@@ -123,6 +123,16 @@ function matchesEntityType(row: EmbeddingRow, entityTypes?: EmbeddableEntityType
   return !entityTypes || entityTypes.includes(row.entity_type as EmbeddableEntityType);
 }
 
+function embeddingModelForRows(rows: EmbeddingRow[]) {
+  const configuredModel = getAiRuntimeConfig().embeddingModel;
+  if (rows.some((row) => row.embedding_model === configuredModel)) return configuredModel;
+  return rows[0]?.embedding_model ?? configuredModel;
+}
+
+function isCompatibleEmbeddingRow(row: EmbeddingRow, model: string, dimension: number) {
+  return row.embedding_model === model && Array.isArray(row.embedding) && row.embedding.length === dimension;
+}
+
 function metadataRecord(metadata: EmbeddingRow["metadata"]): Record<string, unknown> {
   if (!metadata || Array.isArray(metadata) || typeof metadata !== "object") return {};
   return metadata as Record<string, unknown>;
@@ -163,13 +173,16 @@ async function embeddingRetrieval(admin: AdminContext, input: RetrievalQuery, pr
   const rows = ((data ?? []) as EmbeddingRow[]).filter((row) => matchesEntityType(row, input.entityTypes));
   if (rows.length === 0) return null;
 
-  const model = rows[0]?.embedding_model ?? getAiRuntimeConfig().embeddingModel;
+  const model = embeddingModelForRows(rows);
   const response = await provider.embed({ input: input.query, model });
   const queryEmbedding = response.embeddings[0];
 
   if (!queryEmbedding) return null;
 
-  const items = rows
+  const compatibleRows = rows.filter((row) => isCompatibleEmbeddingRow(row, model, queryEmbedding.length));
+  if (compatibleRows.length === 0) return null;
+
+  const items = compatibleRows
     .map((row) => ({
       confidence: "fact" as const,
       metrics: metricsFromMetadata(row.metadata),

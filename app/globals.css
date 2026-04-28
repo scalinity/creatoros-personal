@@ -2854,6 +2854,211 @@ h6 {
   padding-left: var(--space-3);
 }
 
+.coach-page {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.coach-metrics,
+.coach-prompt-grid,
+.coach-recommendation-grid {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.coach-workbench {
+  align-items: start;
+  display: grid;
+  gap: var(--space-6);
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 0.34fr);
+}
+
+.coach-main,
+.coach-composer,
+.coach-question-form,
+.coach-playbook-panel,
+.coach-playbook-form,
+.coach-selected-report,
+.coach-report-list,
+.coach-report-links,
+.coach-draft-list,
+.coach-inspector-body,
+.coach-evidence-list {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.coach-composer,
+.coach-playbook-panel,
+.coach-report-list,
+.coach-selected-report {
+  background: var(--bg-surface);
+  border: var(--border-hairline);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+}
+
+.coach-composer .rule-header,
+.coach-playbook-panel .rule-header,
+.coach-report-list .rule-header,
+.coach-draft-list .rule-header {
+  margin-bottom: 0;
+}
+
+.coach-question-form {
+  align-items: end;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.coach-playbook-form {
+  align-items: center;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.coach-playbook-form p,
+.coach-card-title,
+.coach-report-link,
+.chat-answer,
+.chat-question,
+.coach-evidence-item p {
+  overflow-wrap: anywhere;
+}
+
+.coach-playbook-form p,
+.chat-answer,
+.chat-question,
+.coach-evidence-item p,
+.coach-recommendation-grid p {
+  color: var(--ink-secondary);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.coach-suggested-form {
+  display: contents;
+}
+
+.coach-prompt {
+  background: var(--bg-surface-2);
+  border: var(--border-hairline);
+  border-radius: var(--radius-md);
+  color: var(--ink-primary);
+  cursor: pointer;
+  display: grid;
+  gap: var(--space-2);
+  min-height: 128px;
+  padding: var(--space-4);
+  text-align: left;
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-standard);
+}
+
+.coach-prompt:hover,
+.coach-prompt:focus-visible {
+  background: color-mix(in oklch, var(--accent-vermillion) 8%, var(--bg-surface-2));
+  border-color: color-mix(in oklch, var(--accent-vermillion) 45%, var(--rule-hairline));
+  transform: translateY(-1px);
+}
+
+.coach-prompt-label,
+.coach-report-kind,
+.chat-role,
+.coach-card-title {
+  color: var(--ink-tertiary);
+  font-size: var(--text-xs);
+}
+
+.coach-report-link {
+  border-bottom: var(--border-hairline);
+  color: inherit;
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  text-decoration: none;
+}
+
+.coach-report-link:last-child {
+  border-bottom: 0;
+}
+
+.coach-report-link:hover,
+.coach-report-link-selected {
+  background: var(--bg-surface-2);
+  box-shadow: inset 2px 0 0 0 var(--accent-vermillion);
+}
+
+.coach-report-date {
+  color: var(--ink-tertiary);
+  font-size: var(--text-xs);
+}
+
+.chat-message {
+  background: color-mix(in oklch, var(--bg-surface-2) 82%, var(--bg-surface));
+  border: var(--border-hairline);
+  border-radius: var(--radius-md);
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-4);
+}
+
+.chat-message-head,
+.coach-confidence-row,
+.coach-evidence-head {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.chat-message-head {
+  justify-content: space-between;
+}
+
+.chat-question {
+  border-left: 2px solid var(--accent-vermillion);
+  color: var(--ink-primary);
+  padding-left: var(--space-3);
+}
+
+.coach-recommendation-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.coach-inspector {
+  max-height: calc(100vh - 96px);
+  overflow: auto;
+  position: sticky;
+  top: calc(48px + var(--space-5));
+}
+
+.coach-inspector .kv-val {
+  overflow-wrap: anywhere;
+}
+
+.coach-evidence-item {
+  border: var(--border-hairline);
+  border-radius: var(--radius-sm);
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-3);
+}
+
+.coach-evidence-head {
+  justify-content: space-between;
+}
+
+.coach-evidence-head .mono {
+  color: var(--ink-tertiary);
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}
+
 @media (max-width: 1200px) {
   .calendar-grid {
     grid-template-columns: repeat(3, minmax(180px, 1fr));
@@ -2868,13 +3073,26 @@ h6 {
   .approval-rail {
     position: static;
   }
+
+  .coach-workbench {
+    grid-template-columns: 1fr;
+  }
+
+  .coach-inspector {
+    position: static;
+  }
 }
 
 @media (max-width: 780px) {
   .publishing-metrics,
   .publishing-form-grid,
   .publishing-action-grid,
-  .calendar-grid {
+  .calendar-grid,
+  .coach-metrics,
+  .coach-prompt-grid,
+  .coach-question-form,
+  .coach-playbook-form,
+  .coach-recommendation-grid {
     grid-template-columns: 1fr;
   }
 }
@@ -2886,7 +3104,9 @@ h6 {
   .analytics-table-grid,
   .analytics-aggregate-grid,
   .analytics-operating-grid,
-  .dashboard-suggestion-list {
+  .dashboard-suggestion-list,
+  .coach-metrics,
+  .coach-prompt-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -2906,7 +3126,9 @@ h6 {
   .analytics-table-grid,
   .analytics-aggregate-grid,
   .analytics-operating-grid,
-  .dashboard-suggestion-list {
+  .dashboard-suggestion-list,
+  .coach-metrics,
+  .coach-prompt-grid {
     grid-template-columns: 1fr;
   }
 }

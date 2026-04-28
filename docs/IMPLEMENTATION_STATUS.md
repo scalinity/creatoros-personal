@@ -1,16 +1,16 @@
 # Implementation Status
 
 Last updated: 2026-04-28
-Current phase: Phase 18 - Analytics Dashboard and Reports complete
-Next prompt: `19_COACH_RETRIEVAL_CONTENT_PLAYBOOK.md`
+Current phase: Phase 19 - Coach, Retrieval, and Content Playbooks complete
+Next prompt: `20_INSPIRATION_AND_EXTENSION_SAVE_TOKEN.md`
 
 ## Current State
 
-CreatorOS now has deterministic, explainable analytics across imported/manual owner posts, metric snapshots, publishing drafts/jobs/failures, scheduled/published rows, blogs, campaigns, and experiments. `/analytics` loads real owner-scoped data and surfaces dense MetricBlocks, top/bottom post tables, topic/format/hook/day/hour aggregates, cadence, velocity from valid same-post metric snapshots, score explanations, and explicit unknowns where source data does not exist.
+CreatorOS now has an evidence-citing `/coach` workspace backed by server-only retrieval, AI prompt runs, and `content_coach_reports` persistence. The coach can answer owner questions, generate content playbooks, inspect cited records, and gracefully downgrade uncited or empty-history guidance to speculation instead of inventing evidence.
 
-The private `/dashboard` is wired to real counts for X status, publishing permission, queue health, row-level publishing workload detail, failed jobs, imported posts, ideas, generated outputs, blogs, top posts, active campaigns, active experiments, and Phase 19 coach placeholders that are labeled as speculation/inference instead of fake recommendations.
+Retrieval now combines existing owner-scoped embedding/keyword search with operating context from voice profiles, campaigns, experiments, publishing drafts, published posts, and blogs. Citation validation strips nonexistent records, never substitutes synthetic fallback citations, and records citation filtering in report metadata. Mixed embedding models/dimensions are filtered before scoring.
 
-X write publishing, read sync, manual imports, blog workflows, and the publishing state machine remain intact. Coach chat, account research, inspiration extension tokens, billing, marketing, autonomous engagement, public onboarding, and uncontrolled external action remain intentionally unimplemented.
+X write publishing, read sync, manual imports, blog workflows, analytics, dashboard, and the publishing state machine remain intact. Account research, inspiration extension tokens, billing, marketing, autonomous engagement, public onboarding, and uncontrolled external action remain intentionally unimplemented.
 
 The original documentation package remains under `docs/`:
 
@@ -52,13 +52,75 @@ The original documentation package remains under `docs/`:
 - [x] `16_X_OAUTH_AND_READ_SYNC.md` - Implement X OAuth, encrypted tokens, refresh, sync, metrics, capability flags, and disconnect behavior.
 - [x] `17_X_WRITE_PUBLISHING_ADAPTER.md` - Enable official X writes under approval, capability, duplicate, rate-limit, reconciliation, and audit guardrails.
 - [x] `18_ANALYTICS_DASHBOARD_AND_REPORTS.md` - Build deterministic analytics, velocity, aggregates, cadence, score explanations, and post/blog/campaign metrics.
-- [ ] `19_COACH_RETRIEVAL_AND_CONTENT_PLAYBOOKS.md` - Build internal-evidence coach, retrieval, embeddings, keyword fallback, citations, and playbooks.
+- [x] `19_COACH_RETRIEVAL_AND_CONTENT_PLAYBOOKS.md` - Build internal-evidence coach, retrieval, embeddings, keyword fallback, citations, and playbooks.
 - [ ] `20_INSPIRATION_LIBRARY_AND_CHROME_EXTENSION_SAVE_TOKEN.md` - Build scoped inspiration save endpoint, personal save tokens, token settings, and extension scaffold.
 - [ ] `21_REPLY_GUY_AND_ACCOUNT_RESEARCHER.md` - Build account research, reply drafts, and handoff workflows.
 - [ ] `22_GROWTH_SYSTEM_CAMPAIGNS_EXPERIMENTS_REVIEWS.md` - Build goals, pillars, positioning, campaigns, experiments, reviews, and profile audits.
 - [ ] `23_HARDENING_EXPORT_DELETE_OBSERVABILITY.md` - Add rate limits, diagnostics, export/delete, error boundaries, observability, and production safeguards.
 - [ ] `24_TESTING_E2E_DEPLOYMENT_READINESS.md` - Complete Vitest, Playwright, RLS, mocked AI/X, publishing dry-run, and design regression coverage.
 - [ ] `25_FINAL_PRODUCTION_REVIEW_AND_HANDOFF.md` - Complete final acceptance review, limitations, and handoff.
+
+## Phase 19 Completed Work
+
+- Replaced `/coach` placeholder with a protected server-rendered coach workspace, suggested prompts, saved report history, content playbook action, and evidence inspector.
+- Added rate-limited coach server actions guarded by `requireAdmin()` for chat and playbook generation.
+- Added `lib/coach` as the server-only coach orchestration layer for context packet construction, retrieval, AI prompt execution, citation verification, `content_coach_reports` persistence, prompt-run persistence, and audit logging.
+- Built owner-scoped context packets from posts/ideas/blogs/generated outputs via retrieval plus operating context from voice profiles, campaigns, experiments, publishing drafts, published posts, and recent blogs.
+- Implemented citation filtering so nonexistent model citations are stripped, no synthetic fallback evidence is attached, and reports with no valid citations persist as `speculation`.
+- Hardened embedding retrieval to score only compatible stored embeddings from the selected embedding model and exact query vector dimension.
+- Added focused Phase 19 tests for owner-filtered context, metric-bearing evidence, mixed embedding model filtering, hallucinated citation stripping, empty-history speculation, playbook persistence, and coach UI rendering.
+- Ran a review-orchestrator pass with parallel backend, security, and UI/accessibility reviewers; resolved blocking findings around synthetic fallback citations, empty-history fact labels, mixed embedding scoring, selected-report accessibility, sticky inspector overflow, and inspector metadata wrapping.
+
+## Phase 19 Files Changed
+
+- `app/(app)/coach/page.tsx` - Protected coach route wired to `loadCoachWorkspace` and server actions.
+- `app/(app)/coach/actions.ts` - Rate-limited admin server actions for coach chat and content playbook generation.
+- `components/coach/index.tsx` - Coach workspace UI, suggested prompts, report history, recommendation cards, drafts, and evidence inspector.
+- `app/globals.css` - Coach workspace, prompt, report, and evidence inspector layout/styles.
+- `lib/coach/index.ts` - Server-only coach context, retrieval orchestration, citation validation, AI runs, persistence, and workspace loading.
+- `lib/retrieval/index.ts` - Compatible embedding model/dimension filtering before cosine scoring.
+- `tests/unit/coach/phase19-coach.test.ts` - Phase 19 coach, playbook, UI, citation, and retrieval regression coverage.
+- `docs/IMPLEMENTATION_STATUS.md` - This Phase 19 ledger update.
+
+## Phase 19 Checks and Commands Run
+
+| Command or check | Result |
+|---|---|
+| Required docs read | Root `README.md` is absent. Read `docs/README.md`, `docs/IMPLEMENTATION_STATUS.md`, `docs/docs/AI_SYSTEM.md`, `docs/docs/AI_PROMPTS.md`, `docs/docs/SPEC.md`, `docs/docs/API_CONTRACTS.md`, `docs/docs/UX_SPEC.md`, `docs/docs/DATA_MODEL.md`, and `docs/docs/SECURITY.md`. |
+| Bootstrap check | Confirmed Next.js 16.2.4, React 19.2.5, pnpm via `pnpm-lock.yaml` and `packageManager`, no monorepo indicators, Vitest and Playwright test setup. |
+| Package-manager execution | The `pnpm` binary is not on PATH in this shell, so checks were run with the pinned `npx pnpm@10.33.2` form. |
+| Sequential Thinking MCP | Requested by repo instructions but not available in this Codex session; planning, reflection, and verification were performed explicitly with available tools. |
+| Morph codebase search/edit | Used Morph for codebase search and all Phase 19 code/status edits. |
+| `npx pnpm@10.33.2 test tests/unit/coach/phase19-coach.test.ts` before implementation | Failed as expected because `@/components/coach` and `@/lib/coach` did not exist yet. |
+| `npx pnpm@10.33.2 test tests/unit/coach/phase19-coach.test.ts` after review regression tests | Passed: 1 file, 7 tests. |
+| `npx pnpm@10.33.2 typecheck` | Passed. |
+| `npx pnpm@10.33.2 lint` | Passed with no warnings. |
+| `npx pnpm@10.33.2 test` | Passed: 29 files, 123 tests. |
+| `npx pnpm@10.33.2 build` | Passed; Next lists `/coach` as a dynamic protected route. |
+| `npx pnpm@10.33.2 test:e2e` | Passed: 1 Chromium login smoke test. Playwright emitted pre-existing npm config and `NO_COLOR`/`FORCE_COLOR` warnings only. |
+| Direct `useEffect` check | Morph search found no direct `useEffect` calls in the new coach route/components. |
+| Phase 19 review-orchestrator pass | Completed with parallel backend, security, and UI/accessibility reviewers. Blocking findings were resolved before this ledger update. |
+
+## Phase 19 Known Limitations and Blockers
+
+- Live Anthropic/OpenAI coach runs were not exercised against real provider credentials in automated verification; tests use the existing mock AI provider.
+- Coach/playbook rate limits use the existing process-memory fixed-window store. This matches earlier private-app phases but remains a hardening item for distributed/serverless deployments.
+- Coach supports server-action workflows, not a public chat API route. This preserves the private app boundary and can be extended later if an internal API route is needed.
+- Retrieval depends on existing embeddings being refreshed; when embeddings are unavailable or fail, keyword fallback remains active and tested.
+
+## Phase 19 Acceptance Gates
+
+- [x] Coach answers can include internal citations when valid evidence is returned.
+- [x] Coach handles empty history without inventing evidence and persists uncited guidance as `speculation`.
+- [x] Content playbook generation persists to `content_coach_reports`.
+- [x] Prompt-injection boundaries are implemented through data-only context packets and prompt constraints.
+- [x] Nonexistent/hallucinated citations are stripped and never replaced with synthetic citations.
+- [x] Mixed embedding model/dimension rows are excluded from vector scoring.
+- [x] No billing, marketing, public onboarding, autonomous engagement, approval bypass, official X algorithm claims, or secret exposure was added.
+
+## Phase 19 Next Step
+
+Run `20_INSPIRATION_AND_EXTENSION_SAVE_TOKEN.md` next. Stop here for Phase 19.
 
 ## Phase 18 Completed Work
 
