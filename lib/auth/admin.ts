@@ -7,6 +7,7 @@ import { redirect } from "next/navigation";
 import { NextResponse, type NextRequest } from "next/server";
 
 import { logAuditEvent } from "@/lib/audit";
+import { getE2eAdminContext, shouldUseE2eAuthBypass } from "@/lib/testing/e2e-fixtures";
 import type { Database } from "@/types/database";
 
 import { authorizeAdminIdentity } from "./allowlist";
@@ -70,6 +71,13 @@ async function auditDeniedAccess(result: Extract<AdminAuthResult, { ok: false }>
 }
 
 export async function getAdminContext(options: { auditDenied?: boolean; request?: NextRequest } = {}) {
+  if (await shouldUseE2eAuthBypass(options.request)) {
+    return {
+      admin: getE2eAdminContext(),
+      ok: true,
+    } satisfies AdminAuthResult;
+  }
+
   let supabase: SupabaseServerClient;
 
   try {

@@ -3,6 +3,8 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import type { Database } from "@/types/database";
 
+import { shouldUseE2eAuthBypass } from "@/lib/testing/e2e-fixtures";
+
 import { getOptionalSupabaseAuthConfig } from "./config";
 import { isAdminEmail } from "./allowlist";
 import { isPrivateAppPath } from "./routes";
@@ -12,6 +14,16 @@ function redirect(request: NextRequest, path: string) {
 }
 
 export async function updateSupabaseSession(request: NextRequest) {
+  if (await shouldUseE2eAuthBypass(request)) {
+    const pathname = request.nextUrl.pathname;
+
+    if (pathname === "/" || pathname === "/login") {
+      return redirect(request, "/dashboard");
+    }
+
+    return NextResponse.next({ request });
+  }
+
   const config = getOptionalSupabaseAuthConfig();
 
   if (!config) {

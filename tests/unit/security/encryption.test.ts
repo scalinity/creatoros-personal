@@ -6,6 +6,21 @@ import { decryptToken, encryptToken } from "@/lib/security/encryption";
 
 const key = "phase08-encryption-key-material-32";
 
+function tamperCiphertext(payload: string) {
+  const parts = payload.split(".");
+  const encodedCiphertext = parts[3];
+
+  if (!encodedCiphertext) {
+    throw new Error("Missing ciphertext test payload.");
+  }
+
+  const ciphertext = Buffer.from(encodedCiphertext, "base64url");
+  ciphertext[0] = (ciphertext[0] ?? 0) ^ 1;
+  parts[3] = ciphertext.toString("base64url");
+
+  return parts.join(".");
+}
+
 describe("token encryption helpers", () => {
   it("encrypts token material without storing plaintext and decrypts it with the same key", () => {
     const encrypted = encryptToken("x-access-token-secret", { key, purpose: "x_oauth_token" });
@@ -17,7 +32,7 @@ describe("token encryption helpers", () => {
 
   it("rejects tampered ciphertext and mismatched purposes", () => {
     const encrypted = encryptToken("refresh-token-secret", { key, purpose: "x_oauth_token" });
-    const tampered = encrypted.replace(/.$/, encrypted.endsWith("a") ? "b" : "a");
+    const tampered = tamperCiphertext(encrypted);
 
     expect(() => decryptToken(tampered, { key, purpose: "x_oauth_token" })).toThrow("Token payload could not be decrypted.");
     expect(() => decryptToken(encrypted, { key, purpose: "personal_save_token" })).toThrow("Token payload could not be decrypted.");

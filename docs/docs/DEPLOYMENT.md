@@ -12,6 +12,7 @@
 Required:
 
 - `NEXT_PUBLIC_APP_URL`
+- `CHROME_EXTENSION_ORIGINS`
 - `DATABASE_URL`
 - `SUPABASE_URL`
 - `SUPABASE_ANON_KEY`
@@ -68,10 +69,13 @@ X_PUBLISHING_SCOPES=tweet.write media.write
 
 ## Cron Setup
 
-Cron routes:
+Implemented cron routes:
 
 - `/api/cron/x-sync`
 - `/api/cron/publish`
+
+Planned cron routes that should not be configured until route handlers exist:
+
 - `/api/cron/metric-snapshots`
 - `/api/cron/weekly-review`
 - `/api/cron/monthly-review`
@@ -104,6 +108,57 @@ Vercel sends `CRON_SECRET` as Authorization header when configured. Routes must 
 - Escalate publishing scopes only after review.
 - Publish test post only with explicit confirmation.
 - Export and delete test data in staging.
+
+## Phase 24 Production-Readiness Runbook
+
+Run these checks from the repository root before promoting a build:
+
+```bash
+corepack enable
+pnpm install --frozen-lockfile
+pnpm exec playwright install chromium
+pnpm typecheck
+pnpm lint
+pnpm test
+pnpm test:e2e
+pnpm build
+```
+
+If the workstation does not have `pnpm` available, the verified fallback is:
+
+```bash
+npx pnpm@10.33.2 install --frozen-lockfile
+npx pnpm@10.33.2 exec playwright install chromium
+npx pnpm@10.33.2 typecheck
+npx pnpm@10.33.2 lint
+npx pnpm@10.33.2 test
+npx pnpm@10.33.2 test:e2e
+npx pnpm@10.33.2 build
+```
+
+The Playwright suite starts an isolated local server on `127.0.0.1:3100` by default. It sets `AI_PROVIDER=mock`, `AI_MODEL=mock-model`, `CHROME_EXTENSION_ORIGINS=chrome-extension://creatoros-e2e`, `CREATOROS_E2E_AUTH_BYPASS=1`, and a per-run `CREATOROS_E2E_AUTH_SECRET` for that server only. The bypass code also requires non-production runtime, no `VERCEL_ENV`, a loopback `NEXT_PUBLIC_APP_URL`, a loopback request host, and the per-run secret. Never set `CREATOROS_E2E_AUTH_BYPASS=1` in production, preview, or public staging deployments.
+
+The Phase 24 smoke suite covers the user-prompted smoke baseline: private access, dashboard load, idea creation, post import, post history, mocked AI analysis, generated-output persistence, blog draft creation, publishing draft approval/schedule dry-run, and extension token rejection without live AI or X credentials. The broader `docs/TEST_PLAN.md` smoke list remains the target for staging/final acceptance expansion where live Supabase/RLS, additional workflows, and visual regression infrastructure are available.
+
+## Production Release Checklist
+
+- Confirm `.env.example` and the deployment environment include every required variable from this guide.
+- Apply all Supabase migrations to the target project and regenerate types when schema changes are introduced.
+- Verify RLS is enabled on exposed tables before pointing the app at production data.
+- Confirm `ADMIN_EMAILS` contains only the owner email addresses.
+- Confirm `NEXT_PUBLIC_APP_URL`, Supabase Auth site URL, and X OAuth callback URL all use the same deployed origin.
+- Confirm AI and X provider keys are configured only as server-side environment variables.
+- Run a staging dry-run publishing job before enabling live `tweet.write` publishing.
+- Confirm cron routes receive `Authorization: Bearer $CRON_SECRET` and reject missing or invalid secrets.
+- Review diagnostics for missing secrets, degraded X connection state, and disabled AI provider status after deploy.
+
+## Local Smoke-Run Notes
+
+- Unit tests use deterministic mocks and do not require live Supabase, AI, or X credentials.
+- Playwright E2E uses an in-memory Supabase-like fixture for admin-only app flows.
+- X adapter behavior is covered through mock clients and dry-run publishing; live external writes remain manually gated.
+- Browser output artifacts are written to Playwright's default report directories and should not be committed.
+- If port `3100` is occupied, run with `CREATOROS_E2E_PORT=<free-port> pnpm test:e2e`.
 
 
 ## Verified Official References

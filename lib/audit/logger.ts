@@ -6,6 +6,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 import { normalizeEmail } from "@/lib/auth/allowlist";
 import { getSupabaseServiceRoleConfig } from "@/lib/auth/config";
+import { getE2eSupabaseClient, shouldUseE2eServiceRoleClient } from "@/lib/testing/e2e-fixtures";
 import type { Database } from "@/types/database";
 
 import { redactAuditMetadata, redactAuditString } from "./redaction";
@@ -30,6 +31,10 @@ export type AuditEventInput = {
 let serviceRoleClient: null | SupabaseClient<Database> = null;
 
 function getServiceRoleClient() {
+  if (shouldUseE2eServiceRoleClient()) {
+    return getE2eSupabaseClient();
+  }
+
   if (serviceRoleClient) {
     return serviceRoleClient;
   }
