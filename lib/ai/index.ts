@@ -1,6 +1,6 @@
 import "server-only";
 
-export { getAiRuntimeConfig } from "./config";
+export { getAiRuntimeConfig, getProviderApiKey } from "./config";
 export { getAiFoundationDiagnostics } from "./diagnostics";
 export { parseStructuredJson, AiStructuredOutputError } from "./json";
 export { getPromptDefinition, listPromptDefinitions, requiredPromptIds } from "./prompts";

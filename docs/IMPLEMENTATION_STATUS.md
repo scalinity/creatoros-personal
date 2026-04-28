@@ -1,18 +1,18 @@
 # Implementation Status
 
 Last updated: 2026-04-28
-Current phase: Phase 12 - Algorithm Analyzer and Brain Dump Transformer complete
-Next prompt: `13_VOICE_MODELING_AND_EMBEDDINGS_FOUNDATION.md`
+Current phase: Phase 13 - Voice Modeling and Embeddings Foundation complete
+Next prompt: `14_BLOG_SYSTEM.md`
 
 ## Current State
 
-CreatorOS now has the first two complete owner-facing AI workflows on top of the server-only AI foundation. `/algo-analyzer` is a protected private workstation page for heuristic draft scoring with a large draft textarea, content-type selector, voice-profile placeholder toggle, thread-expansion toggle, publish-readiness toggle, nine metric scores, overall gauge, diagnosis, risk warnings, rewrite cards, client copy actions, save-to-generated-output, save-to-idea, and persisted `algo_analysis_reports`.
+CreatorOS now has the voice-modeling and retrieval substrate required by later coach, composer, retrieval, and style-aware generation phases. The owner can recompute a personal voice profile from owner-authored posts and available blogs through the protected AI settings surface or the protected `/api/voice-profile` route. Voice generation is server-only, admin-guarded, schema-validated, audited, persisted to `voice_profiles`, and constrained to owner posts/blogs only. AI-supplied representative examples are allowlisted against loaded owner source IDs and their visible text is derived from the trusted source rows before persistence.
 
-`/brain-dump` is a protected private workstation page for turning raw messy notes into structured content. It saves the raw dump, extracts themes, claims, stories, examples, contradictions, and strong lines, then generates posts, threads, blog outlines, video scripts, campaign ideas, strategy notes, and clarifying questions. Selected generated items can be saved to `generated_outputs` for later composer use.
+The active voice profile captures summary, tone, sentence patterns, common phrases, hooks, topic clusters, CTA patterns, formatting habits, punctuation/emoji habits, length distribution, and representative examples. The algorithm analyzer can now include the active voice profile when requested instead of the prior placeholder.
 
-Both workflows use server actions with admin guards, Zod validation, in-memory rate limits, sanitized error redirects, server-only `runStructuredPrompt`, structured AI output schemas, mock-provider coverage in tests, `ai_jobs`/`prompt_runs` logging through the AI runner, workflow-specific audit events, and RLS-backed Supabase persistence through the authenticated admin context. Save actions derive generated output text from persisted reports/dumps rather than trusting hidden browser fields.
+Phase 13 also added a server-only embedding and retrieval foundation for owner posts, content ideas, generated outputs, brain dumps, and blogs. Embedding refresh creates an AI job, writes user-filtered 3072-dimensional embedding rows when the embedding provider is available, retires stale active embeddings for refreshed entity/model scopes, records source metrics in embedding metadata, and falls back to keyword retrieval when embeddings or the provider are unavailable. Retrieval returns the documented snake_case AI evidence shape and remains user-filtered in both vector and keyword modes.
 
-The owner-facing AI workflows remain bounded to analysis, drafting, and local saves. Voice modeling is still a placeholder until Phase 13. Publishing draft creation, approval, scheduling, X OAuth/sync, X writes, blog editor creation, coach chat, embeddings, account research, inspiration transform, billing, marketing, autonomous engagement, public onboarding, and uncontrolled external action remain intentionally unimplemented.
+The owner-facing AI workflows remain bounded to analysis, drafting, local saves, voice modeling, and retrieval infrastructure. The full coach chat, blog system, publishing state machine, X OAuth/sync, X writes, account research, inspiration transform, billing, marketing, autonomous engagement, public onboarding, and uncontrolled external action remain intentionally unimplemented.
 
 The original documentation package remains under `docs/`:
 
@@ -48,18 +48,99 @@ The original documentation package remains under `docs/`:
 - [x] `10_CONTENT_IDEAS_GENERATED_OUTPUTS_COMPOSER_BASE.md` - Build content idea CRUD, generated-output storage/actions, source tracking, and composer workspace base.
 - [x] `11_AI_FOUNDATION_PROMPT_REGISTRY_STRUCTURED_OUTPUTS.md` - Implement server-only AI provider abstraction, prompt registry, structured outputs, mock provider, `ai_jobs`, and `prompt_runs`.
 - [x] `12_ALGO_ANALYZER_AND_BRAIN_DUMP.md` - Build heuristic draft analysis and brain-dump transformation workflows.
-- [ ] `13_VOICE_MODELING_AND_EMBEDDINGS_FOUNDATION.md` - Build voice profile generation and retrieval substrate.
-- [ ] `10_PUBLISHING_SYSTEM.md` - Build approval state machine, calendar, queue, dry run, jobs, failures, retries, and audit surfaces before external writes.
-- [ ] `11_X_OAUTH_AND_SYNC.md` - Implement X OAuth, encrypted tokens, refresh, sync, metrics, capability flags, and disconnect behavior.
-- [ ] `12_X_WRITE_AND_PUBLISH_SYSTEM.md` - Enable official X writes under approval, capability, duplicate, rate-limit, reconciliation, and audit guardrails.
-- [ ] `13_BLOG_SYSTEM.md` - Build blog CRUD, versions, AI drafting/editing/SEO, exports, and repurposing workflows.
-- [ ] `14_ANALYTICS.md` - Build deterministic analytics, velocity, aggregates, cadence, score explanations, and post/blog/campaign metrics.
-- [ ] `15_COACH_AND_RETRIEVAL.md` - Build internal-evidence coach, retrieval, embeddings, keyword fallback, citations, and playbooks.
-- [ ] `16_GROWTH_SYSTEM.md` - Build goals, pillars, positioning, campaigns, experiments, reviews, and profile audits.
-- [ ] `17_CHROME_EXTENSION.md` - Build scoped inspiration save endpoint, personal save tokens, token settings, and extension scaffold.
-- [ ] `18_HARDENING.md` - Add rate limits, diagnostics, export/delete, error boundaries, observability, and production safeguards.
-- [ ] `19_TESTING.md` - Complete Vitest, Playwright, RLS, mocked AI/X, publishing dry-run, and design regression coverage.
-- [ ] `20_DEPLOYMENT.md` - Configure production deployment, Supabase, Vercel env, cron, OAuth callbacks, smoke tests, and runbook.
+- [x] `13_VOICE_MODELING_AND_EMBEDDINGS_FOUNDATION.md` - Build voice profile generation and retrieval substrate.
+- [ ] `14_BLOG_SYSTEM.md` - Build blog CRUD, versions, exports, and repurposing workflows.
+- [ ] `15_PUBLISHING_STATE_MACHINE_DRY_RUN_AND_CALENDAR.md` - Build approval state machine, calendar, queue, dry run, jobs, failures, retries, and audit surfaces before external writes.
+- [ ] `16_X_OAUTH_AND_READ_SYNC.md` - Implement X OAuth, encrypted tokens, refresh, sync, metrics, capability flags, and disconnect behavior.
+- [ ] `17_X_WRITE_PUBLISHING_ADAPTER.md` - Enable official X writes under approval, capability, duplicate, rate-limit, reconciliation, and audit guardrails.
+- [ ] `18_ANALYTICS_DASHBOARD_AND_REPORTS.md` - Build deterministic analytics, velocity, aggregates, cadence, score explanations, and post/blog/campaign metrics.
+- [ ] `19_COACH_RETRIEVAL_AND_CONTENT_PLAYBOOKS.md` - Build internal-evidence coach, retrieval, embeddings, keyword fallback, citations, and playbooks.
+- [ ] `20_INSPIRATION_LIBRARY_AND_CHROME_EXTENSION_SAVE_TOKEN.md` - Build scoped inspiration save endpoint, personal save tokens, token settings, and extension scaffold.
+- [ ] `21_REPLY_GUY_AND_ACCOUNT_RESEARCHER.md` - Build account research, reply drafts, and handoff workflows.
+- [ ] `22_GROWTH_SYSTEM_CAMPAIGNS_EXPERIMENTS_REVIEWS.md` - Build goals, pillars, positioning, campaigns, experiments, reviews, and profile audits.
+- [ ] `23_HARDENING_EXPORT_DELETE_OBSERVABILITY.md` - Add rate limits, diagnostics, export/delete, error boundaries, observability, and production safeguards.
+- [ ] `24_TESTING_E2E_DEPLOYMENT_READINESS.md` - Complete Vitest, Playwright, RLS, mocked AI/X, publishing dry-run, and design regression coverage.
+- [ ] `25_FINAL_PRODUCTION_REVIEW_AND_HANDOFF.md` - Complete final acceptance review, limitations, and handoff.
+
+## Phase 13 Completed Work
+
+- Expanded `voice-profile.v1` schemas and prompt instructions for tone, sentence patterns, common phrases, hooks, topic clusters, CTAs, formatting habits, punctuation/emoji habits, length distribution, and representative examples.
+- Added `lib/voice` for server-only owner-source loading, structured voice-profile generation, source allowlisting, sanitized examples, active-profile persistence, status loading, audit logging, and safer active-profile switching.
+- Added `lib/embeddings` for owner-content document extraction, balanced cross-entity refresh selection, mock/OpenAI embedding support, AI job tracking, stale embedding retirement, metadata metrics, and keyword fallback mode when embeddings are unavailable.
+- Added `lib/retrieval` for user-filtered embedding retrieval, keyword fallback retrieval, documented snake_case evidence items, source metrics, sanitized provider-failure fallback, and confidence labeling.
+- Added protected `/api/voice-profile` GET/POST status and recompute route with admin guard, Zod validation, rate limiting, stable response envelopes, and sanitized errors.
+- Added protected AI settings actions and UI for voice profile recompute, embedding refresh, active profile status, source counts, embedding status, and fallback visibility.
+- Wired the active voice profile into the algorithm analyzer when the owner enables voice-aware analysis.
+- Updated operational diagnostics to report Phase 13 and the new voice/retrieval foundation status.
+- Added focused Phase 13 unit tests for owner-only voice profile generation, AI-supplied source citation sanitization, settings UI, settings action redirects, embedding refresh, stale embedding retirement, balanced entity refresh, keyword fallback, vector evidence metrics, and provider-failure fallback.
+- Completed a review-orchestrator substitute with four read-only review agents; blocking findings were resolved around server-action redirects, stale embeddings, retrieval evidence shape, provider-failure fallback, entity starvation, and AI-supplied voice citations.
+
+## Phase 13 Files Changed
+
+- `app/(app)/settings/ai/page.tsx` - Added protected voice/embedding status loading and panel rendering.
+- `app/(app)/settings/ai/actions.ts` - Added guarded voice recompute and embedding refresh server actions.
+- `app/api/voice-profile/route.ts` - Added protected voice profile status/recompute API route.
+- `app/globals.css` - Added voice profile settings panel styles.
+- `components/analyzer/index.tsx` - Updated analyzer voice-profile option copy for active profile use.
+- `components/settings/voice-profile-panel.tsx` - Added settings UI for active voice profile and embedding refresh controls.
+- `lib/ai/config.ts` - Aligned default embedding model to the 3072-dimensional database vector column.
+- `lib/ai/index.ts` - Exported provider API key availability helper for embedding/retrieval services.
+- `lib/ai/prompts/index.ts` - Expanded voice-profile prompt registry instructions and mock output.
+- `lib/ai/schemas.ts` - Expanded voice profile structured output schemas.
+- `lib/algo-analyzer/index.ts` - Loaded and passed the active voice profile when requested.
+- `lib/embeddings/index.ts` - Added server-only embedding document loading, refresh, stale retirement, status, and metadata helpers.
+- `lib/retrieval/index.ts` - Added server-only vector and keyword retrieval with user-filtered evidence.
+- `lib/server-only/diagnostics.ts` - Updated operational phase and diagnostics copy.
+- `lib/voice/index.ts` - Added voice profile generation, persistence, status, and source sanitization service.
+- `tests/unit/diagnostics/operational-diagnostics.test.ts` - Updated expected current phase.
+- `tests/unit/voice/phase13-voice-retrieval.test.ts` - Added voice, embeddings, retrieval, and review-regression coverage.
+- `tests/unit/voice/phase13-settings-actions.test.ts` - Added server-action redirect regression coverage.
+- `docs/IMPLEMENTATION_STATUS.md` - Updated this Phase 13 ledger.
+
+## Phase 13 Checks and Commands Run
+
+| Command or check | Result |
+|---|---|
+| Required docs read | Root `README.md` is absent. Read `docs/README.md`, `docs/IMPLEMENTATION_STATUS.md`, `docs/docs/AI_SYSTEM.md`, `docs/docs/AI_PROMPTS.md`, `docs/docs/DATA_MODEL.md`, `docs/docs/SPEC.md`, and `docs/docs/SECURITY.md`. |
+| Bootstrap check | Confirmed Next.js 16.2.4, React 19.2.5, pnpm via `pnpm-lock.yaml` and `packageManager`, no monorepo indicators, Vitest and Playwright test setup. |
+| Sequential Thinking MCP | Requested by repo instructions but not available in this Codex session; planning, reflection, and verification were performed explicitly with available tools. |
+| Morph codebase search | Used before and during implementation to inspect AI prompt/schema patterns, server actions, auth guards, settings pages, diagnostics, database tables, and retrieval consumers; used after implementation to check React side-effect and server-only boundaries. |
+| `pnpm test ...` direct | Failed because `pnpm` is not installed on PATH in this shell; all subsequent pnpm commands used `npx pnpm@10.33.2`. |
+| Focused Phase 13 test before implementation | Failed as expected because `components/settings/voice-profile-panel` and Phase 13 services did not exist yet. |
+| Focused Phase 13 tests after implementation/review fixes | Passed: 2 test files, 10 tests. |
+| Compatibility focused tests | Passed: 8 test files, 35 tests. |
+| `npx pnpm@10.33.2 typecheck` first Phase 13 run | Failed on strict typing in settings params, voice example narrowing, metadata values, and test fixtures; fixed. |
+| `npx pnpm@10.33.2 typecheck` review-fix run | Failed on a test mock payload assertion; fixed. |
+| `npx pnpm@10.33.2 typecheck` final | Passed. |
+| `npx pnpm@10.33.2 lint` | Passed with no warnings after removing an unused test helper type/import. |
+| `npx pnpm@10.33.2 test` | Passed: 23 test files, 90 tests. |
+| `npx pnpm@10.33.2 build` | Passed; Next listed `/api/voice-profile` and `/settings/ai` as dynamic protected routes. |
+| `npx pnpm@10.33.2 test:e2e` | Passed: 1 Chromium login smoke test. Playwright emitted the pre-existing npm config and `NO_COLOR`/`FORCE_COLOR` warnings only. |
+| Generated-file hygiene | Build/E2E rewrote the Next ambient route import once; restored `next-env.d.ts` to `.next/types/routes.d.ts` and reran typecheck successfully. |
+| Review-orchestrator substitute | Completed with four read-only review agents; fixed all blocking findings identified for Phase 13. |
+
+## Phase 13 Known Limitations and Blockers
+
+- Live OpenAI embedding calls were not exercised because checks run without provider credentials. Mock embedding coverage verifies vector dimensions, persistence boundaries, and retrieval behavior.
+- Anthropic embeddings are not implemented; embeddings use OpenAI when configured or the mock provider in tests, with keyword fallback when unavailable.
+- Full coach chat, composer style generation, and retrieval-cited playbooks are still deferred to later phases. Phase 13 provides the reusable voice profile and retrieval substrate only.
+- Embedding refresh deliberately retires active rows for the targeted entity/model scope before writing current rows; if the provider is unavailable, the app relies on keyword fallback until embeddings can be refreshed again.
+- Server-action/API rate limits use the existing in-memory limiter, matching prior phases; distributed persistent rate limiting remains a later hardening concern.
+
+## Phase 13 Acceptance Gates
+
+- [x] Owner can generate/recompute a voice profile from imported owner posts and available owner blogs through protected settings/API surfaces.
+- [x] Voice profile is persisted in `voice_profiles`, available to later AI workflows, and used by the analyzer when requested.
+- [x] Voice profile sources exclude target-account, inspiration, other-user, and deleted content; AI-supplied examples are allowlisted and source-derived before persistence.
+- [x] Embedding writes are server-only, user-filtered, source-scoped, stale-retired, and covered by tests.
+- [x] Retrieval has an implemented keyword fallback path for missing providers, failed embedding queries, or no vector matches.
+- [x] No full coach chat, publishing handoff, blog system, X write, billing, marketing, autonomous engagement, or public onboarding was added.
+
+## Phase 13 Next Step
+
+Run `14_BLOG_SYSTEM.md` next. Stop here for Phase 13.
+
+---
 
 ## Phase 12 Completed Work
 

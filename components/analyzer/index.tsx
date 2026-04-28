@@ -197,7 +197,7 @@ export function AlgoAnalyzerView({ analyzeAction, filters, report, reports, save
             <div className="workflow-form-grid">
               <Select defaultValue="post" label="Content type" name="content_type" options={contentTypeOptions} />
               <div className="workflow-checks">
-                {checkbox("use_voice_profile", "Use voice profile placeholder")}
+                {checkbox("use_voice_profile", "Use active voice profile")}
                 {checkbox("generate_thread", "Generate thread expansion")}
                 {checkbox("include_publish_readiness", "Include publish readiness", true)}
               </div>

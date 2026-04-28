@@ -212,11 +212,35 @@ export const inspirationTransformOutputSchema = z.object({
   variants: z.array(generatedDraftSchema).min(1),
 });
 
+export const voiceProfileExampleSchema = z.object({
+  record_id: nonEmptyString,
+  record_type: z.enum(["blog_post", "post"]),
+  text: nonEmptyString,
+  why_representative: nonEmptyString,
+});
+
+export const voiceProfileFormattingHabitsSchema = z.object({
+  casing: nonEmptyString,
+  emoji_usage: nonEmptyString,
+  line_breaks: nonEmptyString,
+  long_form_style: nonEmptyString,
+  punctuation: nonEmptyString,
+  thread_style: nonEmptyString,
+});
+
+export const voiceProfileLengthDistributionSchema = z.object({
+  blog_words_median: z.number().min(0),
+  post_characters_median: z.number().min(0),
+  thread_items_median: z.number().min(0),
+});
+
 export const voiceProfileOutputSchema = z.object({
   common_phrases: z.array(nonEmptyString),
   cta_patterns: z.array(nonEmptyString),
-  formatting_habits: z.array(nonEmptyString),
+  examples: z.array(voiceProfileExampleSchema).min(1),
+  formatting_habits: voiceProfileFormattingHabitsSchema,
   hook_patterns: z.array(nonEmptyString),
+  length_distribution: voiceProfileLengthDistributionSchema,
   sentence_patterns: z.array(nonEmptyString),
   summary: nonEmptyString,
   tone: nonEmptyString,

@@ -34,7 +34,7 @@ describe("operational diagnostics", () => {
     const diagnostics = getOperationalDiagnostics(validEnv);
 
     expect(diagnostics.overall).toBe("ready");
-    expect(diagnostics.phase).toBe("11-ai-foundation-prompt-registry-structured-outputs");
+    expect(diagnostics.phase).toBe("13-voice-modeling-and-embeddings-foundation");
     expect(diagnostics.groups.map((group) => group.id)).toEqual([
       "auth",
       "database",

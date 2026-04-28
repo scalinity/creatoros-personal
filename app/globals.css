@@ -2052,6 +2052,66 @@ h6 {
   padding: var(--space-4) var(--space-5);
 }
 
+.voice-profile-panel {
+  display: grid;
+  gap: var(--space-4);
+  margin-block: var(--space-5);
+}
+
+.voice-profile-metrics {
+  margin-block-start: 0;
+}
+
+.voice-profile-actions {
+  align-items: stretch;
+}
+
+.voice-profile-actions form {
+  margin: 0;
+}
+
+.voice-profile-grid {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.voice-profile-summary {
+  grid-column: 1 / -1;
+}
+
+.voice-profile-card .key-value-row,
+.voice-profile-summary .key-value-row {
+  border-color: var(--color-border-subtle);
+}
+
+.voice-profile-example {
+  border-inline-start: 1px solid var(--color-accent);
+  color: var(--color-text-primary);
+  margin: 0;
+  padding-inline-start: var(--space-3);
+}
+
+.voice-profile-example + .voice-profile-example {
+  margin-block-start: var(--space-3);
+}
+
+.voice-profile-example p {
+  margin: 0;
+}
+
+.voice-profile-example footer {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  margin-block-start: var(--space-2);
+}
+
+@media (max-width: 860px) {
+  .voice-profile-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 1100px) {
   .app-shell-inspector {
     grid-template-columns: 240px minmax(0, 1fr);

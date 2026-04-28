@@ -80,7 +80,7 @@ export function getAiRuntimeConfig(source: EnvSource = process.env): AiRuntimeCo
       keyConfigured: anthropicKeyConfigured,
       modelCompatible: anthropicModelCompatible,
     },
-    embeddingModel: source.AI_EMBEDDING_MODEL?.trim() || "text-embedding-3-small",
+    embeddingModel: source.AI_EMBEDDING_MODEL?.trim() || "text-embedding-3-large",
     effort: parseEffort(source.AI_EFFORT),
     maxTokens: parseMaxTokens(source.AI_MAX_TOKENS),
     model,

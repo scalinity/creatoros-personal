@@ -29,7 +29,7 @@ export type OperationalDiagnostics = {
   env: EnvDiagnostics;
   groups: DiagnosticGroup[];
   overall: Exclude<DiagnosticStatus, "scaffolded">;
-  phase: "08-settings-diagnostics-env-security" | "11-ai-foundation-prompt-registry-structured-outputs";
+  phase: "08-settings-diagnostics-env-security" | "11-ai-foundation-prompt-registry-structured-outputs" | "13-voice-modeling-and-embeddings-foundation";
   service: "creatoros-personal";
 };
 
@@ -58,8 +58,8 @@ const groupDefinitions = [
   {
     id: "ai",
     label: "AI Config",
-    readySummary: "AI routing config, selected provider readiness, and prompt registry foundations are available.",
-    degradedSummary: "Selected AI provider config is incomplete; AI calls stay disabled until fixed.",
+    readySummary: "AI routing config, selected provider readiness, prompt registry, voice modeling, and retrieval foundations are available.",
+    degradedSummary: "Selected AI provider config is incomplete; AI calls stay disabled while manual and keyword fallback workflows remain available.",
     items: [
       { key: "AI_PROVIDER", label: "Provider selection", secret: false },
       { key: "AI_MODEL", label: "Model", secret: false },
@@ -184,7 +184,7 @@ export function getOperationalDiagnostics(source: NodeJS.ProcessEnv | EnvSource 
     env,
     groups,
     overall,
-    phase: "11-ai-foundation-prompt-registry-structured-outputs",
+    phase: "13-voice-modeling-and-embeddings-foundation",
     service: "creatoros-personal",
   };
 }

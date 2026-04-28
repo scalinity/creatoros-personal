@@ -7,6 +7,7 @@ import { parseTagInput } from "@/lib/content/validation";
 import { algoAnalysisOutputSchema, type AiProvider } from "@/lib/ai";
 import { runStructuredPrompt } from "@/lib/ai/run";
 import type { AlgoAnalysisReportRow, Json } from "@/types/database";
+import { loadActiveVoiceProfile, type VoiceProfile } from "@/lib/voice";
 
 import type { AlgoAnalyzerInput, AnalyzerSaveIdeaInput, AnalyzerSaveOutputInput } from "./validation";
 
@@ -146,7 +147,7 @@ export function rowToAlgoAnalysisReport(row: AlgoAnalysisReportRow): AlgoAnalysi
   };
 }
 
-function promptInputForAnalysis(input: AlgoAnalyzerInput) {
+function promptInputForAnalysis(input: AlgoAnalyzerInput, voiceProfile: VoiceProfile | null) {
   return {
     constraints: [
       "Return exactly nine metric scores from 0 to 10.",
@@ -169,18 +170,32 @@ function promptInputForAnalysis(input: AlgoAnalyzerInput) {
     objective: "Score this owner draft heuristically and suggest safer, stronger rewrites for owner review.",
     task: "Analyze an X/blog-to-X draft inside CreatorOS Personal.",
     voice_profile: input.useVoiceProfile
-      ? {
-          available: false,
-          note: "Voice modeling is not implemented until Phase 13; use an empty placeholder profile.",
-        }
+      ? voiceProfile
+        ? {
+            available: true,
+            common_phrases: voiceProfile.commonPhrases,
+            cta_patterns: voiceProfile.ctaPatterns,
+            formatting_habits: voiceProfile.formattingHabits,
+            hook_patterns: voiceProfile.hookPatterns,
+            id: voiceProfile.id,
+            sentence_patterns: voiceProfile.sentencePatterns,
+            summary: voiceProfile.summary,
+            tone: voiceProfile.tone,
+            topic_clusters: voiceProfile.topicClusters,
+          }
+        : {
+            available: false,
+            note: "No active voice profile is available yet; analyze the draft without style-specific assumptions.",
+          }
       : null,
   };
 }
 
 export async function runAlgoAnalysis(admin: AdminContext, input: AlgoAnalyzerInput, options: AlgoAnalysisRunOptions = {}) {
+  const voiceProfile = input.useVoiceProfile ? await loadActiveVoiceProfile(admin) : null;
   const response = await runStructuredPrompt({
     admin,
-    input: promptInputForAnalysis(input),
+    input: promptInputForAnalysis(input, voiceProfile),
     jobType: "algo_analysis",
     promptId: PROMPT_ID,
     provider: options.provider,
@@ -207,7 +222,8 @@ export async function runAlgoAnalysis(admin: AdminContext, input: AlgoAnalyzerIn
         generate_thread: input.generateThread,
         include_publish_readiness: input.includePublishReadiness,
         phase: PHASE,
-        use_voice_profile_placeholder: input.useVoiceProfile,
+        use_voice_profile: Boolean(voiceProfile),
+        voice_profile_requested: input.useVoiceProfile,
       },
       metric_scores: output.metric_scores,
       model: response.model,
@@ -219,7 +235,7 @@ export async function runAlgoAnalysis(admin: AdminContext, input: AlgoAnalyzerIn
       risk_warnings: output.risk_warnings,
       thread_expansion: output.thread_expansion,
       user_id: admin.userId,
-      voice_profile_id: null,
+      voice_profile_id: voiceProfile?.id ?? null,
     })
     .select()
     .single();
