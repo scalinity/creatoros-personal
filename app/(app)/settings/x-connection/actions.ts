@@ -42,18 +42,21 @@ export async function disconnectXConnectionAction(formData: FormData) {
     redirectToXSettings("disconnect_failed");
   }
 
+  let notice = "x_disconnected";
+
   try {
     await disconnectXConnection(admin, {
       deleteImportedPosts: parsed.data.delete_imported_posts,
       deleteSnapshots: parsed.data.delete_snapshots,
     });
-    redirectToXSettings("x_disconnected");
   } catch (error) {
     console.error("Settings X disconnect failed", {
       reason: error instanceof Error ? error.message : "unknown",
     });
-    redirectToXSettings("disconnect_failed");
+    notice = "disconnect_failed";
   }
+
+  redirectToXSettings(notice);
 }
 
 export async function syncXConnectionAction(formData: FormData) {
@@ -65,6 +68,8 @@ export async function syncXConnectionAction(formData: FormData) {
     redirectToXSettings("live_sync_failed");
   }
 
+  let notice = parsed.data.mode === "mock" ? "mock_sync_failed" : "live_sync_failed";
+
   try {
     const result = await runXReadSync(admin, {
       includeMetrics: parsed.data.include_metrics,
@@ -72,11 +77,12 @@ export async function syncXConnectionAction(formData: FormData) {
       mode: parsed.data.mode,
     });
     const prefix = parsed.data.mode === "mock" ? "mock" : "live";
-    redirectToXSettings(result.status === "succeeded" ? `${prefix}_sync_complete` : `${prefix}_sync_failed`);
+    notice = result.status === "succeeded" ? `${prefix}_sync_complete` : `${prefix}_sync_failed`;
   } catch (error) {
     console.error("Settings X sync failed", {
       reason: error instanceof Error ? error.message : "unknown",
     });
-    redirectToXSettings(parsed.data.mode === "mock" ? "mock_sync_failed" : "live_sync_failed");
   }
+
+  redirectToXSettings(notice);
 }
