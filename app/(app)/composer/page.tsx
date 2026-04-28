@@ -9,6 +9,7 @@ import {
   updateContentIdeaAction,
   updateGeneratedOutputStatusAction,
 } from "./actions";
+import { createPublishingDraftFromSourceAction } from "../publishing/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +45,7 @@ export default async function ComposerPage({ searchParams }: ComposerPageProps) 
   return (
     <ComposerWorkspaceView
       archiveIdeaAction={archiveContentIdeaAction}
+      createDraftFromSourceAction={createPublishingDraftFromSourceAction}
       createIdeaAction={createContentIdeaAction}
       filters={params}
       ideas={ideas}

@@ -7,6 +7,7 @@ type FormAction = ComponentProps<"form">["action"];
 
 export type ComposerWorkspaceViewProps = {
   archiveIdeaAction?: FormAction;
+  createDraftFromSourceAction?: FormAction;
   createIdeaAction?: FormAction;
   filters: ComposerFilters;
   ideas: ComposerIdea[];
@@ -217,7 +218,7 @@ function EditIdeaForm({ action, idea }: { action?: FormAction; idea: ComposerIde
   );
 }
 
-function SourceInspector({ archiveAction, idea, updateAction }: { archiveAction?: FormAction; idea?: ComposerIdea | null; updateAction?: FormAction }) {
+function SourceInspector({ archiveAction, createDraftAction, idea, updateAction }: { archiveAction?: FormAction; createDraftAction?: FormAction; idea?: ComposerIdea | null; updateAction?: FormAction }) {
   if (!idea) {
     return (
       <aside className="composer-inspector">
@@ -250,14 +251,19 @@ function SourceInspector({ archiveAction, idea, updateAction }: { archiveAction?
       </form>
       <Card className="composer-handoff" variant="inset">
         <Card.Header>
-          <span className="composer-card-title smallcaps">Publishing handoff deferred</span>
-          <Badge variant="outline">Phase 15</Badge>
+          <span className="composer-card-title smallcaps">Publishing handoff</span>
+          <Badge variant="success">Phase 15</Badge>
         </Card.Header>
         <Card.Body>
-          <p className="composer-muted">Publishing drafts, approval, scheduling, and X writes remain disabled until the publishing state machine phase.</p>
-          <Button disabled size="sm" variant="secondary">
-            Create publishing draft
-          </Button>
+          <p className="composer-muted">Create a private publishing draft from this idea. Approval, scheduling, and dry-run jobs happen in the publishing queue.</p>
+          <form action={createDraftAction} className="composer-output-action">
+            <input name="source_type" type="hidden" value="content_idea" />
+            <input name="source_id" type="hidden" value={idea.id} />
+            <input name="content_type" type="hidden" value="single_post" />
+            <Button size="sm" type="submit" variant="secondary">
+              Create publishing draft
+            </Button>
+          </form>
         </Card.Body>
       </Card>
     </aside>
@@ -297,7 +303,7 @@ function OutputActionButton({ action, formAction, id, label, variant = "secondar
   );
 }
 
-function OutputCard({ action, output }: { action?: FormAction; output: ComposerOutput }) {
+function OutputCard({ action, createDraftAction, output }: { action?: FormAction; createDraftAction?: FormAction; output: ComposerOutput }) {
   return (
     <article className="rewrite-card composer-output-card">
       <div className="composer-output-head">
@@ -320,20 +326,27 @@ function OutputCard({ action, output }: { action?: FormAction; output: ComposerO
         <OutputActionButton action="copied" formAction={action} id={output.id} label="Mark copied" />
         <OutputActionButton action={output.saved ? "unsaved" : "saved"} formAction={action} id={output.id} label={output.saved ? "Unsave" : "Save"} />
         <OutputActionButton action={output.favorite ? "unfavorite" : "favorite"} formAction={action} id={output.id} label={output.favorite ? "Unfavorite" : "Favorite"} />
+        <form action={createDraftAction} className="composer-output-action">
+          <input name="source_type" type="hidden" value="generated_output" />
+          <input name="source_id" type="hidden" value={output.id} />
+          <Button size="sm" type="submit" variant="secondary">
+            Create publishing draft
+          </Button>
+        </form>
         <OutputActionButton action="archived" formAction={action} id={output.id} label="Archive" variant="destructive" />
       </div>
     </article>
   );
 }
 
-function GeneratedOutputs({ action, outputs }: { action?: FormAction; outputs: ComposerOutput[] }) {
+function GeneratedOutputs({ action, createDraftAction, outputs }: { action?: FormAction; createDraftAction?: FormAction; outputs: ComposerOutput[] }) {
   return (
     <section className="composer-output-section" aria-label="Generated outputs">
       <RuleHeader folio="§ 06" label="Generated outputs" sub="stored outputs only" />
       {outputs.length > 0 ? (
         <div className="composer-output-list">
           {outputs.map((output) => (
-            <OutputCard action={action} key={output.id} output={output} />
+            <OutputCard action={action} createDraftAction={createDraftAction} key={output.id} output={output} />
           ))}
         </div>
       ) : (
@@ -345,6 +358,7 @@ function GeneratedOutputs({ action, outputs }: { action?: FormAction; outputs: C
 
 export function ComposerWorkspaceView({
   archiveIdeaAction,
+  createDraftFromSourceAction,
   createIdeaAction,
   filters,
   ideas,
@@ -386,9 +400,9 @@ export function ComposerWorkspaceView({
               <SaveOutputForm action={saveOutputAction} selectedIdea={selectedIdea} />
             </Card.Body>
           </Card>
-          <GeneratedOutputs action={updateOutputAction} outputs={selectedOutputs} />
+          <GeneratedOutputs action={updateOutputAction} createDraftAction={createDraftFromSourceAction} outputs={selectedOutputs} />
         </div>
-        <SourceInspector archiveAction={archiveIdeaAction} idea={selectedIdea} updateAction={updateIdeaAction} />
+        <SourceInspector archiveAction={archiveIdeaAction} createDraftAction={createDraftFromSourceAction} idea={selectedIdea} updateAction={updateIdeaAction} />
       </section>
     </div>
   );

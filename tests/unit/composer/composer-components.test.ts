@@ -58,7 +58,10 @@ describe("ComposerWorkspaceView", () => {
     expect(markup).toContain("Generated outputs");
     expect(markup).toContain("Ship the system");
     expect(markup).toContain("Mark copied");
-    expect(markup).toContain("Publishing handoff deferred");
+    expect(markup).toContain("Publishing handoff");
+    expect(markup).toContain("Create publishing draft");
+    expect(markup).toContain('name="source_type" value="generated_output"');
+    expect(markup).toContain('name="source_type" value="content_idea"');
     expect(markup).not.toContain("pending implementation");
   });
 

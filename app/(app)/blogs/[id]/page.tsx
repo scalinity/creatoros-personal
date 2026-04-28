@@ -5,6 +5,7 @@ import { requireAdmin } from "@/lib/auth/admin";
 import { loadBlogDetail } from "@/lib/blogs";
 
 import { applyBlogEditorAction, generateBlogDraftAction, generateBlogOutlineAction, generateBlogSeoAction, repurposeBlogToXAction, updateBlogAction } from "../actions";
+import { createPublishingDraftFromSourceAction } from "../../publishing/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +39,7 @@ export default async function BlogDetailPage({ params, searchParams }: BlogDetai
   return (
     <BlogDetailView
       aiEditorAction={applyBlogEditorAction}
+      createDraftAction={createPublishingDraftFromSourceAction}
       detail={detail}
       exportActionBase={`/api/blogs/${id}/export`}
       generateDraftAction={generateBlogDraftAction}

@@ -25,6 +25,7 @@ export type NewBlogViewProps = {
 
 export type BlogDetailViewProps = {
   aiEditorAction?: FormAction;
+  createDraftAction?: FormAction;
   detail: BlogDetail;
   exportActionBase: string;
   generateDraftAction?: FormAction;
@@ -345,6 +346,27 @@ function AiPanel({ aiEditorAction, blog, generateDraftAction, generateOutlineAct
   );
 }
 
+function PublishingHandoffPanel({ action, blog }: { action?: FormAction; blog: BlogRecord }) {
+  return (
+    <Card>
+      <Card.Header>
+        <RuleHeader folio="§ 06" label="Publishing handoff" sub="approval queue" />
+      </Card.Header>
+      <Card.Body>
+        <p className="blog-muted">Create a dry-run publishing draft from this blog. The queue will require exact owner approval before scheduling or dry-run execution.</p>
+        <form action={action} className="blog-export-actions">
+          <input name="source_type" type="hidden" value="blog_post" />
+          <input name="source_id" type="hidden" value={blog.id} />
+          <input name="content_type" type="hidden" value="blog_to_x_thread" />
+          <Button size="sm" type="submit" variant="secondary">
+            Create publishing draft
+          </Button>
+        </form>
+      </Card.Body>
+    </Card>
+  );
+}
+
 function AiActionForm({ action, blogId, label, mode }: { action?: FormAction; blogId: string; label: string; mode: string }) {
   return (
     <form action={action} className="blog-ai-action">
@@ -360,6 +382,7 @@ function AiActionForm({ action, blogId, label, mode }: { action?: FormAction; bl
 
 export function BlogDetailView({
   aiEditorAction,
+  createDraftAction,
   detail,
   exportActionBase,
   generateDraftAction,
@@ -404,6 +427,7 @@ export function BlogDetailView({
             <Button type="submit">Save blog</Button>
           </form>
           <AiPanel aiEditorAction={aiEditorAction} blog={blog} generateDraftAction={generateDraftAction} generateOutlineAction={generateOutlineAction} generateSeoAction={generateSeoAction} repurposeAction={repurposeAction} />
+          <PublishingHandoffPanel action={createDraftAction} blog={blog} />
         </div>
         <aside className="blog-detail-inspector">
           <BlogMetadata blog={blog} />

@@ -1,18 +1,18 @@
 # Implementation Status
 
 Last updated: 2026-04-28
-Current phase: Phase 14 - Blog System complete
-Next prompt: `15_PUBLISHING_STATE_MACHINE_DRY_RUN_CALENDAR.md`
+Current phase: Phase 15 - Publishing State Machine, Dry Run, and Calendar complete
+Next prompt: `16_X_OAUTH_AND_READ_SYNC.md`
 
 ## Current State
 
-CreatorOS now has a protected long-form blog workstation. The owner can create sourced or manual blogs, edit markdown and SEO metadata, track meaningful versions, export Markdown/HTML/JSON/MDX artifacts, and run AI-assisted outline, full draft, editor, SEO, and blog-to-X repurposing workflows. Blog pages, server actions, and API routes remain admin-guarded and server-side data access stays user-filtered.
+CreatorOS now has a protected dry-run publishing workstation. The owner can create publishing drafts manually or from content ideas, generated outputs, and blog posts; edit drafts; run duplicate/similarity/risk guardrails; approve exact payloads; schedule approved drafts; run deterministic dry-run jobs; retry retryable failures; cancel drafts; and review publishing state in `/publishing` and `/calendar`.
 
-Blog edits now use a Postgres RPC that locks the blog row and writes the matching `blog_versions` row in the same transaction. Blog-to-X repurposing creates a `blog_repurposing_jobs` row before storing generated outputs, uses valid `running`/`succeeded`/`failed` statuses, records generated-output ids back to the job, and never creates publishing drafts or external writes in this phase.
+The publishing state machine enforces owner approval before scheduling or dry-run execution. Approval stores a payload hash over the exact preview payload, and content-impacting edits invalidate approval until the owner re-approves. Dry-run publishing records `publishing_jobs` and `publishing_failures` with `external_call: false` and never writes to X or creates published-post records.
 
-AI blog prompts wrap current drafts and supported source records as data-only context packets. Phase 14 supports source-linked generation from owner posts, brain dumps, content ideas, and generated outputs; unsupported future source categories are not accepted by the create schema/UI until their loaders exist. Exports use sanitized filenames, attachment disposition, safe HTML rendering, checksums, audit logs, and preserve terminal `published_externally`/`archived` statuses.
+Publishing APIs and server actions are admin-guarded, Zod-validated, rate-limited, audit-logged, and use sanitized error envelopes. Source handoffs from the composer and blog system now create publishing drafts, but AI can only create or suggest content; it cannot approve, schedule, or publish.
 
-The owner-facing AI workflows remain bounded to analysis, drafting, local saves, voice modeling, retrieval infrastructure, and blog generation. Publishing approval/calendar, X OAuth/sync, X writes, full analytics reports, coach chat, account research, inspiration extension tokens, billing, marketing, autonomous engagement, public onboarding, and uncontrolled external action remain intentionally unimplemented.
+The owner-facing AI workflows remain bounded to analysis, drafting, local saves, voice modeling, retrieval infrastructure, blog generation, and publishing dry runs. X OAuth/sync, live X writes, full analytics reports, coach chat, account research, inspiration extension tokens, billing, marketing, autonomous engagement, public onboarding, and uncontrolled external action remain intentionally unimplemented.
 
 The original documentation package remains under `docs/`:
 
@@ -50,7 +50,7 @@ The original documentation package remains under `docs/`:
 - [x] `12_ALGO_ANALYZER_AND_BRAIN_DUMP.md` - Build heuristic draft analysis and brain-dump transformation workflows.
 - [x] `13_VOICE_MODELING_AND_EMBEDDINGS_FOUNDATION.md` - Build voice profile generation and retrieval substrate.
 - [x] `14_BLOG_SYSTEM.md` - Build blog CRUD, versions, exports, and repurposing workflows.
-- [ ] `15_PUBLISHING_STATE_MACHINE_DRY_RUN_CALENDAR.md` - Build approval state machine, calendar, queue, dry run, jobs, failures, retries, and audit surfaces before external writes.
+- [x] `15_PUBLISHING_STATE_MACHINE_DRY_RUN_CALENDAR.md` - Build approval state machine, calendar, queue, dry run, jobs, failures, retries, and audit surfaces before external writes.
 - [ ] `16_X_OAUTH_AND_READ_SYNC.md` - Implement X OAuth, encrypted tokens, refresh, sync, metrics, capability flags, and disconnect behavior.
 - [ ] `17_X_WRITE_PUBLISHING_ADAPTER.md` - Enable official X writes under approval, capability, duplicate, rate-limit, reconciliation, and audit guardrails.
 - [ ] `18_ANALYTICS_DASHBOARD_AND_REPORTS.md` - Build deterministic analytics, velocity, aggregates, cadence, score explanations, and post/blog/campaign metrics.
@@ -61,6 +61,95 @@ The original documentation package remains under `docs/`:
 - [ ] `23_HARDENING_EXPORT_DELETE_OBSERVABILITY.md` - Add rate limits, diagnostics, export/delete, error boundaries, observability, and production safeguards.
 - [ ] `24_TESTING_E2E_DEPLOYMENT_READINESS.md` - Complete Vitest, Playwright, RLS, mocked AI/X, publishing dry-run, and design regression coverage.
 - [ ] `25_FINAL_PRODUCTION_REVIEW_AND_HANDOFF.md` - Complete final acceptance review, limitations, and handoff.
+
+## Phase 15 Completed Work
+
+- Added `lib/publishing` state-machine services for draft creation, source handoff, edit invalidation, exact-payload approval, scheduling, dry-run jobs, retry, cancel, queue loading, calendar loading, and audit logging.
+- Added publishing validation schemas for draft CRUD, source handoffs, approval confirmation, scheduling, dry-run execution, retry, cancel, thread parsing, JSON metadata, and future schedule times.
+- Added duplicate, similarity, and risk guardrails before approval, including owner-post/draft comparison and blocking over-length X payload warnings unless the owner supplies an override reason.
+- Added deterministic dry-run execution that records `publishing_jobs`, simulated retryable failures, redacted failure rows, and `external_call: false` payload/result metadata without calling X or creating `published_posts`.
+- Added protected publishing server actions and API routes for drafts, source handoff, approval, scheduling, dry-run publish, retry, and cancel.
+- Replaced `/publishing` with the publishing queue, create form, editor, approval rail, schedule controls, dry-run controls, retry/cancel actions, failure cards, and status metrics.
+- Replaced `/calendar` with a protected publishing calendar that reads scheduled content-calendar items and shows warning states.
+- Added composer and blog source handoffs so selected content ideas, generated outputs, and blog posts can create publishing drafts.
+- Added Phase 15 styling for dense publishing queues, approval rails, failure cards, calendar cells, and responsive layout while preserving the existing dark editorial design system.
+- Updated operational diagnostics to report Phase 15.
+- Added focused Phase 15 tests covering unapproved scheduling rejection, exact approval/schedule flow, approval invalidation on edit, deterministic dry-run failure behavior, and publishing UI rendering.
+- Completed a review-orchestrator substitute; the blocking consistency finding around partial schedule writes was resolved with compensating cleanup before final verification.
+
+## Phase 15 Files Changed
+
+- `app/(app)/publishing/page.tsx` - Protected publishing queue route.
+- `app/(app)/publishing/actions.ts` - Guarded publishing mutation and dry-run server actions.
+- `app/(app)/calendar/page.tsx` - Protected publishing calendar route.
+- `app/(app)/composer/page.tsx` - Wired composer source handoff action.
+- `app/(app)/blogs/[id]/page.tsx` - Wired blog source handoff action.
+- `app/api/publishing/_utils.ts` - Shared API response and error helpers.
+- `app/api/publishing/drafts/route.ts` - Protected draft create API.
+- `app/api/publishing/drafts/[id]/route.ts` - Protected draft update API.
+- `app/api/publishing/drafts/[id]/approve/route.ts` - Protected approval API.
+- `app/api/publishing/drafts/[id]/schedule/route.ts` - Protected schedule API.
+- `app/api/publishing/drafts/[id]/publish/route.ts` - Protected dry-run publishing API.
+- `app/api/publishing/drafts/from-source/route.ts` - Protected source handoff API.
+- `app/api/publishing/jobs/[id]/retry/route.ts` - Protected retry API.
+- `app/api/publishing/jobs/[id]/cancel/route.ts` - Protected cancel API.
+- `components/publishing/index.tsx` - Publishing workspace, queue rows, approval rail, failure cards, and calendar cells.
+- `components/composer/index.tsx` - Active publishing handoff forms for ideas and generated outputs.
+- `components/blogs/index.tsx` - Blog-to-publishing handoff panel.
+- `app/globals.css` - Publishing and calendar UI styles.
+- `lib/publishing/index.ts` - State-machine services, dry-run executor, guardrails, queue/calendar loaders, and audit behavior.
+- `lib/publishing/validation.ts` - Phase 15 validation schemas.
+- `lib/server-only/diagnostics.ts` - Updated current operational phase.
+- `tests/unit/publishing/phase15-publishing-state-machine.test.ts` - Phase 15 state-machine and UI tests.
+- `tests/unit/composer/composer-components.test.ts` - Updated composer handoff expectations.
+- `tests/unit/diagnostics/operational-diagnostics.test.ts` - Updated expected current phase.
+- `docs/IMPLEMENTATION_STATUS.md` - Updated this Phase 15 ledger.
+
+## Phase 15 Checks and Commands Run
+
+| Command or check | Result |
+|---|---|
+| Required docs read | Root `README.md` is absent. Read `docs/README.md`, `docs/IMPLEMENTATION_STATUS.md`, `docs/docs/PUBLISHING_SYSTEM.md`, `docs/docs/API_CONTRACTS.md`, `docs/docs/SECURITY.md`, `docs/docs/UX_SPEC.md`, and `docs/design/component-map.md`. |
+| Bootstrap check | Confirmed Next.js 16.2.4, React 19.2.5, pnpm via `pnpm-lock.yaml` and `packageManager`, no monorepo indicators, Vitest and Playwright test setup. |
+| Sequential Thinking MCP | Requested by repo instructions but not available in this Codex session; planning, reflection, and verification were performed explicitly with available tools. |
+| Morph codebase search/edit | Used for codebase searches and file edits across publishing services, routes, actions, UI, CSS, diagnostics, tests, and this status ledger. |
+| Focused Phase 15 test before implementation | Failed as expected because publishing components/services did not exist yet. |
+| Focused Phase 15 tests after implementation | Passed: 1 test file, 4 tests. |
+| `npx pnpm@10.33.2 typecheck` first Phase 15 run | Failed on strict Phase 15 service/test typing; fixed. |
+| `npx pnpm@10.33.2 lint` first Phase 15 run | Passed with one unused-helper warning in publishing validation; fixed and reran clean. |
+| `npx pnpm@10.33.2 test` first Phase 15 run | Failed only on the old composer expectation for deferred publishing handoff; updated the test for Phase 15 active handoff. |
+| `npx pnpm@10.33.2 typecheck` final | Passed. |
+| `npx pnpm@10.33.2 lint` final | Passed. |
+| `npx pnpm@10.33.2 test` final | Passed: 25 test files, 98 tests. |
+| `npx pnpm@10.33.2 build` final | Passed; Next listed `/publishing`, `/calendar`, and the protected `/api/publishing/**` routes as dynamic routes. |
+| `npx pnpm@10.33.2 test:e2e` final | Passed: 1 Chromium login smoke test. Playwright emitted the pre-existing npm config and `NO_COLOR`/`FORCE_COLOR` warnings only. |
+| Generated-file hygiene | Verified `next-env.d.ts` had no final diff after build/E2E. |
+| Review-orchestrator substitute | Completed without spawned subagents because active Codex policy does not allow delegation unless explicitly requested; fixed the partial-schedule cleanup finding. |
+
+## Phase 15 Known Limitations and Blockers
+
+- Live X writes are intentionally disabled. Dry-run jobs store deterministic would-publish payloads and never call X.
+- X OAuth connection, encrypted X tokens, account identity, read sync, live capability flags, and disconnect behavior are deferred to Phase 16.
+- The scheduled queue is dry-run/manual in this phase; automatic cron processing and live reconciliation are deferred to later publishing hardening/write phases.
+- Duplicate/similarity checks are heuristic Jaccard checks over recent owner posts and publishing drafts; deeper semantic checks can build on the retrieval substrate in later phases.
+- Server-action/API rate limits use the existing in-memory limiter, matching prior phases; distributed persistent rate limiting remains a later hardening concern.
+
+## Phase 15 Acceptance Gates
+
+- [x] Unapproved drafts cannot be scheduled or dry-run published.
+- [x] Approved drafts can be scheduled and appear in the publishing calendar.
+- [x] Editing an approved draft invalidates approval until the exact payload is re-approved.
+- [x] Dry-run publishing creates deterministic job outcomes with no X API writes and no `published_posts` rows.
+- [x] Queue and calendar show status, scheduled content, and failure/retry states.
+- [x] Publishing state-machine tests pass.
+- [x] Every publishing state transition implemented in this phase writes an audit event.
+- [x] No live X writes, billing, marketing, public onboarding, autonomous engagement, or approval bypass was added.
+
+## Phase 15 Next Step
+
+Run `16_X_OAUTH_AND_READ_SYNC.md` next. Stop here for Phase 15.
+
+---
 
 ## Phase 14 Completed Work
 
