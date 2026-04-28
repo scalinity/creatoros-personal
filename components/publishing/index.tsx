@@ -3,6 +3,7 @@ import type { ComponentProps, ReactNode } from "react";
 
 import { AssumptionFlag, Badge, Button, Card, EmptyState, Input, KeyValueRow, MetricBlock, RuleHeader, Select, Textarea, cn } from "@/components/design-system";
 import { buildPublishingPayloadPreview, computePublishingPayloadHash, type PublishingCalendar, type PublishingCalendarDay, type PublishingDraft, type PublishingFailure, type PublishingJob, type PublishingWorkspace } from "@/lib/publishing";
+import type { SanitizedXConnection } from "@/lib/x/oauth";
 
 export type FormAction = ComponentProps<"form">["action"];
 
@@ -13,10 +14,12 @@ export type PublishingWorkspaceViewProps = {
   dryRunAction?: FormAction;
   editAction?: FormAction;
   notice?: null | string;
+  publishAction?: FormAction;
   retryAction?: FormAction;
   scheduleAction?: FormAction;
   selectedDraftId?: null | string;
   workspace: PublishingWorkspace;
+  xConnection?: null | SanitizedXConnection;
 };
 
 export type PublishingCalendarViewProps = {
@@ -85,7 +88,8 @@ function noticeText(notice?: null | string) {
   if (notice === "draft_approved") return "Exact payload approved by the owner.";
   if (notice === "draft_scheduled") return "Approved draft scheduled in dry-run mode.";
   if (notice === "dry_run_complete") return "Dry-run publishing job recorded without calling X.";
-  if (notice === "retry_complete") return "Retry dry-run recorded.";
+  if (notice === "live_publish_complete") return "Live X publish completed and reconciled into post history.";
+  if (notice === "retry_complete") return "Retry recorded. Inspect the latest job state.";
   if (notice === "canceled") return "Publishing item canceled.";
   if (notice === "rate_limited") return "Publishing workflow rate limit reached. Try again after the window resets.";
   if (notice.endsWith("failed")) return "The publishing request failed validation or could not transition safely.";
@@ -200,7 +204,7 @@ export function PublishFailureCard({ failure, retryAction }: { failure: Publishi
         <input name="id" type="hidden" value={failure.jobId} />
         <input name="confirmation" type="hidden" value="confirm retry" />
         <Button disabled={!failure.retryable} size="sm" type="submit" variant="secondary">
-          Retry dry run
+          Retry
         </Button>
       </InlineForm>
     </article>
@@ -232,8 +236,10 @@ export function ApprovalRail({
   editAction,
   failures,
   jobs,
+  publishAction,
   retryAction,
   scheduleAction,
+  xConnection,
 }: {
   approveAction?: FormAction;
   cancelAction?: FormAction;
@@ -242,8 +248,10 @@ export function ApprovalRail({
   editAction?: FormAction;
   failures: PublishingFailure[];
   jobs: PublishingJob[];
+  publishAction?: FormAction;
   retryAction?: FormAction;
   scheduleAction?: FormAction;
+  xConnection?: null | SanitizedXConnection;
 }) {
   if (!draft) {
     return (
@@ -254,8 +262,9 @@ export function ApprovalRail({
     );
   }
 
-  const payload = buildPublishingPayloadPreview(draft);
-  const payloadHash = computePublishingPayloadHash(draft);
+  const payload = buildPublishingPayloadPreview(draft, xConnection);
+  const payloadHash = computePublishingPayloadHash(draft, xConnection);
+  const approvalIsCurrent = draft.approvalStatus === "approved" && draft.approvalPayloadHash === payloadHash;
   const draftFailures = failures.filter((failure) => !failure.draftId || failure.draftId === draft.id);
   const draftJobs = jobs.filter((job) => job.draftId === draft.id);
 
@@ -270,7 +279,8 @@ export function ApprovalRail({
           <KeyValueRow label="Approval" value={<Badge variant={statusVariant(draft.approvalStatus)}>{draft.approvalStatus}</Badge>} />
           <KeyValueRow label="Payload hash" mono value={draft.approvalPayloadHash ?? payloadHash} />
           <KeyValueRow label="Required scopes" value={(payload.required_scopes as string[]).join(", ")} />
-          <KeyValueRow label="X account" value="not_connected / dry run only" />
+          <KeyValueRow label="X account" value={xConnection?.username ? `@${xConnection.username}` : "not connected"} />
+          <KeyValueRow label="Write capability" value={xConnection?.capabilities.can_write_posts ? "enabled" : "disabled"} />
         </Card.Body>
       </Card>
       <Card variant="inset">
@@ -282,7 +292,7 @@ export function ApprovalRail({
         </Card.Body>
       </Card>
       <AssumptionFlag label="Dry run">
-        Live X writes are disabled in Phase 15. Dry-run jobs persist payload previews and deterministic outcomes without external calls.
+        Dry-run jobs persist payload previews without external calls. Live publish requires owner approval, tweet.write scope, and the visible X account above.
       </AssumptionFlag>
       <div className="publishing-action-grid">
         <InlineForm action={approveAction}>
@@ -297,15 +307,24 @@ export function ApprovalRail({
           <input name="id" type="hidden" value={draft.id} />
           <input name="payload_hash" type="hidden" value={draft.approvalPayloadHash ?? payloadHash} />
           <input name="confirmation" type="hidden" value="confirm dry run" />
-          <Button disabled={draft.approvalStatus !== "approved"} size="sm" type="submit" variant="secondary">
+          <Button disabled={!approvalIsCurrent} size="sm" type="submit" variant="secondary">
             Dry run
+          </Button>
+        </InlineForm>
+        <InlineForm action={publishAction}>
+          <input name="id" type="hidden" value={draft.id} />
+          <input name="payload_hash" type="hidden" value={draft.approvalPayloadHash ?? payloadHash} />
+          <input name="confirmation" type="hidden" value="confirm live publish" />
+          <input name="dry_run" type="hidden" value="false" />
+          <Button disabled={!approvalIsCurrent || xConnection?.capabilities.can_write_posts !== true} size="sm" type="submit">
+            Publish to X
           </Button>
         </InlineForm>
         <InlineForm action={scheduleAction} className="publishing-schedule-form">
           <input name="id" type="hidden" value={draft.id} />
           <Input label="Schedule ISO" name="scheduled_for" placeholder="2099-04-28T16:30:00.000Z" />
           <Input defaultValue={draft.timezone} label="Timezone" name="timezone" />
-          <Button disabled={draft.status !== "approved" || draft.approvalStatus !== "approved"} size="sm" type="submit" variant="secondary">
+          <Button disabled={draft.status !== "approved" || !approvalIsCurrent} size="sm" type="submit" variant="secondary">
             Schedule approved
           </Button>
         </InlineForm>
@@ -341,17 +360,19 @@ export function PublishingWorkspaceView({
   dryRunAction,
   editAction,
   notice,
+  publishAction,
   retryAction,
   scheduleAction,
   selectedDraftId,
   workspace,
+  xConnection,
 }: PublishingWorkspaceViewProps) {
   const selectedDraft = workspace.drafts.find((draft) => draft.id === selectedDraftId) ?? workspace.drafts[0] ?? null;
 
   return (
     <main className="publishing-page" aria-labelledby="publishing-title">
       <h1 className="workflow-title" id="publishing-title">Publishing</h1>
-      <RuleHeader actions={<Badge variant="outline">Dry run only</Badge>} folio="§ 15" label="Publishing queue" sub="approval, schedule, jobs" />
+      <RuleHeader actions={<Badge variant={xConnection?.capabilities.can_write_posts ? "success" : "outline"}>{xConnection?.capabilities.can_write_posts ? "X write enabled" : "dry run available"}</Badge>} folio="§ 17" label="Publishing queue" sub="approval, schedule, jobs" />
       <Notice notice={notice} />
       <section className="publishing-metrics" aria-label="Publishing summary">
         <MetricBlock label="Needs approval" value={workspace.metrics.needsApproval} />
@@ -376,8 +397,10 @@ export function PublishingWorkspaceView({
           editAction={editAction}
           failures={workspace.failures}
           jobs={workspace.jobs}
+          publishAction={publishAction}
           retryAction={retryAction}
           scheduleAction={scheduleAction}
+          xConnection={xConnection}
         />
       </section>
     </main>

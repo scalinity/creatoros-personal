@@ -1,9 +1,12 @@
 import "server-only";
 
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 import { logAuditEvent } from "@/lib/audit";
 import type { AdminContext } from "@/lib/auth/admin";
+import { createSupabaseServiceRoleClient } from "@/lib/db/service-role";
+import { createLiveXPublishingClient, type XCreatePostPayload, XApiError, type XCreatedPost, type XMediaUploadInput, type XPublishingClient } from "@/lib/x/client";
+import { loadDecryptedXConnection, loadXConnectionStatus, refreshStoredXConnection, shouldRefreshXToken, type DecryptedXConnection, type SanitizedXConnection } from "@/lib/x/oauth";
 import type {
   BlogPostRow,
   ContentCalendarItemRow,
@@ -11,10 +14,12 @@ import type {
   Database,
   GeneratedOutputRow,
   Json,
+  MediaAssetRow,
   PostRow,
   PublishingDraftRow,
   PublishingFailureRow,
   PublishingJobRow,
+  PublishedPostRow,
   ScheduledPostRow,
 } from "@/types/database";
 
@@ -31,6 +36,7 @@ import type {
 import { publishingSourceTypes } from "./validation";
 
 const PHASE = "15-publishing-state-machine-dry-run-calendar";
+const PHASE_17 = "17-x-write-publishing-adapter";
 const DRY_RUN_FAILURE_MARKER = "[dry-run-fail]";
 
 type PublishingDraftUpdatePayload = Database["public"]["Tables"]["publishing_drafts"]["Update"];
@@ -112,6 +118,19 @@ export type PublishingFailure = {
   message: null | string;
   retryAfter: null | string;
   retryable: boolean;
+};
+
+export type PublishedPost = {
+  contentType: string;
+  id: string;
+  platformPostId: null | string;
+  publishedAt: string;
+  publishedVia: string;
+  quoteTargetPostId: null | string;
+  replyTargetPostId: null | string;
+  threadPostIds: string[];
+  threadRootPostId: null | string;
+  url: null | string;
 };
 
 export type ScheduledPost = {
@@ -241,6 +260,21 @@ function rowToFailure(row: PublishingFailureRow): PublishingFailure {
   };
 }
 
+function rowToPublishedPost(row: PublishedPostRow): PublishedPost {
+  return {
+    contentType: row.content_type,
+    id: row.id,
+    platformPostId: row.platform_post_id,
+    publishedAt: row.published_at,
+    publishedVia: row.published_via,
+    quoteTargetPostId: row.quote_target_post_id,
+    replyTargetPostId: row.reply_target_post_id,
+    threadPostIds: row.thread_post_ids,
+    threadRootPostId: row.thread_root_post_id,
+    url: row.url,
+  };
+}
+
 function rowToScheduledPost(row: ScheduledPostRow): ScheduledPost {
   return {
     calendarItemId: row.calendar_item_id,
@@ -288,22 +322,32 @@ function requiredScopesForDraft(draft: Pick<PublishingDraft, "contentType" | "me
   return [...scopes].sort();
 }
 
-export function buildPublishingPayloadPreview(draft: PublishingDraft) {
+export function buildPublishingPayloadPreview(draft: PublishingDraft, connection?: null | SanitizedXConnection) {
+  const liveWriteEnabled = connection?.capabilities.can_write_posts === true;
+
   return {
     account: {
-      avatar_url: null,
-      display_name: "X connection pending",
-      username: "not_connected",
+      avatar_url: connection?.avatarUrl ?? null,
+      display_name: connection?.displayName ?? "X connection pending",
+      username: connection?.username ?? "not_connected",
+      x_user_id: connection?.xUserId ?? null,
     },
-    capabilities: {
+    capabilities: connection?.capabilities ?? {
+      can_delete_posts: false,
+      can_read_metrics: false,
+      can_read_private_metrics: false,
+      can_read_user_posts: false,
       can_upload_media: draft.mediaAssetIds.length === 0,
       can_write_posts: true,
       can_write_quotes: draft.contentType === "quote_post",
       can_write_replies: draft.contentType === "reply",
       dry_run_only: true,
-      live_x_write_enabled: false,
+      enterprise_analytics_enabled: false,
+      enterprise_quote_post_enabled: false,
+      enterprise_streams_enabled: false,
     },
     content_type: draft.contentType,
+    live_x_write_enabled: liveWriteEnabled,
     media_asset_ids: draft.mediaAssetIds,
     quote_post_id: draft.quotePostId,
     reply_to_post_id: draft.replyToPostId,
@@ -313,8 +357,8 @@ export function buildPublishingPayloadPreview(draft: PublishingDraft) {
   } satisfies Record<string, Json>;
 }
 
-export function computePublishingPayloadHash(draft: PublishingDraft) {
-  return hashString(stableJsonStringify(buildPublishingPayloadPreview(draft)));
+export function computePublishingPayloadHash(draft: PublishingDraft, connection?: null | SanitizedXConnection) {
+  return hashString(stableJsonStringify(buildPublishingPayloadPreview(draft, connection)));
 }
 
 function jaccardSimilarity(left: string, right: string) {
@@ -886,7 +930,8 @@ export async function approvePublishingDraft(admin: AdminContext, input: Publish
     throw new Error("Publishing draft requires an explicit owner override before approval.");
   }
 
-  const payloadHash = computePublishingPayloadHash(draft);
+  const connection = await loadXConnectionStatus(admin);
+  const payloadHash = computePublishingPayloadHash(draft, connection);
 
   if (input.payloadHash && input.payloadHash !== payloadHash) {
     throw new Error("Approval payload hash does not match the current draft payload.");
@@ -922,6 +967,8 @@ export async function approvePublishingDraft(admin: AdminContext, input: Publish
     metadata: {
       duplicate_status: checks.duplicateCheck.status,
       payload_hash: payloadHash,
+      preview_account_x_user_id: connection?.xUserId ?? null,
+      preview_account_username: connection?.username ?? null,
       phase: PHASE,
       risk_blocking: Boolean(checks.riskCheck.blocking),
       similarity_status: checks.similarityCheck.status,
@@ -935,18 +982,18 @@ export async function approvePublishingDraft(admin: AdminContext, input: Publish
   return rowToDraft(data);
 }
 
-function assertApprovalPayload(draft: PublishingDraft, suppliedHash?: null | string) {
+function assertApprovalPayload(draft: PublishingDraft, suppliedHash?: null | string, connection?: null | SanitizedXConnection) {
   if (draft.approvalStatus !== "approved" || !draft.approvalPayloadHash || !draft.approvedAt) {
-    throw new Error("Publishing draft must be approved before this transition.");
+    throw new XPublishingGuardError("approval_required", "Publishing draft must be approved before this transition.");
   }
 
-  const currentHash = computePublishingPayloadHash(draft);
+  const currentHash = computePublishingPayloadHash(draft, connection);
   if (currentHash !== draft.approvalPayloadHash) {
-    throw new Error("Approved payload hash is stale. Re-approval is required.");
+    throw new XPublishingGuardError("payload_mismatch", "Approved payload hash is stale. Re-approval is required.");
   }
 
   if (suppliedHash && suppliedHash !== draft.approvalPayloadHash) {
-    throw new Error("Supplied payload hash does not match the approved payload.");
+    throw new XPublishingGuardError("payload_mismatch", "Supplied payload hash does not match the approved payload.");
   }
 }
 
@@ -957,7 +1004,8 @@ export async function scheduleApprovedDraft(admin: AdminContext, input: Publishi
     throw new Error("Publishing draft must be approved before scheduling.");
   }
 
-  assertApprovalPayload(draft);
+  const connection = await loadXConnectionStatus(admin);
+  assertApprovalPayload(draft, null, connection);
 
   const { data: calendarItem, error: calendarError } = await admin.supabase
     .from("content_calendar_items")
@@ -1092,14 +1140,15 @@ async function insertPublishingFailure(admin: AdminContext, job: PublishingJobRo
 
 export async function runDryRunPublishingJob(admin: AdminContext, input: PublishingDraftDryRunServiceInput, options: { jobType?: "dry_run" | "retry" } = {}) {
   const draft = await loadDraft(admin, input.id);
-  assertApprovalPayload(draft, input.payloadHash ?? null);
+  const connection = await loadXConnectionStatus(admin);
+  assertApprovalPayload(draft, input.payloadHash ?? null, connection);
 
   const payloadHash = draft.approvalPayloadHash;
   if (!payloadHash) throw new Error("Approved payload hash is missing.");
 
   const startedAt = nowIso();
   const failed = dryRunShouldFail(draft);
-  const payloadPreview = buildPublishingPayloadPreview(draft);
+  const payloadPreview = buildPublishingPayloadPreview(draft, connection);
   const responsePayload = {
     deterministic_id: hashString(`${draft.id}:${payloadHash}`).slice(0, 24),
     dry_run: true,
@@ -1150,6 +1199,728 @@ export async function runDryRunPublishingJob(admin: AdminContext, input: Publish
   return { failure, job: rowToJob(jobRow), payload: payloadPreview };
 }
 
+export type XPublishingMode = "dry_run" | "live";
+
+export type XPublishingJobResult = {
+  failure: null | PublishingFailure;
+  job: PublishingJob;
+  mode: XPublishingMode;
+  payload: Record<string, Json>;
+  publishedPost: null | PublishedPost;
+};
+
+type XPublishingJobOptions = {
+  client?: XPublishingClient;
+  connection?: DecryptedXConnection;
+  expectedContentTypes?: string[];
+  jobType?: "publish" | "retry";
+  mode?: XPublishingMode;
+  now?: () => Date;
+  request?: { headers: Headers; url?: string } | null;
+  scheduledPostId?: null | string;
+  serviceClient?: ReturnType<typeof createSupabaseServiceRoleClient>;
+};
+
+type XPublishFailureDetails = {
+  failureType: string;
+  message: string;
+  providerErrorCode: null | string;
+  rawErrorRedacted: Record<string, Json>;
+  retryAfter: null | string;
+  retryable: boolean;
+};
+
+class XPublishingGuardError extends Error {
+  constructor(
+    readonly code: string,
+    message: string,
+    readonly retryable = false,
+    readonly retryAfter: null | string = null,
+  ) {
+    super(message);
+    this.name = "XPublishingGuardError";
+  }
+}
+
+class XThreadPartialFailure extends Error {
+  constructor(
+    readonly causeError: unknown,
+    readonly createdPosts: XCreatedPost[],
+  ) {
+    super(causeError instanceof Error ? causeError.message : "Thread publishing partially failed.");
+    this.name = "XThreadPartialFailure";
+  }
+}
+
+function publishNowIso(options: XPublishingJobOptions) {
+  return (options.now?.() ?? new Date()).toISOString();
+}
+
+function isThreadPublishingType(contentType: string) {
+  return ["blog_to_x_series", "blog_to_x_thread", "campaign_sequence", "thread"].includes(contentType);
+}
+
+function publishableItems(draft: PublishingDraft) {
+  if (isThreadPublishingType(draft.contentType)) {
+    return draft.threadItems.length > 0 ? draft.threadItems : draft.text.split(/\n{2,}/).map((item) => item.trim()).filter(Boolean);
+  }
+
+  return [draft.text].filter((item) => item.trim().length > 0);
+}
+
+function assertLivePublishConfirmation(input: PublishingDraftDryRunServiceInput, options: XPublishingJobOptions) {
+  if (options.scheduledPostId || options.jobType === "retry") return;
+
+  const confirmation = input.confirmation?.trim().toLowerCase() ?? "";
+  if (!confirmation.includes("confirm")) {
+    throw new XPublishingGuardError("confirmation_required", "Explicit owner confirmation is required before live X publishing.");
+  }
+}
+
+function xPostUrl(username: null | string, platformPostId: string) {
+  return username ? `https://x.com/${username}/status/${platformPostId}` : `https://x.com/i/web/status/${platformPostId}`;
+}
+
+function liveIdempotencyKey(draft: PublishingDraft, payloadHash: string, jobType: "publish" | "retry", scheduledPostId?: null | string) {
+  const base = `${jobType}:${draft.id}:${payloadHash}:${hashString(textForDraft(draft)).slice(0, 12)}:${scheduledPostId ?? "immediate"}`;
+  return jobType === "retry" || scheduledPostId ? `${base}:${randomUUID()}` : base;
+}
+
+function xRequestPayloadForDraft(draft: PublishingDraft, connection: null | SanitizedXConnection, mediaIds: string[] = []) {
+  const items = publishableItems(draft);
+  const payloads = isThreadPublishingType(draft.contentType)
+    ? items.map((text, index) => ({
+        media: index === 0 && mediaIds.length > 0 ? { media_ids: mediaIds } : undefined,
+        reply: index === 0 ? null : { mode: "previous_thread_post" },
+        text,
+      }))
+    : [
+        {
+          media: mediaIds.length > 0 ? { media_ids: mediaIds } : undefined,
+          quote_tweet_id: draft.contentType === "quote_post" ? draft.quotePostId : undefined,
+          reply: draft.contentType === "reply" && draft.replyToPostId ? { in_reply_to_tweet_id: draft.replyToPostId } : undefined,
+          text: draft.text,
+        },
+      ];
+
+  return {
+    ...buildPublishingPayloadPreview(draft, connection),
+    payloads: payloads as unknown as Json,
+  } satisfies Record<string, Json>;
+}
+
+function assertXPublishingCapabilities(draft: PublishingDraft, connection: DecryptedXConnection) {
+  if (connection.status !== "connected" && connection.status !== "degraded") {
+    throw new XPublishingGuardError("x_connection_unavailable", "X connection is not available for publishing.");
+  }
+
+  if (!connection.capabilities.can_write_posts) {
+    throw new XPublishingGuardError("missing_scope", "X connection is missing tweet.write scope.");
+  }
+
+  if (draft.contentType === "reply" && !connection.capabilities.can_write_replies) {
+    throw new XPublishingGuardError("capability_disabled", "X reply publishing is not enabled for this connection.");
+  }
+
+  if (draft.contentType === "quote_post" && !connection.capabilities.can_write_quotes) {
+    throw new XPublishingGuardError("capability_disabled", "X quote publishing requires the Enterprise quote-post capability flag.");
+  }
+
+  if (draft.mediaAssetIds.length > 0 && !connection.capabilities.can_upload_media) {
+    throw new XPublishingGuardError("missing_scope", "X media publishing requires media.write scope.");
+  }
+}
+
+async function loadXPublishingConnection(admin: AdminContext, options: XPublishingJobOptions) {
+  if (options.connection) return options.connection;
+
+  const serviceClient = options.serviceClient ?? createSupabaseServiceRoleClient();
+  let connection = await loadDecryptedXConnection(admin, { client: serviceClient });
+
+  if (shouldRefreshXToken(connection.tokenExpiresAt)) {
+    connection = await refreshStoredXConnection(admin, connection, { client: serviceClient });
+  }
+
+  return connection;
+}
+
+async function loadMediaAssets(admin: AdminContext, draft: PublishingDraft) {
+  if (draft.mediaAssetIds.length === 0) return [];
+
+  const { data, error } = await admin.supabase
+    .from("media_assets")
+    .select("*")
+    .eq("user_id", admin.userId)
+    .is("deleted_at", null);
+
+  if (error) {
+    throw new Error(`Failed to load media assets: ${error.message}`);
+  }
+
+  const wanted = new Set(draft.mediaAssetIds);
+  const rows = ((data ?? []) as MediaAssetRow[]).filter((row) => wanted.has(row.id));
+
+  if (rows.length !== wanted.size) {
+    throw new XPublishingGuardError("media_asset_missing", "One or more media assets are missing.");
+  }
+
+  return rows;
+}
+
+function mediaCategoryForAsset(asset: MediaAssetRow): XMediaUploadInput["mediaCategory"] {
+  if (asset.mime_type.startsWith("video/")) return "tweet_video";
+  if (asset.mime_type === "image/gif") return "tweet_gif";
+  return "tweet_image";
+}
+
+async function resolveMediaIds(admin: AdminContext, draft: PublishingDraft, client: XPublishingClient, connection: DecryptedXConnection) {
+  const assets = await loadMediaAssets(admin, draft);
+  const mediaIds: string[] = [];
+
+  for (const asset of assets) {
+    if (asset.x_media_id) {
+      mediaIds.push(asset.x_media_id);
+      continue;
+    }
+
+    const metadata = safeObject(asset.metadata);
+    const media = typeof metadata.media_base64 === "string" ? metadata.media_base64 : null;
+
+    if (!media || !connection.capabilities.can_upload_media) {
+      throw new XPublishingGuardError("media_upload_not_configured", "Media upload is not configured for this asset. Upload it first or remove it from the draft.");
+    }
+
+    const uploaded = await client.uploadMedia({
+      media,
+      mediaCategory: mediaCategoryForAsset(asset),
+      mediaType: asset.mime_type,
+    });
+
+    await admin.supabase
+      .from("media_assets")
+      .update({
+        metadata: metadataWithPhase({ ...metadata, x_uploaded_at: publishNowIso({}) }),
+        x_media_id: uploaded.id,
+        x_upload_status: "uploaded",
+      })
+      .eq("id", asset.id)
+      .eq("user_id", admin.userId);
+
+    mediaIds.push(uploaded.id);
+  }
+
+  return mediaIds;
+}
+
+function createPostPayload(draft: PublishingDraft, text: string, options: { mediaIds?: string[]; replyToPostId?: null | string } = {}): XCreatePostPayload {
+  const payload: XCreatePostPayload = { text };
+
+  if (options.mediaIds && options.mediaIds.length > 0) {
+    payload.media = { media_ids: options.mediaIds };
+  }
+
+  if (options.replyToPostId) {
+    payload.reply = { in_reply_to_tweet_id: options.replyToPostId };
+  }
+
+  if (draft.contentType === "reply" && draft.replyToPostId) {
+    payload.reply = { in_reply_to_tweet_id: draft.replyToPostId };
+  }
+
+  if (draft.contentType === "quote_post" && draft.quotePostId) {
+    payload.quote_tweet_id = draft.quotePostId;
+  }
+
+  return payload;
+}
+
+async function publishDraftToX(draft: PublishingDraft, client: XPublishingClient, mediaIds: string[]) {
+  const items = publishableItems(draft);
+
+  if (items.length === 0) {
+    throw new XPublishingGuardError("validation_error", "Publishing draft has no publishable content.");
+  }
+
+  if (isThreadPublishingType(draft.contentType)) {
+    const published: XCreatedPost[] = [];
+
+    for (const [index, item] of items.entries()) {
+      const previousPostId = published.at(-1)?.id ?? null;
+      const payload = createPostPayload(draft, item, {
+        mediaIds: index === 0 ? mediaIds : [],
+        replyToPostId: previousPostId,
+      });
+      try {
+        published.push(await client.createPost(payload));
+      } catch (error) {
+        throw new XThreadPartialFailure(error, published);
+      }
+    }
+
+    return published;
+  }
+
+  return [await client.createPost(createPostPayload(draft, items[0] ?? draft.text, { mediaIds }))];
+}
+
+async function createLivePublishingJob(admin: AdminContext, draft: PublishingDraft, payload: Record<string, Json>, payloadHash: string, options: XPublishingJobOptions) {
+  const startedAt = publishNowIso(options);
+  const jobType = options.jobType ?? "publish";
+  const { data, error } = await admin.supabase
+    .from("publishing_jobs")
+    .insert({
+      attempt_count: 1,
+      idempotency_key: liveIdempotencyKey(draft, payloadHash, jobType, options.scheduledPostId),
+      job_type: jobType,
+      metadata: metadataWithPhase({ phase: PHASE_17, payload_hash: payloadHash, scheduled_post_id: options.scheduledPostId ?? null }),
+      publishing_draft_id: draft.id,
+      scheduled_for: draft.scheduledAt,
+      started_at: startedAt,
+      status: "running",
+      user_id: admin.userId,
+      x_request_payload: payload,
+      x_response_payload: {},
+    })
+    .select()
+    .single();
+
+  if (error || !data) {
+    throw new Error(`Failed to create X publishing job: ${error?.message ?? "missing row"}`);
+  }
+
+  await admin.supabase.from("publishing_drafts").update({ status: "publishing" }).eq("id", draft.id).eq("user_id", admin.userId);
+
+  await logAuditEvent({
+    actorEmail: admin.email,
+    eventType: "x_publish_requested",
+    metadata: {
+      content_type: draft.contentType,
+      job_id: data.id,
+      payload_hash: payloadHash,
+      phase: PHASE_17,
+      scheduled_post_id: options.scheduledPostId ?? null,
+    },
+    request: options.request ?? undefined,
+    success: true,
+    targetId: draft.id,
+    targetType: "publishing_draft",
+    userId: admin.userId,
+  });
+
+  return data;
+}
+
+async function updatePublishingJob(admin: AdminContext, job: PublishingJobRow, payload: Database["public"]["Tables"]["publishing_jobs"]["Update"]) {
+  const { data, error } = await admin.supabase
+    .from("publishing_jobs")
+    .update(payload)
+    .eq("id", job.id)
+    .eq("user_id", admin.userId)
+    .select()
+    .single();
+
+  if (error || !data) {
+    throw new Error(`Failed to update X publishing job: ${error?.message ?? "missing row"}`);
+  }
+
+  return data;
+}
+
+function zeroMetrics() {
+  return {
+    bookmark_count: 0,
+    impression_count: 0,
+    like_count: 0,
+    media_view_count: 0,
+    profile_click_count: 0,
+    quote_count: 0,
+    reply_count: 0,
+    repost_count: 0,
+    url_link_click_count: 0,
+    video_view_count: 0,
+  };
+}
+
+async function insertPublishedArchivePost(admin: AdminContext, draft: PublishingDraft, connection: DecryptedXConnection, created: XCreatedPost, index: number) {
+  const timestamp = publishNowIso({});
+  const { data, error } = await admin.supabase
+    .from("posts")
+    .insert({
+      ...zeroMetrics(),
+      author_display_name: connection.displayName,
+      author_username: connection.username,
+      created_at_platform: timestamp,
+      engagement_rate: null,
+      format: draft.contentType,
+      has_link: /https?:\/\//i.test(created.text),
+      has_media: draft.mediaAssetIds.length > 0 && index === 0,
+      hook_type: null,
+      imported_at: timestamp,
+      is_owner_post: true,
+      media_metadata: { media_asset_ids: draft.mediaAssetIds },
+      metadata: {
+        phase: PHASE_17,
+        publishing_draft_id: draft.id,
+        thread_index: index,
+      } satisfies Record<string, Json>,
+      platform: "x",
+      platform_post_id: created.id,
+      quality_score: null,
+      raw_api_payload: created.raw as Json,
+      source: "x_api_publish",
+      text: created.text,
+      tone: null,
+      topic: null,
+      url: xPostUrl(connection.username, created.id),
+      user_id: admin.userId,
+      virality_score: null,
+    })
+    .select()
+    .single();
+
+  if (error || !data) {
+    throw new Error(`Failed to archive published X post: ${error?.message ?? "missing row"}`);
+  }
+
+  await admin.supabase.from("post_metric_snapshots").insert({
+    ...zeroMetrics(),
+    engagement_rate: null,
+    heuristic_score: null,
+    metadata: { phase: PHASE_17 },
+    post_id: data.id,
+    quality_score: null,
+    raw_api_payload: created.raw as Json,
+    score_metadata: { source: "x_api_publish" },
+    snapshot_at: timestamp,
+    source: "x_api_publish",
+    user_id: admin.userId,
+    virality_score: null,
+  });
+
+  return data as PostRow;
+}
+
+async function insertPublishedPost(admin: AdminContext, draft: PublishingDraft, job: PublishingJobRow, connection: DecryptedXConnection, createdPosts: XCreatedPost[], payloadHash: string, partial: boolean) {
+  if (createdPosts.length === 0) return null;
+
+  const archivedPosts = [];
+  for (const [index, created] of createdPosts.entries()) {
+    archivedPosts.push(await insertPublishedArchivePost(admin, draft, connection, created, index));
+  }
+
+  const root = createdPosts[0]!;
+  const { data, error } = await admin.supabase
+    .from("published_posts")
+    .insert({
+      content_type: draft.contentType,
+      metadata: {
+        partial,
+        payload_hash: payloadHash,
+        phase: PHASE_17,
+      } satisfies Record<string, Json>,
+      platform: "x",
+      platform_post_id: root.id,
+      post_id: archivedPosts[0]?.id ?? null,
+      published_at: publishNowIso({}),
+      published_via: "api",
+      publishing_draft_id: draft.id,
+      publishing_job_id: job.id,
+      quote_target_post_id: draft.quotePostId,
+      raw_api_payload: { posts: createdPosts.map((post) => post.raw) } as Json,
+      reply_target_post_id: draft.replyToPostId,
+      thread_post_ids: createdPosts.map((post) => post.id),
+      thread_root_post_id: isThreadPublishingType(draft.contentType) ? root.id : null,
+      url: xPostUrl(connection.username, root.id),
+      user_id: admin.userId,
+    })
+    .select()
+    .single();
+
+  if (error || !data) {
+    throw new Error(`Failed to record published X post: ${error?.message ?? "missing row"}`);
+  }
+
+  return rowToPublishedPost(data as PublishedPostRow);
+}
+
+async function markDraftAndSchedule(admin: AdminContext, draft: PublishingDraft, status: "failed" | "published", scheduledPostId?: null | string) {
+  await admin.supabase.from("publishing_drafts").update({ status }).eq("id", draft.id).eq("user_id", admin.userId);
+
+  const scheduledUpdate = status === "published" ? { status: "published" } : { status: "failed" };
+  const calendarStatus = status === "published" ? "published" : "missed";
+  if (scheduledPostId) {
+    await admin.supabase.from("scheduled_posts").update(scheduledUpdate).eq("id", scheduledPostId).eq("user_id", admin.userId);
+  } else {
+    await admin.supabase.from("scheduled_posts").update(scheduledUpdate).eq("publishing_draft_id", draft.id).eq("user_id", admin.userId);
+  }
+
+  await admin.supabase.from("content_calendar_items").update({ status: calendarStatus }).eq("entity_id", draft.id).eq("user_id", admin.userId);
+}
+
+async function deferScheduledPublish(admin: AdminContext, draft: PublishingDraft, scheduledPostId: string, retryAfter: string, message: string) {
+  await admin.supabase
+    .from("publishing_drafts")
+    .update({ scheduled_at: retryAfter, status: "scheduled" })
+    .eq("id", draft.id)
+    .eq("user_id", admin.userId);
+
+  await admin.supabase
+    .from("scheduled_posts")
+    .update({
+      lock_token: null,
+      locked_at: null,
+      metadata: metadataWithPhase({ deferred_message: message, deferred_reason: "rate_limited", phase: PHASE_17, retry_after: retryAfter }),
+      scheduled_for: retryAfter,
+      status: "scheduled",
+    })
+    .eq("id", scheduledPostId)
+    .eq("user_id", admin.userId);
+
+  await admin.supabase
+    .from("content_calendar_items")
+    .update({
+      starts_at: retryAfter,
+      status: "scheduled",
+    })
+    .eq("entity_id", draft.id)
+    .eq("user_id", admin.userId);
+}
+
+function failureDetailsForError(error: unknown, partialPosts: XCreatedPost[]): XPublishFailureDetails {
+  if (error instanceof XThreadPartialFailure) {
+    return failureDetailsForError(error.causeError, error.createdPosts);
+  }
+
+  if (partialPosts.length > 0) {
+    return {
+      failureType: "thread_partial_failure",
+      message: error instanceof Error ? error.message.slice(0, 500) : "Thread publishing partially failed.",
+      providerErrorCode: "thread_partial_failure",
+      rawErrorRedacted: { partial_post_ids: partialPosts.map((post) => post.id) },
+      retryAfter: null,
+      retryable: false,
+    };
+  }
+
+  if (error instanceof XPublishingGuardError) {
+    return {
+      failureType: error.code,
+      message: error.message.slice(0, 500),
+      providerErrorCode: error.code,
+      rawErrorRedacted: { code: error.code },
+      retryAfter: error.retryAfter,
+      retryable: error.retryable,
+    };
+  }
+
+  if (error instanceof XApiError) {
+    return {
+      failureType: error.details.code,
+      message: error.message.slice(0, 500),
+      providerErrorCode: error.details.code,
+      rawErrorRedacted: { code: error.details.code, status: error.details.status },
+      retryAfter: error.details.rateLimitResetAt ?? null,
+      retryable: error.details.retryable,
+    };
+  }
+
+  return {
+    failureType: "x_api_error",
+    message: error instanceof Error ? error.message.slice(0, 500) : "Unknown X publishing failure.",
+    providerErrorCode: "x_api_error",
+    rawErrorRedacted: {},
+    retryAfter: null,
+    retryable: false,
+  };
+}
+
+async function insertXPublishingFailure(admin: AdminContext, job: PublishingJobRow, draft: PublishingDraft, details: XPublishFailureDetails) {
+  const { data, error } = await admin.supabase
+    .from("publishing_failures")
+    .insert({
+      failure_type: details.failureType,
+      metadata: metadataWithPhase({ phase: PHASE_17 }),
+      provider_error_code: details.providerErrorCode,
+      publishing_draft_id: draft.id,
+      publishing_job_id: job.id,
+      raw_error_redacted: details.rawErrorRedacted,
+      retry_after: details.retryAfter,
+      retryable: details.retryable,
+      sanitized_message: details.message,
+      user_id: admin.userId,
+    })
+    .select()
+    .single();
+
+  if (error || !data) {
+    throw new Error(`Failed to record X publishing failure: ${error?.message ?? "missing row"}`);
+  }
+
+  await logAuditEvent({
+    actorEmail: admin.email,
+    error: details.message,
+    eventType: "x_publish_failed",
+    metadata: {
+      failure_type: details.failureType,
+      job_id: job.id,
+      phase: PHASE_17,
+      retry_after: details.retryAfter,
+      retryable: details.retryable,
+    },
+    success: false,
+    targetId: draft.id,
+    targetType: "publishing_draft",
+    userId: admin.userId,
+  });
+
+  return rowToFailure(data);
+}
+
+export async function runXPublishingJob(admin: AdminContext, input: PublishingDraftDryRunServiceInput, options: XPublishingJobOptions = {}): Promise<XPublishingJobResult> {
+  const mode = options.mode ?? "dry_run";
+
+  if (mode === "dry_run") {
+    const result = await runDryRunPublishingJob(admin, input, { jobType: options.jobType === "retry" ? "retry" : "dry_run" });
+    return {
+      failure: result.failure,
+      job: result.job,
+      mode,
+      payload: result.payload,
+      publishedPost: null,
+    };
+  }
+
+  const draft = await loadDraft(admin, input.id);
+
+  if (options.expectedContentTypes && !options.expectedContentTypes.includes(draft.contentType)) {
+    throw new Error(`Publishing draft type ${draft.contentType} does not match this X publish route.`);
+  }
+
+  assertLivePublishConfirmation(input, options);
+  const payloadHash = draft.approvalPayloadHash;
+  if (draft.approvalStatus !== "approved" || !payloadHash || !draft.approvedAt) {
+    throw new XPublishingGuardError("approval_required", "Publishing draft must be approved before live X publishing.");
+  }
+
+  const connection = await loadXPublishingConnection(admin, options);
+  const initialPayload = xRequestPayloadForDraft(draft, connection);
+  const job = await createLivePublishingJob(admin, draft, initialPayload, payloadHash, options);
+  let createdPosts: XCreatedPost[] = [];
+  let publishedPost: null | PublishedPost = null;
+  let requestPayload = initialPayload;
+
+  const recordFailure = async (details: XPublishFailureDetails) => {
+    const completedAt = publishNowIso(options);
+    const updatedJob = await updatePublishingJob(admin, job, {
+      completed_at: completedAt,
+      error: details.message,
+      error_code: details.failureType,
+      rate_limit_reset_at: details.retryAfter,
+      status: "failed",
+      x_response_payload: {
+        error: details.rawErrorRedacted,
+        partial_post_ids: createdPosts.map((post) => post.id),
+      } as Json,
+    });
+
+    if (options.scheduledPostId && details.retryable && details.retryAfter) {
+      await deferScheduledPublish(admin, draft, options.scheduledPostId, details.retryAfter, details.message);
+    } else {
+      await markDraftAndSchedule(admin, draft, "failed", options.scheduledPostId);
+    }
+
+    const failure = await insertXPublishingFailure(admin, job, draft, details);
+
+    return {
+      failure,
+      job: rowToJob(updatedJob),
+      mode,
+      payload: requestPayload,
+      publishedPost,
+    };
+  };
+
+  try {
+    assertApprovalPayload(draft, input.payloadHash ?? null, connection);
+    assertXPublishingCapabilities(draft, connection);
+    const client = options.client ?? createLiveXPublishingClient(connection.accessToken);
+    const mediaIds = await resolveMediaIds(admin, draft, client, connection);
+    requestPayload = xRequestPayloadForDraft(draft, connection, mediaIds);
+    await updatePublishingJob(admin, job, { x_request_payload: requestPayload });
+
+    try {
+      createdPosts = await publishDraftToX(draft, client, mediaIds);
+    } catch (error) {
+      if (error instanceof XThreadPartialFailure) {
+        createdPosts = error.createdPosts;
+      }
+
+      if (createdPosts.length > 0) {
+        try {
+          publishedPost = await insertPublishedPost(admin, draft, job, connection, createdPosts, payloadHash, true);
+        } catch (reconciliationError) {
+          return recordFailure({
+            failureType: "local_reconciliation_failed",
+            message: reconciliationError instanceof Error ? reconciliationError.message.slice(0, 500) : "X publish succeeded partially, but local reconciliation failed.",
+            providerErrorCode: "local_reconciliation_failed",
+            rawErrorRedacted: { platform_post_ids: createdPosts.map((post) => post.id) },
+            retryAfter: null,
+            retryable: false,
+          });
+        }
+      }
+
+      return recordFailure(failureDetailsForError(error, createdPosts));
+    }
+
+    try {
+      publishedPost = await insertPublishedPost(admin, draft, job, connection, createdPosts, payloadHash, false);
+      const completedAt = publishNowIso(options);
+      const updatedJob = await updatePublishingJob(admin, job, {
+        completed_at: completedAt,
+        rate_limit_reset_at: createdPosts.find((post) => post.rateLimitResetAt)?.rateLimitResetAt ?? null,
+        status: "succeeded",
+        x_response_payload: { posts: createdPosts.map((post) => post.raw) } as Json,
+      });
+      await markDraftAndSchedule(admin, draft, "published", options.scheduledPostId);
+      await logAuditEvent({
+        actorEmail: admin.email,
+        eventType: "x_publish_succeeded",
+        metadata: {
+          job_id: updatedJob.id,
+          payload_hash: payloadHash,
+          phase: PHASE_17,
+          platform_post_ids: createdPosts.map((post) => post.id),
+        },
+        request: options.request ?? undefined,
+        success: true,
+        targetId: draft.id,
+        targetType: "publishing_draft",
+        userId: admin.userId,
+      });
+
+      return {
+        failure: null,
+        job: rowToJob(updatedJob),
+        mode,
+        payload: requestPayload,
+        publishedPost,
+      };
+    } catch (error) {
+      return recordFailure({
+        failureType: "local_reconciliation_failed",
+        message: error instanceof Error ? error.message.slice(0, 500) : "X publish succeeded, but local reconciliation failed.",
+        providerErrorCode: "local_reconciliation_failed",
+        rawErrorRedacted: { platform_post_ids: createdPosts.map((post) => post.id) },
+        retryAfter: null,
+        retryable: false,
+      });
+    }
+  } catch (error) {
+    return recordFailure(failureDetailsForError(error, createdPosts));
+  }
+}
+
 async function loadJob(admin: AdminContext, id: string) {
   const { data, error } = await admin.supabase
     .from("publishing_jobs")
@@ -1187,6 +1958,10 @@ export async function retryPublishingJob(admin: AdminContext, input: PublishingJ
     throw new Error("Publishing failure is not retryable.");
   }
 
+  if (failure.retry_after && new Date(failure.retry_after).getTime() > Date.now()) {
+    throw new Error("Publishing failure retry window has not opened yet.");
+  }
+
   await logAuditEvent({
     actorEmail: admin.email,
     eventType: "publishing_retry",
@@ -1197,7 +1972,11 @@ export async function retryPublishingJob(admin: AdminContext, input: PublishingJ
     userId: admin.userId,
   });
 
-  return runDryRunPublishingJob(admin, { confirmation: null, id: job.publishing_draft_id, payloadHash: null }, { jobType: "retry" });
+  if (job.job_type === "dry_run") {
+    return runDryRunPublishingJob(admin, { confirmation: null, id: job.publishing_draft_id, payloadHash: null }, { jobType: "retry" });
+  }
+
+  return runXPublishingJob(admin, { confirmation: null, id: job.publishing_draft_id, payloadHash: null }, { jobType: "retry", mode: "live" });
 }
 
 export async function cancelPublishingJob(admin: AdminContext, input: PublishingCancelInput) {
@@ -1272,6 +2051,155 @@ export async function cancelPublishingDraft(admin: AdminContext, input: Publishi
   });
 
   return rowToDraft(data);
+}
+
+export type ScheduledPublishingExecutorResult = {
+  checkedAt: string;
+  failed: number;
+  processed: number;
+  skipped: number;
+  succeeded: number;
+};
+
+export async function runScheduledPublishingExecutor(admin: AdminContext, options: XPublishingJobOptions & { limit?: number } = {}): Promise<ScheduledPublishingExecutorResult> {
+  const checkedAt = publishNowIso(options);
+  const { data, error } = await admin.supabase
+    .from("scheduled_posts")
+    .select("*")
+    .eq("user_id", admin.userId)
+    .eq("status", "scheduled")
+    .lte("scheduled_for", checkedAt)
+    .is("deleted_at", null)
+    .order("scheduled_for", { ascending: true })
+    .limit(options.limit ?? 10);
+
+  if (error) {
+    throw new Error(`Failed to load due scheduled posts: ${error.message}`);
+  }
+
+  let failed = 0;
+  let skipped = 0;
+  let succeeded = 0;
+
+  for (const scheduled of (data ?? []) as ScheduledPostRow[]) {
+    const lockToken = randomUUID();
+    const { data: claimed, error: lockError } = await admin.supabase
+      .from("scheduled_posts")
+      .update({
+        lock_token: lockToken,
+        locked_at: checkedAt,
+        status: "publishing",
+      })
+      .eq("id", scheduled.id)
+      .eq("user_id", admin.userId)
+      .eq("status", "scheduled")
+      .is("lock_token", null)
+      .select("id")
+      .maybeSingle();
+
+    if (lockError || !claimed) {
+      skipped += 1;
+      continue;
+    }
+
+    try {
+      const result = await runXPublishingJob(
+        admin,
+        {
+          confirmation: "confirm scheduled publish",
+          id: scheduled.publishing_draft_id,
+          payloadHash: null,
+        },
+        {
+          ...options,
+          mode: "live",
+          scheduledPostId: scheduled.id,
+        },
+      );
+
+      if (result.job.status === "succeeded") succeeded += 1;
+      else if (result.failure?.retryable && result.failure.retryAfter) skipped += 1;
+      else failed += 1;
+    } catch (error) {
+      failed += 1;
+      await admin.supabase
+        .from("scheduled_posts")
+        .update({
+          metadata: metadataWithPhase({
+            error: error instanceof Error ? error.message.slice(0, 500) : "unknown scheduled publish failure",
+            phase: PHASE_17,
+          }),
+          status: "failed",
+        })
+        .eq("id", scheduled.id)
+        .eq("user_id", admin.userId);
+    }
+  }
+
+  return {
+    checkedAt,
+    failed,
+    processed: succeeded + failed,
+    skipped,
+    succeeded,
+  };
+}
+
+export async function deleteOwnXPost(admin: AdminContext, input: { confirmation: string; platformPostId: string }, options: XPublishingJobOptions = {}) {
+  const connection = await loadXPublishingConnection(admin, options);
+
+  if (!connection.capabilities.can_delete_posts) {
+    await logAuditEvent({
+      actorEmail: admin.email,
+      error: "X delete capability is disabled.",
+      eventType: "x_publish_failed",
+      metadata: { action: "delete", phase: PHASE_17, platform_post_id: input.platformPostId },
+      success: false,
+      targetType: "x_post",
+      userId: admin.userId,
+    });
+    throw new XPublishingGuardError("capability_disabled", "X delete-own-post capability is disabled.");
+  }
+
+  const client = options.client ?? createLiveXPublishingClient(connection.accessToken);
+  const result = await client.deletePost(input.platformPostId);
+  const timestamp = publishNowIso(options);
+
+  await admin.supabase
+    .from("published_posts")
+    .update({
+      deleted_at: timestamp,
+      metadata: metadataWithPhase({ deleted_external: true, phase: PHASE_17 }),
+    })
+    .eq("user_id", admin.userId)
+    .eq("platform", "x")
+    .eq("platform_post_id", input.platformPostId);
+
+  await admin.supabase
+    .from("posts")
+    .update({
+      deleted_at: timestamp,
+      metadata: metadataWithPhase({ deleted_external: true, phase: PHASE_17 }),
+    })
+    .eq("user_id", admin.userId)
+    .eq("platform", "x")
+    .eq("platform_post_id", input.platformPostId);
+
+  await logAuditEvent({
+    actorEmail: admin.email,
+    eventType: "x_post_deleted",
+    metadata: {
+      confirmation: input.confirmation ? "present" : "missing",
+      phase: PHASE_17,
+      platform_post_id: input.platformPostId,
+    },
+    request: options.request ?? undefined,
+    success: result.deleted,
+    targetType: "x_post",
+    userId: admin.userId,
+  });
+
+  return result;
 }
 
 function computeMetrics(drafts: PublishingDraft[]) {

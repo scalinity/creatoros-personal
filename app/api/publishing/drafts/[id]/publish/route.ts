@@ -1,8 +1,8 @@
 import { NextRequest } from "next/server";
 
 import { requireAdminForRoute } from "@/lib/auth/admin";
-import { runDryRunPublishingJob } from "@/lib/publishing";
-import { publishingDraftDryRunSchema } from "@/lib/publishing/validation";
+import { runXPublishingJob } from "@/lib/publishing";
+import { publishingDraftPublishSchema } from "@/lib/publishing/validation";
 import { createFixedWindowRateLimiter, MemoryRateLimitStore, rateLimitHeaders } from "@/lib/rate-limit";
 
 import { envelope, errorResponse, publishingErrorResponse, readJsonBody } from "../../../_utils";
@@ -29,23 +29,23 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
   const { id } = await context.params;
   const body = await readJsonBody(request);
-  const parsed = publishingDraftDryRunSchema.safeParse({
+  const parsed = publishingDraftPublishSchema.safeParse({
     ...(body && typeof body === "object" && !Array.isArray(body) ? body : {}),
     id,
   });
 
   if (!parsed.success) {
-    return errorResponse("validation_error", "Publishing dry-run payload failed validation.", 400, headers);
+    return errorResponse("validation_error", "Publishing payload failed validation.", 400, headers);
   }
 
   try {
-    const result = await runDryRunPublishingJob(guard.admin, parsed.data);
+    const result = await runXPublishingJob(guard.admin, parsed.data, { mode: parsed.data.dryRun ? "dry_run" : "live", request });
     return envelope(result, headers);
   } catch (error) {
-    console.error("Publishing dry-run API failed", {
+    console.error("Publishing API failed", {
       draftId: id,
       reason: error instanceof Error ? error.message : "unknown",
     });
-    return publishingErrorResponse(error, "Publishing dry run could not be completed.", headers);
+    return publishingErrorResponse(error, "Publishing could not be completed.", headers);
   }
 }

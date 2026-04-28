@@ -17,12 +17,15 @@ const oauthCallbackLimiter = createFixedWindowRateLimiter({
   windowMs: 60_000,
 });
 
-const oauthCookieNames = ["creatoros_x_oauth_state", "creatoros_x_oauth_verifier", "creatoros_x_oauth_return_to", "creatoros_x_oauth_scopes"] as const;
+const oauthCookieNames = ["creatoros_x_oauth_state", "creatoros_x_oauth_verifier", "creatoros_x_oauth_return_to", "creatoros_x_oauth_scopes", "creatoros_x_oauth_mode"] as const;
 
-function redirectWithNotice(returnTo: string, notice: string, headers?: Record<string, string>) {
-  const url = new URL(returnTo, "http://creatoros.local");
+function redirectWithNotice(request: NextRequest, returnTo: string, notice: string, headers?: Record<string, string>) {
+  let url = new URL(returnTo, request.nextUrl.origin);
+  if (url.origin !== request.nextUrl.origin) {
+    url = new URL("/settings/x-connection", request.nextUrl.origin);
+  }
   url.searchParams.set("notice", notice);
-  const response = NextResponse.redirect(`${url.pathname}${url.search}`, { headers });
+  const response = NextResponse.redirect(url, { headers });
 
   for (const name of oauthCookieNames) {
     response.cookies.set(name, "", {
@@ -56,6 +59,7 @@ export async function GET(request: NextRequest) {
   const expectedState = request.cookies.get("creatoros_x_oauth_state")?.value;
   const verifier = request.cookies.get("creatoros_x_oauth_verifier")?.value;
   const requestedScopes = normalizeXScopes(request.cookies.get("creatoros_x_oauth_scopes")?.value);
+  const mode = request.cookies.get("creatoros_x_oauth_mode")?.value === "publishing" ? "publishing" : "read";
 
   if (!parsed.success || parsed.data.error || !parsed.data.code || !parsed.data.state || !expectedState || parsed.data.state !== expectedState || !verifier) {
     await logAuditEvent({
@@ -72,7 +76,7 @@ export async function GET(request: NextRequest) {
       userId: guard.admin.userId,
     });
 
-    return redirectWithNotice(returnTo, "x_connect_failed", headers);
+    return redirectWithNotice(request, returnTo, "x_connect_failed", headers);
   }
 
   try {
@@ -84,7 +88,24 @@ export async function GET(request: NextRequest) {
       tokenSet,
     });
 
-    return redirectWithNotice(returnTo, connection.status === "connected" ? "x_connected" : "x_connect_degraded", headers);
+    if (mode === "publishing") {
+      await logAuditEvent({
+        actorEmail: guard.admin.email,
+        eventType: "x_scope_escalation_completed",
+        metadata: {
+          capabilities: connection.capabilities,
+          phase: "17-x-write-publishing-adapter",
+          scopes: connection.scopes,
+        },
+        request,
+        success: connection.capabilities.can_write_posts,
+        targetId: connection.id,
+        targetType: "x_connection",
+        userId: guard.admin.userId,
+      });
+    }
+
+    return redirectWithNotice(request, returnTo, connection.status === "connected" ? "x_connected" : "x_connect_degraded", headers);
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown X OAuth callback failure";
     console.error("X OAuth callback failed", { reason: message });
@@ -101,6 +122,6 @@ export async function GET(request: NextRequest) {
       userId: guard.admin.userId,
     });
 
-    return redirectWithNotice(returnTo, "x_connect_failed", headers);
+    return redirectWithNotice(request, returnTo, "x_connect_failed", headers);
   }
 }

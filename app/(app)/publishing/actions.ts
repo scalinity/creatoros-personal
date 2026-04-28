@@ -10,6 +10,7 @@ import {
   createPublishingDraftFromSource,
   retryPublishingJob,
   runDryRunPublishingJob,
+  runXPublishingJob,
   scheduleApprovedDraft,
   updatePublishingDraft,
 } from "@/lib/publishing";
@@ -20,6 +21,7 @@ import {
   publishingDraftCreateSchema,
   publishingDraftDryRunSchema,
   publishingDraftFromSourceSchema,
+  publishingDraftPublishSchema,
   publishingDraftScheduleSchema,
   publishingDraftUpdateSchema,
   publishingJobRetrySchema,
@@ -175,6 +177,31 @@ export async function runDryRunPublishingAction(formData: FormData) {
     });
     redirectToPublishing({ notice: "dry_run_failed", selected: parsed.data.id });
   }
+}
+
+export async function runLivePublishingAction(formData: FormData) {
+  const admin = await requireAdmin();
+  await assertAllowed(admin.userId, "execute");
+  const parsed = publishingDraftPublishSchema.safeParse(formDataToPublishingRecord(formData));
+
+  if (!parsed.success) {
+    redirectToPublishing({ notice: "publish_failed" });
+  }
+
+  let notice = "publish_failed";
+  let selected = parsed.data.id;
+  try {
+    const result = await runXPublishingJob(admin, parsed.data, { mode: parsed.data.dryRun ? "dry_run" : "live" });
+    notice = result.job.status === "succeeded" ? "live_publish_complete" : "publish_failed";
+    selected = result.job.draftId;
+  } catch (error) {
+    console.error("Failed to run live publishing job", {
+      draftId: parsed.data.id,
+      reason: error instanceof Error ? error.message : "unknown",
+    });
+  }
+
+  redirectToPublishing({ notice, selected });
 }
 
 export async function retryPublishingJobAction(formData: FormData) {

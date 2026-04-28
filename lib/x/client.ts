@@ -47,6 +47,56 @@ export type XApiClient = {
   listUserPosts(userId: string, input: XListPostsInput): Promise<XListPostsResult>;
 };
 
+export type XCreatePostPayload = {
+  media?: {
+    media_ids: string[];
+    tagged_user_ids?: string[];
+  };
+  quote_tweet_id?: string;
+  reply?: {
+    exclude_reply_user_ids?: string[];
+    in_reply_to_tweet_id: string;
+  };
+  reply_settings?: "following" | "mentionedUsers" | "subscribers" | "verified";
+  text?: string;
+};
+
+export type XCreatedPost = {
+  id: string;
+  rateLimitResetAt: null | string;
+  raw: Record<string, unknown>;
+  text: string;
+};
+
+export type XMediaUploadInput = {
+  additionalOwners?: string[];
+  media: string;
+  mediaCategory: "subtitles" | "tweet_gif" | "tweet_image" | "tweet_video";
+  mediaType: string;
+  shared?: boolean;
+};
+
+export type XMediaUploadResult = {
+  expiresAfterSeconds: null | number;
+  id: string;
+  mediaKey: null | string;
+  raw: Record<string, unknown>;
+  size: null | number;
+};
+
+export type XDeletePostResult = {
+  deleted: boolean;
+  id: string;
+  rateLimitResetAt: null | string;
+  raw: Record<string, unknown>;
+};
+
+export type XPublishingClient = {
+  createPost(payload: XCreatePostPayload): Promise<XCreatedPost>;
+  deletePost(id: string): Promise<XDeletePostResult>;
+  uploadMedia(input: XMediaUploadInput): Promise<XMediaUploadResult>;
+};
+
 export class XApiError extends Error {
   override name = "XApiError";
 
@@ -139,6 +189,39 @@ async function requestJson(accessToken: string, path: string, fetchImpl: FetchIm
   return { payload, rateLimitResetAt: parseRateLimitReset(response) };
 }
 
+function errorCodeForStatus(status: number) {
+  if (status === 401) return "unauthorized";
+  if (status === 403) return "missing_scope";
+  if (status === 429) return "rate_limited";
+  if (status >= 500) return "x_api_retryable";
+  return "x_api_error";
+}
+
+async function requestJsonWithBody(accessToken: string, path: string, fetchImpl: FetchImpl, init: { body?: unknown; method: "DELETE" | "POST" }) {
+  const response = await fetchImpl(`${X_API_BASE}${path}`, {
+    body: init.body === undefined ? undefined : JSON.stringify(init.body),
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: "application/json",
+      ...(init.body === undefined ? {} : { "Content-Type": "application/json" }),
+    },
+    method: init.method,
+  });
+  const payload = await parseJsonResponse(response);
+
+  if (!response.ok) {
+    const rateLimitResetAt = parseRateLimitReset(response);
+    throw new XApiError(`X API request failed with status ${response.status}.`, {
+      code: errorCodeForStatus(response.status),
+      rateLimitResetAt,
+      retryable: response.status === 429 || response.status >= 500,
+      status: response.status,
+    });
+  }
+
+  return { payload, rateLimitResetAt: parseRateLimitReset(response) };
+}
+
 function parseUserPayload(payload: unknown): XAuthenticatedUser {
   const data = objectValue((payload as XUserPayload | null)?.data);
   const id = stringValue(data.id);
@@ -204,6 +287,51 @@ function parseTweet(tweet: Record<string, unknown>, mediaByKey: Map<string, Reco
   };
 }
 
+function parseCreatedPost(payload: unknown, rateLimitResetAt: null | string): XCreatedPost {
+  const data = objectValue((payload as { data?: unknown } | null)?.data);
+  const id = stringValue(data.id);
+  const text = stringValue(data.text) ?? "";
+
+  if (!id) {
+    throw new Error("X create post response was missing the post id.");
+  }
+
+  return {
+    id,
+    rateLimitResetAt,
+    raw: objectValue(payload),
+    text,
+  };
+}
+
+function parseMediaUpload(payload: unknown): XMediaUploadResult {
+  const data = objectValue((payload as { data?: unknown } | null)?.data);
+  const id = stringValue(data.id);
+
+  if (!id) {
+    throw new Error("X media upload response was missing the media id.");
+  }
+
+  return {
+    expiresAfterSeconds: numberMetric(data.expires_after_secs),
+    id,
+    mediaKey: stringValue(data.media_key),
+    raw: objectValue(payload),
+    size: numberMetric(data.size),
+  };
+}
+
+function parseDeletePost(id: string, payload: unknown, rateLimitResetAt: null | string): XDeletePostResult {
+  const data = objectValue((payload as { data?: unknown } | null)?.data);
+
+  return {
+    deleted: data.deleted === true,
+    id,
+    rateLimitResetAt,
+    raw: objectValue(payload),
+  };
+}
+
 export function createLiveXApiClient(accessToken: string, options: { fetchImpl?: FetchImpl } = {}): XApiClient {
   const fetchImpl = options.fetchImpl ?? fetch;
 
@@ -251,6 +379,41 @@ export function createLiveXApiClient(accessToken: string, options: { fetchImpl?:
       const posts = rawPosts.map((tweet) => parseTweet(tweet, mediaByKey)).filter((post): post is XSyncPost => Boolean(post)).slice(0, input.maxPosts);
 
       return { posts, rateLimitResetAt };
+    },
+  };
+}
+
+export function createLiveXPublishingClient(accessToken: string, options: { fetchImpl?: FetchImpl } = {}): XPublishingClient {
+  const fetchImpl = options.fetchImpl ?? fetch;
+
+  return {
+    async createPost(payload) {
+      const { payload: responsePayload, rateLimitResetAt } = await requestJsonWithBody(accessToken, "/tweets", fetchImpl, {
+        body: payload,
+        method: "POST",
+      });
+      return parseCreatedPost(responsePayload, rateLimitResetAt);
+    },
+
+    async deletePost(id) {
+      const { payload, rateLimitResetAt } = await requestJsonWithBody(accessToken, `/tweets/${encodeURIComponent(id)}`, fetchImpl, {
+        method: "DELETE",
+      });
+      return parseDeletePost(id, payload, rateLimitResetAt);
+    },
+
+    async uploadMedia(input) {
+      const { payload } = await requestJsonWithBody(accessToken, "/media/upload", fetchImpl, {
+        body: {
+          additional_owners: input.additionalOwners,
+          media: input.media,
+          media_category: input.mediaCategory,
+          media_type: input.mediaType,
+          shared: input.shared ?? false,
+        },
+        method: "POST",
+      });
+      return parseMediaUpload(payload);
     },
   };
 }

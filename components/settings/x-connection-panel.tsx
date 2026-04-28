@@ -38,6 +38,7 @@ const noticeCopy: Record<string, string> = {
   x_connect_failed: "X OAuth failed before token storage. Reconnect when configuration is correct.",
   x_connected: "X connected. Tokens are encrypted at rest and never shown here.",
   x_disconnected: "X disconnected. Token material was removed; imported posts remain unless deleted later.",
+  x_scope_escalation_started: "Publishing scope escalation started. Complete the X authorization screen to enable write capabilities.",
 };
 
 function statusVariant(status: null | string): BadgeVariant {
@@ -81,9 +82,14 @@ function Notice({ notice }: { notice?: null | string }) {
 
 function ConnectAction({ connected }: { connected: boolean }) {
   return (
-    <a className="btn btn-primary btn-sm" href="/api/x/oauth/start?mode=read&return_to=/settings/x-connection">
-      <span className="btn-label">{connected ? "Reconnect read access" : "Connect X read access"}</span>
-    </a>
+    <div className="x-connection-link-actions">
+      <a className="btn btn-primary btn-sm" href="/api/x/oauth/start?mode=read&return_to=/settings/x-connection">
+        <span className="btn-label">{connected ? "Reconnect read access" : "Connect X read access"}</span>
+      </a>
+      <a className="btn btn-secondary btn-sm" href="/api/x/oauth/start?mode=publishing&return_to=/settings/x-connection">
+        <span className="btn-label">Enable publishing scopes</span>
+      </a>
+    </div>
   );
 }
 
@@ -130,7 +136,7 @@ export function XConnectionPanel({ connection, disconnectAction, notice, syncAct
           <div className="settings-actions x-connection-actions">
             <div className="settings-action">
               <ConnectAction connected={connected} />
-              <span className="settings-action-note">Requests least-privilege read scopes only.</span>
+              <span className="settings-action-note">Read access stays least-privilege; publishing scopes are requested only through the separate escalation action.</span>
             </div>
             <div className="settings-action">
               <DisconnectForm action={disconnectAction} disabled={!connection || connection.status === "disconnected"} />

@@ -4,16 +4,16 @@ import { logAuditEvent } from "@/lib/audit";
 import { requireAdminForRoute } from "@/lib/auth/admin";
 import { createFixedWindowRateLimiter, MemoryRateLimitStore, rateLimitHeaders } from "@/lib/rate-limit";
 import { buildXAuthorizationUrl, createXCodeChallenge, createXCodeVerifier, createXOAuthState, getOptionalXOAuthConfig } from "@/lib/x/oauth";
-import { xOAuthStartQuerySchema } from "@/lib/x/validation";
+import { xScopeEscalationSchema } from "@/lib/x/validation";
 
-import { errorResponse } from "../../_utils";
+import { errorResponse, readJsonBody } from "../_utils";
 
 export const dynamic = "force-dynamic";
 
-const oauthStartLimiter = createFixedWindowRateLimiter({
-  limit: 5,
+const scopeEscalationLimiter = createFixedWindowRateLimiter({
+  limit: 3,
   store: new MemoryRateLimitStore(),
-  windowMs: 60_000,
+  windowMs: 60 * 60 * 1_000,
 });
 
 const cookieOptions = {
@@ -24,24 +24,22 @@ const cookieOptions = {
   secure: process.env.NODE_ENV === "production",
 };
 
-export async function GET(request: NextRequest) {
+export async function POST(request: NextRequest) {
   const guard = await requireAdminForRoute(request);
 
-  if (!guard.ok) {
-    return guard.response;
-  }
+  if (!guard.ok) return guard.response;
 
-  const decision = await oauthStartLimiter.check({ id: `${guard.admin.userId}:x-oauth-start` });
+  const decision = await scopeEscalationLimiter.check({ id: `${guard.admin.userId}:x-scope-escalation` });
   const headers = rateLimitHeaders(decision);
 
   if (!decision.allowed) {
-    return errorResponse("rate_limited", "Too many X OAuth start requests.", 429, headers);
+    return errorResponse("rate_limited", "Too many X scope escalation requests.", 429, headers);
   }
 
-  const parsed = xOAuthStartQuerySchema.safeParse(Object.fromEntries(request.nextUrl.searchParams));
+  const parsed = xScopeEscalationSchema.safeParse(await readJsonBody(request));
 
   if (!parsed.success) {
-    return errorResponse("validation_error", "X OAuth start query failed validation.", 400, headers);
+    return errorResponse("validation_error", "X scope escalation payload failed validation.", 400, headers);
   }
 
   if (!getOptionalXOAuthConfig()) {
@@ -53,19 +51,20 @@ export async function GET(request: NextRequest) {
   const challenge = createXCodeChallenge(verifier);
   const { scopes, url } = buildXAuthorizationUrl({
     codeChallenge: challenge,
-    mode: parsed.data.mode,
-    returnTo: parsed.data.return_to,
+    mode: "publishing",
+    publishingScopes: parsed.data.requestedScopes,
+    returnTo: parsed.data.returnTo,
     state,
   });
 
   await logAuditEvent({
     actorEmail: guard.admin.email,
-    eventType: parsed.data.mode === "publishing" ? "x_scope_escalation_started" : "x_connect_started",
+    eventType: "x_scope_escalation_started",
     metadata: {
-      mode: parsed.data.mode,
-      phase: parsed.data.mode === "publishing" ? "17-x-write-publishing-adapter" : "16-x-oauth-and-read-sync",
-      requested_scopes: scopes,
-      return_to: parsed.data.return_to,
+      phase: "17-x-write-publishing-adapter",
+      reason: parsed.data.reason,
+      requested_scopes: parsed.data.requestedScopes,
+      scopes,
     },
     request,
     success: true,
@@ -73,12 +72,12 @@ export async function GET(request: NextRequest) {
     userId: guard.admin.userId,
   });
 
-  const response = NextResponse.redirect(url, { headers });
+  const response = NextResponse.redirect(url, { headers, status: 303 });
   response.cookies.set("creatoros_x_oauth_state", state, cookieOptions);
   response.cookies.set("creatoros_x_oauth_verifier", verifier, cookieOptions);
-  response.cookies.set("creatoros_x_oauth_return_to", parsed.data.return_to, cookieOptions);
+  response.cookies.set("creatoros_x_oauth_return_to", parsed.data.returnTo, cookieOptions);
   response.cookies.set("creatoros_x_oauth_scopes", scopes.join(" "), cookieOptions);
-  response.cookies.set("creatoros_x_oauth_mode", parsed.data.mode, cookieOptions);
+  response.cookies.set("creatoros_x_oauth_mode", "publishing", cookieOptions);
 
   return response;
 }

@@ -92,6 +92,10 @@ function createSupabaseMock(seedRows: Record<string, TableRow[]> = {}) {
         filters.push({ key, op: "lte", value });
         return chain;
       },
+      maybeSingle() {
+        const data = orderedRows(filteredRows(table, filters), orderKey, ascending)[0] ?? null;
+        return Promise.resolve({ data, error: null });
+      },
       order(key: string, options?: { ascending?: boolean }) {
         orderKey = key;
         ascending = options?.ascending ?? true;

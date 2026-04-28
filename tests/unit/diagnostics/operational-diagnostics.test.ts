@@ -34,7 +34,7 @@ describe("operational diagnostics", () => {
     const diagnostics = getOperationalDiagnostics(validEnv);
 
     expect(diagnostics.overall).toBe("ready");
-    expect(diagnostics.phase).toBe("16-x-oauth-and-read-sync");
+    expect(diagnostics.phase).toBe("17-x-write-publishing-adapter");
     expect(diagnostics.groups.map((group) => group.id)).toEqual([
       "auth",
       "database",

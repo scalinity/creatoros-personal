@@ -77,6 +77,7 @@ const TOKEN_REFRESH_WINDOW_MS = 5 * 60 * 1_000;
 
 const fallbackDefaultScopes = ["tweet.read", "users.read", "offline.access", "like.read", "bookmark.read", "follows.read", "list.read"];
 const fallbackPublishingScopes = ["tweet.write", "media.write"];
+const allowedPublishingScopes = new Set(fallbackPublishingScopes);
 
 function cleanString(value: null | string | undefined) {
   const trimmed = value?.trim();
@@ -149,6 +150,10 @@ export function normalizeXScopes(scopes: readonly string[] | string | null | und
   return normalized;
 }
 
+function normalizeXPublishingScopes(scopes: readonly string[] | string | null | undefined) {
+  return normalizeXScopes(scopes).filter((scope) => allowedPublishingScopes.has(scope));
+}
+
 export function deriveXCapabilities(scopes: readonly string[], overrides: Partial<Pick<XCapabilities, "enterprise_analytics_enabled" | "enterprise_quote_post_enabled" | "enterprise_streams_enabled">> = {}): XCapabilities {
   const scopeSet = new Set(normalizeXScopes(scopes));
   const hasTweetRead = scopeSet.has("tweet.read");
@@ -157,7 +162,7 @@ export function deriveXCapabilities(scopes: readonly string[], overrides: Partia
   const enterpriseQuote = overrides.enterprise_quote_post_enabled ?? false;
 
   return {
-    can_delete_posts: false,
+    can_delete_posts: hasTweetWrite,
     can_read_metrics: hasTweetRead,
     can_read_private_metrics: Boolean(overrides.enterprise_analytics_enabled && hasTweetRead && hasUsersRead),
     can_read_user_posts: hasTweetRead && hasUsersRead,
@@ -171,12 +176,25 @@ export function deriveXCapabilities(scopes: readonly string[], overrides: Partia
   };
 }
 
+function optionalBooleanFlag(value: null | string | undefined) {
+  const normalized = value?.trim().toLowerCase();
+  return normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on";
+}
+
+export function getXCapabilityOverrides(source: NodeJS.ProcessEnv = process.env) {
+  return {
+    enterprise_analytics_enabled: optionalBooleanFlag(source.X_ENTERPRISE_ANALYTICS_ENABLED),
+    enterprise_quote_post_enabled: optionalBooleanFlag(source.X_ENTERPRISE_QUOTE_POST_ENABLED),
+    enterprise_streams_enabled: optionalBooleanFlag(source.X_ENTERPRISE_STREAMS_ENABLED),
+  } satisfies Partial<Pick<XCapabilities, "enterprise_analytics_enabled" | "enterprise_quote_post_enabled" | "enterprise_streams_enabled">>;
+}
+
 export function getXOAuthConfig(source: NodeJS.ProcessEnv = process.env): XOAuthConfig {
   return {
     clientId: requireEnvValue(source.X_CLIENT_ID, "X_CLIENT_ID"),
     clientSecret: requireEnvValue(source.X_CLIENT_SECRET, "X_CLIENT_SECRET"),
     defaultScopes: normalizeXScopes(source.X_DEFAULT_SCOPES ?? fallbackDefaultScopes),
-    publishingScopes: normalizeXScopes(source.X_PUBLISHING_SCOPES ?? fallbackPublishingScopes),
+    publishingScopes: normalizeXPublishingScopes(source.X_PUBLISHING_SCOPES ?? fallbackPublishingScopes),
     redirectUri: requireEnvValue(source.X_REDIRECT_URI, "X_REDIRECT_URI"),
   };
 }
@@ -204,11 +222,13 @@ export function createXCodeChallenge(verifier: string) {
 export function buildXAuthorizationUrl(input: {
   codeChallenge: string;
   mode?: XOAuthMode;
+  publishingScopes?: readonly string[];
   returnTo?: null | string;
   state: string;
 }, source: NodeJS.ProcessEnv = process.env) {
   const config = getXOAuthConfig(source);
-  const scopes = input.mode === "publishing" ? normalizeXScopes([...config.defaultScopes, ...config.publishingScopes]) : config.defaultScopes;
+  const writeScopes = normalizeXPublishingScopes(input.publishingScopes ?? config.publishingScopes);
+  const scopes = input.mode === "publishing" ? normalizeXScopes([...config.defaultScopes, ...writeScopes]) : config.defaultScopes;
   const url = new URL(X_AUTHORIZE_ENDPOINT);
 
   url.searchParams.set("response_type", "code");
@@ -290,7 +310,7 @@ export async function storeXOAuthConnection(
 ) {
   const client = options.client ?? createSupabaseServiceRoleClient();
   const scopes = normalizeXScopes(input.tokenSet.scope ?? input.scopes);
-  const capabilities = deriveXCapabilities(scopes);
+  const capabilities = deriveXCapabilities(scopes, getXCapabilityOverrides());
   const payload = {
     avatar_url: input.profile.avatarUrl,
     capabilities: capabilities as unknown as Json,

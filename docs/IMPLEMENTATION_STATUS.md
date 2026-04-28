@@ -1,16 +1,16 @@
 # Implementation Status
 
 Last updated: 2026-04-28
-Current phase: Phase 16 - X OAuth and Read Sync complete
-Next prompt: `17_X_WRITE_PUBLISHING_ADAPTER.md`
+Current phase: Phase 17 - X Write Publishing Adapter complete
+Next prompt: `18_ANALYTICS_DASHBOARD_AND_REPORTS.md`
 
 ## Current State
 
-CreatorOS now has a protected X read connection layer. The owner can start the official OAuth 2.0 Authorization Code with PKCE flow using least-privilege read scopes, complete the callback, store encrypted X access and refresh tokens server-side, disconnect X by clearing token material, and run manual read sync from `/settings/x-connection`. Sync jobs import/update owner posts, persist metric snapshots, handle missing metrics as non-destructive unknown/zero values with metadata, and record sanitized sync failures. A `CRON_SECRET`-protected `/api/cron/x-sync` route is available for scheduled read sync.
+CreatorOS now connects the publishing state machine to official X write endpoints behind explicit owner approval, account-bound payload hashes, capability checks, sanitized failure records, and audit logs. The owner can escalate X scopes for publishing, preview the exact approved content/account/capability payload, run dry-runs, publish approved single posts/replies/threads/quote-post drafts, and execute due scheduled posts through a `CRON_SECRET`-protected cron route.
 
-The X settings page now shows sanitized connection state, granted scopes, capability flags, token expiry, last sync status, and live/mock sync controls without exposing token values. Explicit mock sync remains available for dry-run verification when credentials are absent; live sync does not fake success without a connected account.
+The X write adapter supports live and mocked clients, thread ordering with partial-failure capture, retryable rate-limit failures with deferred scheduled rows, published-post reconciliation, post/archive metric snapshots, media upload only when configured/capable, and delete-own-post only behind an explicit confirmation and delete capability flag. Publishing OAuth requests are hard-gated to `tweet.write` and `media.write`; no autonomous engagement or platform-rule bypass behavior was added.
 
-Publishing remains bounded to Phase 15 dry-run behavior. X write publishing, publishing scope escalation, media upload, live publish reconciliation, full analytics reports, coach chat, account research, inspiration extension tokens, billing, marketing, autonomous engagement, public onboarding, and uncontrolled external action remain intentionally unimplemented.
+Full analytics reports, coach chat, account research, inspiration extension tokens, billing, marketing, autonomous engagement, public onboarding, and uncontrolled external action remain intentionally unimplemented.
 
 The original documentation package remains under `docs/`:
 
@@ -50,7 +50,7 @@ The original documentation package remains under `docs/`:
 - [x] `14_BLOG_SYSTEM.md` - Build blog CRUD, versions, exports, and repurposing workflows.
 - [x] `15_PUBLISHING_STATE_MACHINE_DRY_RUN_CALENDAR.md` - Build approval state machine, calendar, queue, dry run, jobs, failures, retries, and audit surfaces before external writes.
 - [x] `16_X_OAUTH_AND_READ_SYNC.md` - Implement X OAuth, encrypted tokens, refresh, sync, metrics, capability flags, and disconnect behavior.
-- [ ] `17_X_WRITE_PUBLISHING_ADAPTER.md` - Enable official X writes under approval, capability, duplicate, rate-limit, reconciliation, and audit guardrails.
+- [x] `17_X_WRITE_PUBLISHING_ADAPTER.md` - Enable official X writes under approval, capability, duplicate, rate-limit, reconciliation, and audit guardrails.
 - [ ] `18_ANALYTICS_DASHBOARD_AND_REPORTS.md` - Build deterministic analytics, velocity, aggregates, cadence, score explanations, and post/blog/campaign metrics.
 - [ ] `19_COACH_RETRIEVAL_AND_CONTENT_PLAYBOOKS.md` - Build internal-evidence coach, retrieval, embeddings, keyword fallback, citations, and playbooks.
 - [ ] `20_INSPIRATION_LIBRARY_AND_CHROME_EXTENSION_SAVE_TOKEN.md` - Build scoped inspiration save endpoint, personal save tokens, token settings, and extension scaffold.
@@ -59,6 +59,80 @@ The original documentation package remains under `docs/`:
 - [ ] `23_HARDENING_EXPORT_DELETE_OBSERVABILITY.md` - Add rate limits, diagnostics, export/delete, error boundaries, observability, and production safeguards.
 - [ ] `24_TESTING_E2E_DEPLOYMENT_READINESS.md` - Complete Vitest, Playwright, RLS, mocked AI/X, publishing dry-run, and design regression coverage.
 - [ ] `25_FINAL_PRODUCTION_REVIEW_AND_HANDOFF.md` - Complete final acceptance review, limitations, and handoff.
+
+## Phase 17 Completed Work
+
+- Added a server-only X publishing client for official create post, delete post, and media upload endpoints with bearer-token isolation, sanitized JSON, and rate-limit metadata capture.
+- Connected approved publishing drafts to live X writes through `runXPublishingJob`, including single post, reply, quote-post, thread ordering, media resolution, retry/reconciliation, and dry-run/live modes.
+- Added account-bound publishing payload hashes so a draft approved for one visible X account/capability payload must be reapproved before publishing to a different connection.
+- Added low-level protected X publish routes for post, thread, reply, quote, and delete-own-post plus the existing publishing draft publish route.
+- Added publishing scope escalation through OAuth with POST-to-303 navigation, hardened callback redirects, and a strict `tweet.write`/`media.write` publishing-scope allowlist.
+- Added scheduled approved publishing execution via `/api/cron/publish`, with concurrency-safe scheduled-row claiming and rate-limit deferral back to `scheduled`.
+- Added `published_posts`, owner post archive rows, metric snapshots, and `publishing_failures` reconciliation for live success, retryable failure, and partial thread failure.
+- Added audit events for publishing scope escalation, external write requests, successful writes, sanitized failures, and delete-own-post actions.
+- Added optional X enterprise capability flags for quote publishing/analytics/streams and surfaced publishing scope escalation in X settings.
+- Resolved phase review findings around missing live confirmation, account-bound approval, OAuth scope hard-gating, safe redirects, server-action redirect handling, local reconciliation errors, scheduled locking, scheduled rate-limit deferral, and retry idempotency.
+
+## Phase 17 Files Changed
+
+- `.env.example` - Optional X enterprise capability flags.
+- `app/(app)/publishing/actions.ts` - Live publish server action and redirect handling.
+- `app/(app)/publishing/page.tsx` - Loads sanitized X connection for exact preview.
+- `app/api/cron/publish/route.ts` - `CRON_SECRET`-protected scheduled publish executor.
+- `app/api/publishing/drafts/[id]/publish/route.ts` - Dry-run/live publish route wiring.
+- `app/api/x/oauth/start/route.ts` and `app/api/x/oauth/callback/route.ts` - Publishing OAuth mode, scope escalation audit, and safe redirects.
+- `app/api/x/publish/**` - Protected low-level post/thread/reply/quote/delete routes.
+- `app/api/x/scope-escalation/route.ts` - Explicit publishing scope escalation endpoint.
+- `components/publishing/index.tsx` - Exact payload/account preview and live publish controls.
+- `components/settings/x-connection-panel.tsx` and `app/globals.css` - Publishing scope escalation UI and styles.
+- `lib/publishing/index.ts` and `lib/publishing/validation.ts` - X executor, account-bound approval, scheduled execution, retries, failures, and validation.
+- `lib/x/client.ts`, `lib/x/oauth.ts`, and `lib/x/validation.ts` - X write client, scope filtering, capabilities, and route schemas.
+- `lib/server-only/diagnostics.ts` - Phase 17 operational diagnostics.
+- `supabase/migrations/20260428091700_phase17_publishing_job_idempotency.sql` - Publishing job idempotency index.
+- `tests/unit/x/phase17-x-publishing.test.ts`, `tests/unit/publishing/phase15-publishing-state-machine.test.ts`, and `tests/unit/diagnostics/operational-diagnostics.test.ts` - Phase 17 and regression coverage.
+- `docs/IMPLEMENTATION_STATUS.md` - This Phase 17 ledger update.
+
+## Phase 17 Checks and Commands Run
+
+| Command or check | Result |
+|---|---|
+| Required docs read | Root `README.md` is absent. Read `docs/README.md`, `docs/IMPLEMENTATION_STATUS.md`, `docs/docs/X_INTEGRATION.md`, `docs/docs/PUBLISHING_SYSTEM.md`, `docs/docs/API_CONTRACTS.md`, `docs/docs/SECURITY.md`, and `docs/docs/IMPLEMENTATION_NOTES.md`. |
+| Documentation lookup | Official X API docs were checked for create post, delete post, media upload, OAuth scopes, and rate-limit behavior. |
+| Bootstrap check | Confirmed Next.js 16.2.4, React 19.2.5, pnpm via `pnpm-lock.yaml` and `packageManager`, no monorepo indicators, Vitest and Playwright test setup. |
+| Package-manager execution | The `pnpm` binary is not on PATH in this shell, so checks were run with the pinned `npx pnpm@10.33.2` form. |
+| Sequential Thinking MCP | Requested by repo instructions but not available in this Codex session; planning, reflection, and verification were performed explicitly with available tools. |
+| Morph codebase search/edit | Used Morph for codebase searches. Morph edits were unavailable with `404 The model morph-v3-large does not exist`, so file edits used `apply_patch` fallback. |
+| `npx pnpm@10.33.2 test tests/unit/x/phase17-x-publishing.test.ts` | First failed as expected before implementation, then passed after Phase 17 implementation and review fixes: 1 file, 8 tests. |
+| `npx pnpm@10.33.2 test tests/unit/x/phase17-x-publishing.test.ts tests/unit/diagnostics/operational-diagnostics.test.ts tests/unit/publishing/phase15-publishing-state-machine.test.ts tests/unit/x/phase16-x-oauth-sync.test.ts` | Passed after review fixes: 4 files, 21 tests. |
+| `npx pnpm@10.33.2 typecheck` | Passed after review fixes. |
+| `npx pnpm@10.33.2 lint` | Passed after review fixes. |
+| `npx pnpm@10.33.2 test` | Passed after review fixes: 27 files, 112 tests. |
+| `npx pnpm@10.33.2 build` | Passed after review fixes; Next listed the new X publish, scope-escalation, and cron publish routes. |
+| `npx pnpm@10.33.2 test:e2e` | Passed after review fixes: 1 Chromium login smoke test. Playwright emitted the pre-existing npm config and `NO_COLOR`/`FORCE_COLOR` warnings only. |
+| Phase 17 review-orchestrator pass | Completed with parallel security, reliability, and API/test review agents. Blocking findings were resolved before this ledger update. |
+
+## Phase 17 Known Limitations and Blockers
+
+- Live X writes were not exercised against real X credentials in automated verification; tests use mocked X clients and official endpoint request-shape assertions.
+- Quote publishing remains behind `enterprise_quote_post_enabled`/`X_ENTERPRISE_QUOTE_POST_ENABLED` and the granted X account capability.
+- Media publishing supports existing `x_media_id` values or configured `media_base64` metadata upload; Supabase Storage/media pipeline integration remains a later enhancement.
+- App-side rate limiting still uses process-memory fixed windows; distributed/persistent rate limiting remains a later hardening concern.
+- Existing drafts approved before account-bound payload hashing must be reapproved before live X publishing.
+
+## Phase 17 Acceptance Gates
+
+- [x] Only approved drafts with current account-bound payload hashes can trigger live or dry-run publish.
+- [x] Immediate live writes require explicit owner confirmation.
+- [x] External writes are audited with sanitized metadata and no token exposure.
+- [x] Thread, reply, quote, media, and delete flows respect capability flags.
+- [x] Failed jobs create actionable `publishing_failures` records.
+- [x] Rate-limited scheduled publishes defer back to `scheduled` instead of becoming terminal failures.
+- [x] Mocked publishing tests cover success, rate limit, partial thread failure, capability blocking, account mismatch, confirmation validation, and scope hard-gating.
+- [x] No autonomous engagement, mass actions, billing, marketing, public onboarding, or approval bypass was added.
+
+## Phase 17 Next Step
+
+Run `18_ANALYTICS_DASHBOARD_AND_REPORTS.md` next. Stop here for Phase 17.
 
 ## Phase 16 Completed Work
 

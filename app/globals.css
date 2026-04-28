@@ -1132,6 +1132,12 @@ h6 {
   margin: 0;
 }
 
+.x-connection-link-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
 .post-history-page {
   display: flex;
   flex-direction: column;

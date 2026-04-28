@@ -25,6 +25,10 @@ const optionalTrimmedText = z.preprocess((value) => {
   return trimmed.length > 0 ? trimmed : null;
 }, z.string().max(8_000).nullable());
 const requiredConfirmation = z.preprocess((value) => String(value ?? "").trim().toLowerCase(), z.string().refine((value) => value.includes("approve") || value.includes("confirm"), "Explicit owner confirmation is required."));
+const booleanish = z
+  .union([z.boolean(), z.string()])
+  .optional()
+  .transform((value) => value === true || value === "true" || value === "on");
 const nullableUuid = z.preprocess((value) => {
   if (value === null || value === undefined) return null;
   const trimmed = String(value).trim();
@@ -221,6 +225,20 @@ export const publishingDraftDryRunSchema = z
     payloadHash: value.payload_hash ?? null,
   }));
 
+export const publishingDraftPublishSchema = z
+  .object({
+    confirmation: requiredConfirmation,
+    dry_run: booleanish.default(true),
+    id: idSchema,
+    payload_hash: optionalTrimmedText.optional(),
+  })
+  .transform((value) => ({
+    confirmation: value.confirmation,
+    dryRun: value.dry_run,
+    id: value.id,
+    payloadHash: value.payload_hash ?? null,
+  }));
+
 export const publishingJobRetrySchema = z.object({
   confirmation: requiredConfirmation.optional(),
   id: idSchema,
@@ -237,6 +255,7 @@ export type PublishingDraftApprovalInput = z.infer<typeof publishingDraftApprova
 export type PublishingDraftCreateInput = z.infer<typeof publishingDraftCreateSchema>;
 export type PublishingDraftDryRunInput = z.infer<typeof publishingDraftDryRunSchema>;
 export type PublishingDraftFromSourceInput = z.infer<typeof publishingDraftFromSourceSchema>;
+export type PublishingDraftPublishInput = z.infer<typeof publishingDraftPublishSchema>;
 export type PublishingDraftScheduleInput = z.infer<typeof publishingDraftScheduleSchema>;
 export type PublishingDraftUpdateInput = z.infer<typeof publishingDraftUpdateSchema>;
 export type PublishingJobRetryInput = z.infer<typeof publishingJobRetrySchema>;
