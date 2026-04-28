@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CreatorOS Save</title>
+    <style>
+      body { background: #201d1a; color: #f4ecdf; font: 13px system-ui, sans-serif; margin: 0; min-width: 280px; padding: 14px; }
+      button, textarea { box-sizing: border-box; width: 100%; }
+      button { background: #d45a36; border: 0; color: #1a1411; font-weight: 700; padding: 9px; }
+      textarea { background: #2b2722; border: 1px solid #5b5047; color: inherit; margin: 10px 0; min-height: 72px; padding: 8px; }
+      p { color: #cfc2b0; line-height: 1.4; margin: 8px 0 0; }
+      [data-tone="error"] { color: #e28b70; }
+      [data-tone="success"] { color: #9ec88c; }
+    </style>
+  </head>
+  <body>
+    <button id="save" type="button">Save inspiration</button>
+    <textarea id="notes" placeholder="Optional note for CreatorOS"></textarea>
+    <p id="status">Select text inside an X post, then save.</p>
+    <script type="module" src="./popup.js"></script>
+  </body>
+</html>

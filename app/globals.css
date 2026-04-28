@@ -3059,6 +3059,221 @@ h6 {
   overflow-wrap: anywhere;
 }
 
+.inspiration-page,
+.inspiration-main,
+.inspiration-list,
+.inspiration-form,
+.inspiration-inspector,
+.inspiration-transform-list,
+.token-settings-panel,
+.token-list,
+.token-form {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.inspiration-metrics {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.inspiration-workbench {
+  display: grid;
+  gap: var(--space-5);
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
+}
+
+.inspiration-create,
+.inspiration-filters,
+.inspiration-card,
+.inspiration-transform,
+.token-row,
+.token-action-state {
+  background: var(--bg-surface);
+  border: var(--border-hairline);
+  border-radius: var(--radius-md);
+}
+
+.inspiration-filters,
+.inspiration-transform-form,
+.inspiration-form-grid,
+.token-form-grid {
+  align-items: end;
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.inspiration-filters {
+  grid-template-columns: minmax(0, 1fr) minmax(160px, 240px) auto;
+  padding: var(--space-4);
+}
+
+.inspiration-filter-actions,
+.inspiration-action-row,
+.token-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.inspiration-reset {
+  color: var(--ink-tertiary);
+  font-size: var(--text-xs);
+  text-decoration: none;
+}
+
+.inspiration-card {
+  overflow: hidden;
+}
+
+.inspiration-card-link {
+  color: inherit;
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  text-decoration: none;
+}
+
+.inspiration-card-link:hover,
+.inspiration-card-selected .inspiration-card-link {
+  background: var(--bg-surface-2);
+  box-shadow: inset 2px 0 0 0 var(--accent-vermillion);
+}
+
+.inspiration-card-head,
+.inspiration-card-foot,
+.inspiration-transform-head,
+.token-row-head {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.inspiration-card-author,
+.token-row h3 {
+  color: var(--ink-primary);
+  font-size: var(--text-sm);
+  margin: 0;
+}
+
+.inspiration-card-text,
+.inspiration-risk-note,
+.inspiration-variant p,
+.inspiration-muted,
+.token-muted,
+.token-action-state p {
+  color: var(--ink-secondary);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.inspiration-card-foot,
+.inspiration-transform-head .mono,
+.token-row .mono {
+  color: var(--ink-tertiary);
+  font-size: var(--text-xs);
+}
+
+.inspiration-inspector {
+  align-self: start;
+  max-height: calc(100vh - 96px);
+  overflow: auto;
+  position: sticky;
+  top: calc(48px + var(--space-5));
+}
+
+.inspiration-risk-note,
+.token-once-box {
+  background: var(--bg-surface-2);
+  border: var(--border-hairline);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+}
+
+.inspiration-transform {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+
+.inspiration-structure {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.inspiration-structure span {
+  border-bottom: var(--border-hairline);
+  color: var(--ink-tertiary);
+  font-size: var(--text-xs);
+  padding-bottom: var(--space-1);
+}
+
+.inspiration-variant {
+  border-left: 2px solid var(--accent-vermillion);
+  display: grid;
+  gap: var(--space-2);
+  padding-left: var(--space-3);
+}
+
+.inspiration-variant span {
+  color: var(--ink-tertiary);
+  font-size: var(--text-xs);
+}
+
+.inspiration-notice,
+.token-action-state {
+  color: var(--ink-primary);
+  padding: var(--space-3) var(--space-4);
+}
+
+.inspiration-notice-warning {
+  border-color: var(--warning-ochre);
+}
+
+.inspiration-notice-danger,
+.token-action-state-danger {
+  border-color: var(--danger-rust);
+}
+
+.token-create,
+.token-row {
+  padding: var(--space-4);
+}
+
+.token-row {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.token-row-grid {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.token-once-box {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.token-once-box code {
+  color: var(--accent-vermillion);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
 @media (max-width: 1200px) {
   .calendar-grid {
     grid-template-columns: repeat(3, minmax(180px, 1fr));
@@ -3074,11 +3289,15 @@ h6 {
     position: static;
   }
 
-  .coach-workbench {
+  .coach-workbench,
+  .inspiration-workbench {
     grid-template-columns: 1fr;
   }
 
-  .coach-inspector {
+  .coach-inspector,
+  .inspiration-inspector {
+    max-height: none;
+    overflow: visible;
     position: static;
   }
 }
@@ -3092,7 +3311,13 @@ h6 {
   .coach-prompt-grid,
   .coach-question-form,
   .coach-playbook-form,
-  .coach-recommendation-grid {
+  .coach-recommendation-grid,
+  .inspiration-metrics,
+  .inspiration-filters,
+  .inspiration-transform-form,
+  .inspiration-form-grid,
+  .token-form-grid,
+  .token-row-grid {
     grid-template-columns: 1fr;
   }
 }

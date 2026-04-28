@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CreatorOS Extension Options</title>
+    <style>
+      body { background: #201d1a; color: #f4ecdf; font: 14px system-ui, sans-serif; margin: 0; max-width: 520px; padding: 18px; }
+      form { display: grid; gap: 12px; }
+      input { background: #2b2722; border: 1px solid #5b5047; box-sizing: border-box; color: inherit; padding: 9px; width: 100%; }
+      label { display: grid; gap: 5px; }
+      button { background: #d45a36; border: 0; color: #1a1411; font-weight: 700; padding: 10px; }
+      p { color: #cfc2b0; line-height: 1.5; }
+      [data-tone="error"] { color: #e28b70; }
+      [data-tone="success"] { color: #9ec88c; }
+    </style>
+  </head>
+  <body>
+    <form id="options-form">
+      <label>CreatorOS app URL <input id="app-url" type="url" placeholder="http://localhost:3000" /></label>
+      <label>Personal save token <input id="save-token" autocomplete="off" type="password" /></label>
+      <button type="submit">Save options</button>
+    </form>
+    <p id="status">Create or rotate a token in CreatorOS settings, then paste it here once.</p>
+    <script type="module" src="./options.js"></script>
+  </body>
+</html>

@@ -1,16 +1,16 @@
 # Implementation Status
 
 Last updated: 2026-04-28
-Current phase: Phase 19 - Coach, Retrieval, and Content Playbooks complete
-Next prompt: `20_INSPIRATION_AND_EXTENSION_SAVE_TOKEN.md`
+Current phase: Phase 20 - Inspiration Library and Chrome Extension Save Token complete
+Next prompt: `21_REPLY_GUY_AND_ACCOUNT_RESEARCH.md`
 
 ## Current State
 
-CreatorOS now has an evidence-citing `/coach` workspace backed by server-only retrieval, AI prompt runs, and `content_coach_reports` persistence. The coach can answer owner questions, generate content playbooks, inspect cited records, and gracefully downgrade uncited or empty-history guidance to speculation instead of inventing evidence.
+CreatorOS now has a protected `/inspiration` library for saving, searching, editing, archiving, and transforming inspiration sources. Transform workflows cover structure, hook pattern, argument pattern, original version, counterpoint, voice-profile version, and 10 unrelated posts from the same abstract pattern. Source text is treated as untrusted data, AI transforms are schema-validated, and deterministic similarity checks persist plagiarism-risk warnings.
 
-Retrieval now combines existing owner-scoped embedding/keyword search with operating context from voice profiles, campaigns, experiments, publishing drafts, published posts, and blogs. Citation validation strips nonexistent records, never substitutes synthetic fallback citations, and records citation filtering in report metadata. Mixed embedding models/dimensions are filtered before scoring.
+CreatorOS also has scoped personal save token management at `/settings/tokens`. Tokens are generated as shown-once raw values, stored as peppered hashes, scoped to `inspiration:create`, revocable, rotatable, rate-limited, and audited on success and failure. The extension-compatible `POST /api/inspiration/save` endpoint requires `Authorization: Bearer <personal_save_token>`, rejects unapproved Chrome extension origins through `CHROME_EXTENSION_ORIGINS`, and cannot read/update/delete records, publish, or call AI transforms.
 
-X write publishing, read sync, manual imports, blog workflows, analytics, dashboard, and the publishing state machine remain intact. Account research, inspiration extension tokens, billing, marketing, autonomous engagement, public onboarding, and uncontrolled external action remain intentionally unimplemented.
+X write publishing, read sync, manual imports, blog workflows, analytics, dashboard, coach retrieval, and the publishing state machine remain intact. Reply-guy/account research, the growth operating layer, final hardening/export-delete coverage, and production extension bundling remain intentionally unimplemented.
 
 The original documentation package remains under `docs/`:
 
@@ -53,12 +53,83 @@ The original documentation package remains under `docs/`:
 - [x] `17_X_WRITE_PUBLISHING_ADAPTER.md` - Enable official X writes under approval, capability, duplicate, rate-limit, reconciliation, and audit guardrails.
 - [x] `18_ANALYTICS_DASHBOARD_AND_REPORTS.md` - Build deterministic analytics, velocity, aggregates, cadence, score explanations, and post/blog/campaign metrics.
 - [x] `19_COACH_RETRIEVAL_AND_CONTENT_PLAYBOOKS.md` - Build internal-evidence coach, retrieval, embeddings, keyword fallback, citations, and playbooks.
-- [ ] `20_INSPIRATION_LIBRARY_AND_CHROME_EXTENSION_SAVE_TOKEN.md` - Build scoped inspiration save endpoint, personal save tokens, token settings, and extension scaffold.
+- [x] `20_INSPIRATION_LIBRARY_AND_CHROME_EXTENSION_SAVE_TOKEN.md` - Build scoped inspiration save endpoint, personal save tokens, token settings, and extension scaffold.
 - [ ] `21_REPLY_GUY_AND_ACCOUNT_RESEARCHER.md` - Build account research, reply drafts, and handoff workflows.
 - [ ] `22_GROWTH_SYSTEM_CAMPAIGNS_EXPERIMENTS_REVIEWS.md` - Build goals, pillars, positioning, campaigns, experiments, reviews, and profile audits.
 - [ ] `23_HARDENING_EXPORT_DELETE_OBSERVABILITY.md` - Add rate limits, diagnostics, export/delete, error boundaries, observability, and production safeguards.
 - [ ] `24_TESTING_E2E_DEPLOYMENT_READINESS.md` - Complete Vitest, Playwright, RLS, mocked AI/X, publishing dry-run, and design regression coverage.
 - [ ] `25_FINAL_PRODUCTION_REVIEW_AND_HANDOFF.md` - Complete final acceptance review, limitations, and handoff.
+
+## Phase 20 Completed Work
+
+- Replaced the `/inspiration` scaffold with a protected inspiration library, summary metrics, search/tag filters, create/edit/archive actions, selected-source inspector, transform controls, and persisted transform history.
+- Added server-only inspiration services for owner-scoped CRUD, extension saves, AI-backed transformation modes, source-bound prompt construction, schema validation, audit logging, and deterministic similarity/plagiarism-risk warnings.
+- Implemented transform modes for structure, hook pattern, argument pattern, original version, counterpoint, voice-profile version, and 10 unrelated posts using the same abstract pattern.
+- Added `/api/inspiration/save` for in-app saves and extension saves, with bearer-token-only extension flow, exact Chrome extension origin allowlisting, sanitized JSON envelopes, CORS handling, pre-verification limits, verified token/IP limits, and audited failures.
+- Added `/api/inspiration/transform` as an admin-only route for expensive AI transforms; extension tokens cannot call it.
+- Added `/settings/tokens` token management with create, revoke, and rotate flows. Raw tokens are shown once, stored only as hashes/prefixes, and token lifecycle failures are audited without raw token/hash leakage.
+- Added `CHROME_EXTENSION_ORIGINS` to `.env.example` and environment diagnostics so the extension endpoint can be bound to exact unpacked/packaged extension origins.
+- Created the Chrome extension scaffold under `extension/` with manifest, content script, popup, options page, API helper, and setup/security documentation.
+- Resolved Phase 20 review-orchestrator findings around extension-origin session fallback, timeline URL attribution, broad host permissions, extension error envelopes, invalid-token rate limiting, CORS origin trust, token failure audits, duplicate form ids, raw-token live announcements, contextual token action labels, mobile inspector scrolling, and selected-source accessibility.
+
+## Phase 20 Files Changed
+
+- `.env.example` - Adds exact Chrome extension origin allowlist configuration.
+- `app/(app)/inspiration/page.tsx` and `app/(app)/inspiration/actions.ts` - Protected inspiration workspace and rate-limited admin server actions.
+- `app/(app)/settings/tokens/page.tsx` and `app/(app)/settings/tokens/actions.ts` - Protected token settings route and audited token lifecycle actions.
+- `app/api/inspiration/save/route.ts` - In-app and extension save endpoint with bearer-token, origin, rate-limit, audit, and envelope safeguards.
+- `app/api/inspiration/transform/route.ts` - Admin-only transform API route.
+- `components/inspiration/index.tsx` - Inspiration library UI, inspector, forms, transform history, plagiarism warnings, and accessibility fixes.
+- `components/settings/tokens.tsx` - Token management UI with shown-once token disclosure and contextual actions.
+- `app/globals.css` - Phase 20 inspiration/token layouts, responsive behavior, and mobile inspector fixes.
+- `lib/env/schema.ts` - Optional `CHROME_EXTENSION_ORIGINS` server env validation.
+- `lib/inspiration/index.ts` and `lib/inspiration/validation.ts` - Server-only inspiration orchestration, schemas, transform handling, extension save service, and similarity guard.
+- `lib/tokens/personal-save-tokens.ts` - Personal save token hashing, verification, listing, revocation, rotation, and usage tracking.
+- `extension/manifest.json`, `extension/README.md`, and `extension/src/**` - Chrome extension scaffold.
+- `tests/unit/inspiration/phase20-inspiration.test.ts` and `tests/unit/inspiration/phase20-inspiration-route.test.ts` - Phase 20 service, UI, token, route, and extension boundary regression coverage.
+- `docs/IMPLEMENTATION_STATUS.md` - This Phase 20 ledger update.
+
+## Phase 20 Checks and Commands Run
+
+| Command or check | Result |
+|---|---|
+| Required docs read | Root `README.md` is absent. Read `docs/IMPLEMENTATION_STATUS.md`, `docs/docs/CHROME_EXTENSION.md`, `docs/docs/SECURITY.md`, `docs/docs/API_CONTRACTS.md`, `docs/docs/SPEC.md`, and `docs/docs/UX_SPEC.md`. |
+| Bootstrap check | Confirmed Next.js 16.2.4, React 19.2.5, pnpm via `pnpm-lock.yaml` and `packageManager`, no monorepo indicators, Vitest and Playwright test setup. |
+| Package-manager execution | The `pnpm` binary is not on PATH in this shell, so checks were run with the pinned `npx pnpm@10.33.2` form. |
+| Sequential Thinking MCP | Requested by repo instructions but not available in this Codex session; planning, reflection, and verification were performed explicitly with available tools. |
+| Morph codebase search/edit | Used Morph for Phase 20 codebase searches and code edits. Used exact filesystem editing only for the >2,000-line stylesheet responsive tweak, matching Morph tool guidance for very large files. |
+| `npx pnpm@10.33.2 test tests/unit/inspiration/phase20-inspiration.test.ts` before implementation | Failed as expected because Phase 20 inspiration components/services were not implemented yet. |
+| `npx pnpm@10.33.2 test tests/unit/inspiration/phase20-inspiration.test.ts tests/unit/inspiration/phase20-inspiration-route.test.ts` after review fixes | Passed: 2 files, 16 tests. |
+| `npx pnpm@10.33.2 typecheck` | Passed. |
+| `npx pnpm@10.33.2 lint` | Passed with no warnings. |
+| `npx pnpm@10.33.2 test` | Passed: 31 files, 139 tests. |
+| `npx pnpm@10.33.2 build` | Passed; Next lists `/inspiration`, `/settings/tokens`, `/api/inspiration/save`, and `/api/inspiration/transform` as dynamic routes. |
+| `npx pnpm@10.33.2 test:e2e` | Passed: 1 Chromium login smoke test. Playwright emitted pre-existing npm config and `NO_COLOR`/`FORCE_COLOR` warnings only. |
+| Direct `useEffect` check | Morph search found no direct `useEffect` calls in the Phase 20 inspiration/token/extension UI files; only the pre-existing `useMountEffect` wrapper remains. |
+| Phase 20 review-orchestrator pass | Completed with parallel backend, security, tests/docs, and UI/accessibility reviewers. Blocking findings were resolved before this ledger update. |
+
+## Phase 20 Known Limitations and Blockers
+
+- The extension is a scaffold: TypeScript source files must still be compiled to the JavaScript filenames referenced by `manifest.json` before loading unpacked.
+- `CHROME_EXTENSION_ORIGINS` must be set to the exact `chrome-extension://<id>` origin after loading or packaging the extension; unknown extension origins are intentionally rejected.
+- Production extension packaging should add the exact deployed CreatorOS origin to `host_permissions`; the checked-in manifest is limited to X/Twitter and local CreatorOS development origins.
+- Extension endpoint token/IP rate limiting uses the existing process-memory fixed-window store. This remains a later hardening item for distributed/serverless deployments.
+- Live installed-extension behavior against the real X DOM was not exercised in Playwright; route, service, UI, and boundary behavior are covered with unit tests.
+- Real Anthropic/OpenAI transform calls were not exercised against live provider credentials in automated checks; tests use the existing mock provider.
+
+## Phase 20 Acceptance Gates
+
+- [x] Owner can save, search, edit, archive, and transform inspiration posts in the private `/inspiration` workspace.
+- [x] Transform workflows generate abstract-pattern variants and persist plagiarism/similarity warnings.
+- [x] Personal save tokens are hashed, scoped to `inspiration:create`, revocable, rotatable, rate-limited, and shown raw only once.
+- [x] Extension endpoint rejects missing, invalid, inactive, expired, wrong-scope, rate-limited, and unapproved-origin token traffic.
+- [x] Valid extension tokens can only create `saved_inspiration_posts`; they cannot read/update/delete, publish, or call expensive AI endpoints.
+- [x] Extension scaffold exists with manifest, content script, popup/options UI, API helper, and setup/security docs.
+- [x] No billing, marketing, public onboarding, autonomous engagement, mass actions, platform bypass, or secret exposure was added.
+
+## Phase 20 Next Step
+
+Run `21_REPLY_GUY_AND_ACCOUNT_RESEARCH.md` next. Stop here for Phase 20.
 
 ## Phase 19 Completed Work
 
@@ -120,7 +191,7 @@ The original documentation package remains under `docs/`:
 
 ## Phase 19 Next Step
 
-Run `20_INSPIRATION_AND_EXTENSION_SAVE_TOKEN.md` next. Stop here for Phase 19.
+Run `20_INSPIRATION_LIBRARY_AND_CHROME_EXTENSION_SAVE_TOKEN.md` next. Stop here for Phase 19.
 
 ## Phase 18 Completed Work
 

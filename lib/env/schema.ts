@@ -30,6 +30,7 @@ export const serverEnvSchema = clientEnvSchema.extend({
   SUPABASE_ANON_KEY: nonEmptyString,
   SUPABASE_SERVICE_ROLE_KEY: nonEmptyString,
   ADMIN_EMAILS: commaList.pipe(z.array(z.string().email()).min(1)),
+  CHROME_EXTENSION_ORIGINS: z.string().trim().optional(),
   OPENAI_API_KEY: optionalNonEmptyString,
   ANTHROPIC_API_KEY: optionalNonEmptyString,
   AI_PROVIDER: z.enum(["anthropic", "openai", "mock"]),
