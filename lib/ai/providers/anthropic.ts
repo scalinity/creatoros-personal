@@ -78,7 +78,6 @@ function messagesForAnthropic(request: AiTextRequest) {
 
 type AnthropicOutputFormatMetadata = {
   outputJsonSchema?: unknown;
-  outputSchemaName?: string;
 };
 
 function outputConfig(metadata: AiTextRequest["metadata"], effort: AnthropicProviderOptions["effort"]) {
@@ -89,7 +88,6 @@ function outputConfig(metadata: AiTextRequest["metadata"], effort: AnthropicProv
     ...(structured?.outputJsonSchema
       ? {
           format: {
-            name: structured.outputSchemaName ?? "creatoros_structured_output",
             schema: structured.outputJsonSchema,
             type: "json_schema",
           },
