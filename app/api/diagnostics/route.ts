@@ -4,7 +4,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { requireAdminForRoute } from "@/lib/auth/admin";
 import { createFixedWindowRateLimiter, MemoryRateLimitStore, rateLimitHeaders } from "@/lib/rate-limit";
-import { getOperationalDiagnostics } from "@/lib/server-only/diagnostics";
+import { getOperationalDiagnosticsForAdmin } from "@/lib/server-only/diagnostics";
 
 export const dynamic = "force-dynamic";
 
@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json(
     {
-      data: getOperationalDiagnostics(),
+      data: await getOperationalDiagnosticsForAdmin(guard.admin),
       error: null,
       ok: true,
       request_id: randomUUID(),

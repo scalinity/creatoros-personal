@@ -8,7 +8,7 @@ import { normalizeEmail } from "@/lib/auth/allowlist";
 import { getSupabaseServiceRoleConfig } from "@/lib/auth/config";
 import type { Database } from "@/types/database";
 
-import { redactAuditMetadata } from "./redaction";
+import { redactAuditMetadata, redactAuditString } from "./redaction";
 
 type AuditRequest = {
   headers: Headers;
@@ -84,7 +84,7 @@ export async function logAuditEvent(input: AuditEventInput) {
 
     const { error } = await getServiceRoleClient().from("audit_logs").insert({
       actor_email: normalizeEmail(input.actorEmail),
-      error: input.error ?? null,
+      error: input.error ? redactAuditString(input.error).slice(0, 500) : null,
       event_type: input.eventType,
       ip_hash: ipHash,
       metadata,

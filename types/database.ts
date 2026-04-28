@@ -686,6 +686,13 @@ export type Database = {
     };
     Views: Record<string, never>;
     Functions: {
+      creatoros_delete_owner_data: {
+        Args: {
+          p_delete_profile?: boolean;
+          p_user_id: Uuid;
+        };
+        Returns: Json;
+      };
       creatoros_update_blog_with_version: {
         Args: {
           p_blog_id: Uuid;

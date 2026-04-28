@@ -3,8 +3,9 @@ import { randomUUID } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 
-import { logAuditEvent } from "@/lib/audit";
+import { redactAuditString } from "@/lib/audit/redaction";
 import { requireAdminForRoute } from "@/lib/auth/admin";
+import { deleteOwnerData } from "@/lib/exports";
 import { createFixedWindowRateLimiter, MemoryRateLimitStore, rateLimitHeaders } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
@@ -64,34 +65,29 @@ export async function DELETE(request: NextRequest) {
     return errorResponse("rate_limited", "Too many data delete requests.", 429, headers);
   }
 
-  await logAuditEvent({
-    actorEmail: guard.admin.email,
-    eventType: "data_delete_scaffolded",
-    metadata: {
-      delete_auth_user: body.data.delete_auth_user,
-      deleted_rows: 0,
-      phase: "08-settings-diagnostics-env-security",
-      scaffold_only: true,
-    },
-    request,
-    success: true,
-    targetType: "data_delete",
-    userId: guard.admin.userId,
-  });
+  try {
+    const result = await deleteOwnerData(guard.admin, {
+      confirmation: body.data.confirmation,
+      deleteAuthUser: body.data.delete_auth_user,
+    }, { request });
 
-  return NextResponse.json(
-    {
-      data: {
-        deleted_rows: 0,
-        live: false,
-        message: "Phase 08 delete is a guarded no-op scaffold. No database rows or auth users were deleted.",
-        status: "scaffolded",
-        token_material_deleted: false,
+    return NextResponse.json(
+      {
+        data: {
+          ...result,
+          live: true,
+          message: "Owner data deletion completed. Token material was cleared before row deletion.",
+          status: "deleted",
+        },
+        error: null,
+        ok: true,
+        request_id: randomUUID(),
       },
-      error: null,
-      ok: true,
-      request_id: randomUUID(),
-    },
-    { headers },
-  );
+      { headers },
+    );
+  } catch (error) {
+    const message = redactAuditString(error instanceof Error ? error.message : "unknown data delete failure").slice(0, 500);
+    console.error("Data delete failed", { reason: message });
+    return errorResponse("internal_error", "Data deletion could not be completed.", 500, headers);
+  }
 }

@@ -4,13 +4,15 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 
 import { logAuditEvent } from "@/lib/audit";
+import { redactAuditString } from "@/lib/audit/redaction";
 import { requireAdminForRoute } from "@/lib/auth/admin";
+import { buildDataExportCsv, createDataExportArchive } from "@/lib/exports";
 import { createFixedWindowRateLimiter, MemoryRateLimitStore, rateLimitHeaders } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
 const exportQuerySchema = z.object({
-  format: z.enum(["json"]).default("json"),
+  format: z.enum(["csv", "json"]).default("json"),
   include_logs: z.enum(["false", "true"]).optional().default("false"),
 });
 
@@ -32,6 +34,18 @@ function errorResponse(code: string, message: string, status: number, headers?: 
   );
 }
 
+function exportHeaders(headers: Record<string, string>, format: "csv" | "json") {
+  const extension = format === "csv" ? "csv" : "json";
+  const contentType = format === "csv" ? "text/csv; charset=utf-8" : "application/json; charset=utf-8";
+
+  return {
+    ...headers,
+    "Cache-Control": "no-store",
+    "Content-Disposition": `attachment; filename="creatoros-data-export.${extension}"`,
+    "Content-Type": contentType,
+  };
+}
+
 export async function GET(request: NextRequest) {
   const guard = await requireAdminForRoute(request);
 
@@ -42,7 +56,7 @@ export async function GET(request: NextRequest) {
   const query = exportQuerySchema.safeParse(Object.fromEntries(request.nextUrl.searchParams));
 
   if (!query.success) {
-    return errorResponse("validation_error", "Only JSON export scaffolding is available in this phase.", 400);
+    return errorResponse("validation_error", "Data export query failed validation.", 400);
   }
 
   const decision = await exportLimiter.check({ id: `${guard.admin.userId}:data-export` });
@@ -52,40 +66,61 @@ export async function GET(request: NextRequest) {
     return errorResponse("rate_limited", "Too many data export requests.", 429, headers);
   }
 
-  const exportedAt = new Date().toISOString();
-
-  await logAuditEvent({
-    actorEmail: guard.admin.email,
-    eventType: "data_export_scaffolded",
-    metadata: {
+  try {
+    const archive = await createDataExportArchive(guard.admin, {
       format: query.data.format,
-      include_logs: query.data.include_logs === "true",
-      phase: "08-settings-diagnostics-env-security",
-      scaffold_only: true,
-    },
-    request,
-    success: true,
-    targetType: "data_export",
-    userId: guard.admin.userId,
-  });
+      includeLogs: query.data.include_logs === "true",
+    });
 
-  return NextResponse.json(
-    {
-      data: {
-        export_id: randomUUID(),
-        exported_at: exportedAt,
+    await logAuditEvent({
+      actorEmail: guard.admin.email,
+      eventType: "data_exported",
+      metadata: {
         format: query.data.format,
-        included: ["phase_08_status"],
-        live: false,
-        message: "Phase 08 export is a safe scaffold. Full data archive generation is deferred.",
-        records: [],
-        redaction: "Secrets, OAuth tokens, personal save tokens, encryption material, and service-role keys are excluded.",
-        status: "scaffolded",
+        include_logs: query.data.include_logs === "true",
+        phase: archive.phase,
+        tables: Object.keys(archive.tables),
       },
-      error: null,
-      ok: true,
-      request_id: randomUUID(),
-    },
-    { headers },
-  );
+      request,
+      success: true,
+      targetType: "data_export",
+      userId: guard.admin.userId,
+    });
+
+    if (query.data.format === "csv") {
+      return new NextResponse(buildDataExportCsv(archive), {
+        headers: exportHeaders(headers, "csv"),
+        status: 200,
+      });
+    }
+
+    return NextResponse.json(
+      {
+        data: archive,
+        error: null,
+        ok: true,
+        request_id: randomUUID(),
+      },
+      { headers: exportHeaders(headers, "json") },
+    );
+  } catch (error) {
+    const message = redactAuditString(error instanceof Error ? error.message : "unknown export failure").slice(0, 500);
+    await logAuditEvent({
+      actorEmail: guard.admin.email,
+      error: message,
+      eventType: "data_export_failed",
+      metadata: {
+        format: query.data.format,
+        include_logs: query.data.include_logs === "true",
+        phase: "23-hardening-export-delete-observability",
+      },
+      request,
+      success: false,
+      targetType: "data_export",
+      userId: guard.admin.userId,
+    });
+
+    console.error("Data export failed", { reason: message });
+    return errorResponse("internal_error", "Data export could not be generated.", 500, headers);
+  }
 }

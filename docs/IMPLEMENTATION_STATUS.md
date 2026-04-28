@@ -1,14 +1,14 @@
 # Implementation Status
 
 Last updated: 2026-04-28
-Current phase: Phase 22 - Growth System, Campaigns, Experiments, Reviews, and Profile Audits complete
-Next prompt: `23_HARDENING_EXPORT_DELETE_OBSERVABILITY.md`
+Current phase: Phase 23 - Hardening, Data Export/Delete, Observability, and Safety Review complete
+Next prompt: `24_TESTING_E2E_DEPLOYMENT_READINESS.md`
 
 ## Current State
 
-CreatorOS now has a protected growth operating layer across `/campaigns`, `/experiments`, dashboard, and analytics. The owner can define growth goals, content pillars, campaigns, campaign items, experiments, experiment outcomes, weekly/monthly strategy reviews, and profile audits. Growth AI outputs use the existing server-only prompt system with structured schemas, period-scoped evidence, sanitized citations, owner-reviewed profile recommendations, and no publishing or platform action path.
+CreatorOS now has the Phase 23 hardening layer: admin-only redacted JSON/CSV export, confirmation-gated owner data deletion, transactional Postgres deletion RPC, expanded runtime diagnostics, global error boundaries, cron/auth-sensitive rate limits, stronger audit redaction, and reviewed prompt-injection/secret boundaries. The owner-facing data settings route exposes live export controls and a destructive confirmation form rather than a placeholder action.
 
-CreatorOS still has the Phase 21 reply/account-research workspaces, Phase 20 inspiration and extension-token system, plus X write publishing, read sync, manual imports, blog workflows, analytics, dashboard, coach retrieval, and the publishing state machine. Final hardening/export-delete coverage and deployment readiness remain intentionally unimplemented.
+CreatorOS still has the Phase 22 growth operating layer, Phase 21 reply/account-research workspaces, Phase 20 inspiration and extension-token system, plus X write publishing, read sync, manual imports, blog workflows, analytics, dashboard, coach retrieval, and the publishing state machine. Full deployment readiness, broader E2E/RLS coverage, and final production review remain intentionally unimplemented until Phases 24 and 25.
 
 The original documentation package remains under `docs/`:
 
@@ -54,9 +54,77 @@ The original documentation package remains under `docs/`:
 - [x] `20_INSPIRATION_LIBRARY_AND_CHROME_EXTENSION_SAVE_TOKEN.md` - Build scoped inspiration save endpoint, personal save tokens, token settings, and extension scaffold.
 - [x] `21_REPLY_GUY_AND_ACCOUNT_RESEARCHER.md` - Build account research, reply drafts, and handoff workflows.
 - [x] `22_GROWTH_CAMPAIGNS_EXPERIMENTS_REVIEWS.md` - Build goals, pillars, positioning, campaigns, experiments, reviews, and profile audits.
-- [ ] `23_HARDENING_EXPORT_DELETE_OBSERVABILITY.md` - Add rate limits, diagnostics, export/delete, error boundaries, observability, and production safeguards.
+- [x] `23_HARDENING_EXPORT_DELETE_OBSERVABILITY.md` - Add rate limits, diagnostics, export/delete, error boundaries, observability, and production safeguards.
 - [ ] `24_TESTING_E2E_DEPLOYMENT_READINESS.md` - Complete Vitest, Playwright, RLS, mocked AI/X, publishing dry-run, and design regression coverage.
 - [ ] `25_FINAL_PRODUCTION_REVIEW_AND_HANDOFF.md` - Complete final acceptance review, limitations, and handoff.
+
+## Phase 23 Completed Work
+
+- Added admin-only `/api/data/export` JSON and CSV exports with service-role reads, full pagination, table-level ownership filtering, audit logging, and redaction of OAuth tokens, token hashes/prefixes, prompt payloads, actor emails, provider keys, auth headers, database URLs, JWT-like strings, and secret-like values.
+- Added admin-only `/api/data/delete` and an in-app `/settings/data` destructive confirmation form requiring `DELETE_CREATOROS_PERSONAL_DATA` before deletion.
+- Added `public.creatoros_delete_owner_data(...)` Supabase RPC migration so database owner-data deletion runs transactionally and clears personal-save-token/X OAuth token material before row deletion.
+- Expanded operational diagnostics to include authenticated runtime counts for AI jobs, sync jobs, publishing jobs/failures, due scheduled posts, personal save-token lifecycle state, and sanitized recent failures.
+- Fixed runtime diagnostics to use exact count queries for status totals while keeping row sampling only for the recent-failures list.
+- Added global and route-level error boundaries with redacted design-system recovery surfaces and App Router retry behavior.
+- Added cron authorization failure rate limits for scheduled publishing and X sync routes, with rate-limit checks before invalid-secret audit writes.
+- Added `rateLimitIdFromRequest()` for request-derived limiter keys without storing raw IP addresses.
+- Strengthened audit/error redaction and ensured audit error strings are sanitized before persistence.
+- Added focused tests for export redaction, delete ordering, runtime diagnostic counts, and standalone error-string redaction.
+- Ran a focused Phase 23 review-orchestrator pass with three reviewers; blocking findings around export truncation, sensitive-table export, non-atomic deletion, cron audit ordering, runtime diagnostic undercounting, error-boundary retry behavior, and the dead delete control were resolved.
+
+## Phase 23 Files Changed
+
+- `app/(app)/settings/data/page.tsx` and `app/(app)/settings/data/actions.ts` - Redacted export links, confirmation-gated destructive form, rate-limited server action, and notice handling.
+- `app/(app)/settings/diagnostics/page.tsx` and `app/api/diagnostics/route.ts` - Authenticated runtime diagnostics wiring.
+- `app/api/data/export/route.ts` and `app/api/data/delete/route.ts` - Protected export/delete APIs with validation, rate limits, audit logging, and redacted failures.
+- `app/api/cron/publish/route.ts` and `app/api/cron/x-sync/route.ts` - Cron invalid-secret rate limits and audited failure behavior.
+- `app/error.tsx` and `app/global-error.tsx` - Redacted recovery boundaries with App Router retry support.
+- `lib/exports/index.ts` - Export archive builder, CSV serializer, service-role pagination, delete RPC caller, delete result parsing, and deletion audit events.
+- `lib/server-only/diagnostics.ts` - Expanded config/runtime diagnostics, exact count queries, and sanitized recent failure summaries.
+- `lib/audit/logger.ts` and `lib/audit/redaction.ts` - Stronger secret-like value redaction and sanitized audit error persistence.
+- `lib/rate-limit/index.ts` - Request-derived hashed limiter identity helper.
+- `supabase/migrations/20260428230000_phase23_owner_data_delete.sql` - Transactional owner-data deletion RPC.
+- `types/database.ts` - Phase 23 RPC type surface.
+- `tests/unit/auth/allowlist.test.ts`, `tests/unit/diagnostics/operational-diagnostics.test.ts`, `tests/unit/exports/phase23-data-controls.test.ts`, and `tests/unit/settings/settings-components.test.ts` - Phase 23 regression coverage.
+
+## Phase 23 Checks and Commands Run
+
+| Command or check | Result |
+|---|---|
+| Required docs read | Root `README.md` is absent. Read `docs/README.md`, `docs/IMPLEMENTATION_STATUS.md`, `docs/docs/SECURITY.md`, `docs/docs/DEPLOYMENT.md`, `docs/docs/API_CONTRACTS.md`, `docs/docs/TEST_PLAN.md`, and `docs/docs/ACCEPTANCE_CRITERIA.md`. |
+| Bootstrap check | Confirmed Next.js App Router 16.2.4, React 19.2.5, pnpm via `pnpm-lock.yaml` and `packageManager`, no monorepo indicators, Vitest and Playwright test setup. |
+| Package-manager execution | The `pnpm` binary is not on PATH in this shell, so checks were run with the pinned `npx pnpm@10.33.2` form. |
+| Sequential Thinking MCP | Requested by repo instructions but not available in this Codex session; planning, reflection, and verification were performed explicitly with available tools. |
+| Morph codebase search/edit | Used Morph for Phase 23 codebase searches and code edits. `docs/IMPLEMENTATION_STATUS.md` was edited with `apply_patch` only after Morph timed out on the large ledger update. |
+| `npx pnpm@10.33.2 typecheck` | Passed. |
+| `npx pnpm@10.33.2 lint` | Passed with no warnings. |
+| `npx pnpm@10.33.2 test` | Passed: 34 files, 162 tests. |
+| `npx pnpm@10.33.2 test:e2e` | Passed: 1 Chromium login smoke test. Playwright emitted pre-existing npm config and `NO_COLOR`/`FORCE_COLOR` warnings only. |
+| `npx pnpm@10.33.2 build` | Passed. |
+| Targeted secret grep | No real secrets found; matches were test fixtures for redaction/token-boundary coverage. |
+| Direct `useEffect` grep | Only the existing `components/app-shell/use-mount-effect.ts` wrapper uses `useEffect`, matching the project policy. |
+| `git diff --check` | Passed. |
+
+## Phase 23 Known Limitations and Blockers
+
+- Rate limits still use the existing process-memory fixed-window store. This is acceptable for this private workstation phase but remains non-durable across distributed/serverless instances.
+- The database portion of owner data deletion is transactional, but optional Supabase Auth user deletion happens through the Auth Admin API after the database RPC and cannot participate in the Postgres transaction; failures are audited and surfaced.
+- Live production Supabase/X/AI credentials were not exercised by automated checks; provider behavior remains validated through existing mocks and compile/runtime boundaries.
+- The new deletion RPC must be applied to the target Supabase database before deployed `/api/data/delete` or the data-settings form can complete live deletion.
+
+## Phase 23 Acceptance Gates
+
+- [x] No route or UI exposes service-role keys, provider keys, encryption material, OAuth tokens, personal save-token raw values/hashes, or cron secrets.
+- [x] High-risk export/delete/cron/auth-sensitive paths are admin-guarded, validation-gated, rate-limited, and audited.
+- [x] Exports are redacted, service-role-backed, paginated, and available in JSON and CSV.
+- [x] Deletes require exact confirmation, clear token material first, use a transactional database RPC for owner rows, and write audit events.
+- [x] Diagnostics include config, jobs, AI, X, publishing, cron, tokens, and recent failure signals without leaking secret values.
+- [x] Prompt-injection and untrusted external-content boundaries remain server-side and redacted; no autonomous publishing or engagement behavior was added.
+- [x] Global/route error boundaries provide redacted recovery surfaces.
+
+## Phase 23 Next Step
+
+Run `24_TESTING_E2E_DEPLOYMENT_READINESS.md` next. Stop here for Phase 23.
 
 ## Phase 22 Completed Work
 

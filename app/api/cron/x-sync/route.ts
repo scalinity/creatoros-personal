@@ -1,13 +1,21 @@
 import { type NextRequest } from "next/server";
 
+import { logAuditEvent } from "@/lib/audit";
 import type { AdminContext } from "@/lib/auth/admin";
 import { createSupabaseServiceRoleClient } from "@/lib/db/service-role";
+import { createFixedWindowRateLimiter, MemoryRateLimitStore, rateLimitHeaders, rateLimitIdFromRequest } from "@/lib/rate-limit";
 import { runXReadSync } from "@/lib/x/sync";
 import type { ProfileRow } from "@/types/database";
 
 import { envelope, errorResponse } from "../../x/_utils";
 
 export const dynamic = "force-dynamic";
+
+const cronAuthLimiter = createFixedWindowRateLimiter({
+  limit: 30,
+  store: new MemoryRateLimitStore(),
+  windowMs: 60_000,
+});
 
 function bearerToken(request: NextRequest) {
   const header = request.headers.get("authorization") ?? "";
@@ -50,11 +58,34 @@ async function loadCronAdminContext(): Promise<AdminContext> {
   } as AdminContext;
 }
 
+async function cronAuthFailure(request: NextRequest, secretConfigured: boolean) {
+  const decision = await cronAuthLimiter.check({ id: rateLimitIdFromRequest(request, "cron:x-sync") });
+  const headers = rateLimitHeaders(decision);
+
+  if (!decision.allowed) {
+    return errorResponse("rate_limited", "Too many cron authorization failures.", 429, headers);
+  }
+
+  await logAuditEvent({
+    eventType: "cron_secret_invalid",
+    metadata: {
+      phase: "23-hardening-export-delete-observability",
+      route: "/api/cron/x-sync",
+      secret_configured: secretConfigured,
+    },
+    request,
+    success: false,
+    targetType: "cron_route",
+  });
+
+  return errorResponse("cron_secret_invalid", "Cron authorization failed.", 401, headers);
+}
+
 export async function GET(request: NextRequest) {
   const expected = expectedCronSecret();
 
   if (!expected || bearerToken(request) !== expected) {
-    return errorResponse("cron_secret_invalid", "Cron authorization failed.", 401);
+    return cronAuthFailure(request, Boolean(expected));
   }
 
   try {

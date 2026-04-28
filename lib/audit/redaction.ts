@@ -3,12 +3,18 @@ import type { Json } from "@/types/database";
 const sensitiveKeyPattern = /authorization|cookie|credential|encryption|key|oauth|password|pepper|secret|session|token/i;
 const emailKeyPattern = /email/i;
 const emailValuePattern = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i;
-const secretValuePattern = /\b(?:sk-[A-Za-z0-9_-]{12,}|ghp_[A-Za-z0-9_]{12,}|AKIA[A-Z0-9]{12,}|Bearer\s+[A-Za-z0-9._~+/-]+=*)\b/i;
+const secretValuePatterns = [
+  /\b(?:sk-[A-Za-z0-9_-]{8,}|ghp_[A-Za-z0-9_]{12,}|AKIA[A-Z0-9]{12,}|Bearer\s+[A-Za-z0-9._~+/-]+=*)\b/i,
+  /\b(?:password|passwd|pwd|secret|client_secret|access_token|refresh_token|api[_-]?key|token)=([^\s&]+)/i,
+  /\b(?:postgres(?:ql)?|mysql|redis):\/\/[^\s]+/i,
+  /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/,
+  /\b(?:ya29\.|xox[baprs]-|cos_live_)[A-Za-z0-9._~+/-]{8,}\b/i,
+];
 const maxDepth = 6;
 const maxStringLength = 500;
 
 function redactString(value: string): string {
-  if (emailValuePattern.test(value) || secretValuePattern.test(value)) {
+  if (emailValuePattern.test(value) || secretValuePatterns.some((pattern) => pattern.test(value))) {
     return "[redacted]";
   }
 
@@ -57,3 +63,11 @@ export function redactAuditMetadata(metadata: unknown): Json {
   return redactValue(metadata);
 }
 
+export function redactAuditString(value: unknown): string {
+  const redacted = redactValue({ value });
+  if (redacted && typeof redacted === "object" && !Array.isArray(redacted) && typeof redacted.value === "string") {
+    return redacted.value;
+  }
+
+  return "[redacted]";
+}

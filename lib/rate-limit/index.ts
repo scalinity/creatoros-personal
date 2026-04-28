@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 export type RateLimitCheck = {
   at?: number;
   id: string;
@@ -90,4 +92,13 @@ export function rateLimitHeaders(decision: RateLimitDecision): Record<string, st
     "X-RateLimit-Reset": String(Math.ceil(decision.resetAt / 1_000)),
     ...(decision.allowed ? {} : { "Retry-After": String(Math.ceil(decision.retryAfterMs / 1_000)) }),
   };
+}
+
+export function rateLimitIdFromRequest(request: { headers: Headers }, scope: string) {
+  const forwardedFor = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+  const ip = forwardedFor || request.headers.get("x-real-ip") || request.headers.get("cf-connecting-ip") || "unknown";
+  const userAgent = request.headers.get("user-agent")?.slice(0, 120) ?? "unknown";
+  const hash = createHash("sha256").update(`${ip}:${userAgent}`).digest("hex").slice(0, 32);
+
+  return `${scope}:${hash}`;
 }

@@ -1,12 +1,14 @@
 import "server-only";
 
+import type { AdminContext } from "@/lib/auth/admin";
 import { getServerEnvDiagnostics, type EnvDiagnostics } from "@/lib/env/schema";
+import { redactAuditMetadata } from "@/lib/audit";
 
 type EnvSource = Record<string, string | undefined>;
 
 export type ConfigPresenceState = "invalid" | "missing" | "present";
 export type DiagnosticStatus = "degraded" | "missing" | "ready" | "scaffolded";
-export type DiagnosticGroupId = "ai" | "auth" | "cron" | "database" | "design-system" | "security" | "x";
+export type DiagnosticGroupId = "ai" | "auth" | "cron" | "database" | "design-system" | "jobs" | "publishing" | "recent-failures" | "security" | "tokens" | "x";
 
 export type ConfigDiagnosticItem = {
   key: string;
@@ -24,19 +26,46 @@ export type DiagnosticGroup = {
   summary: string;
 };
 
+export type WorkspaceFailureDiagnostic = {
+  at: string;
+  id: string;
+  message: string;
+  source: "ai_jobs" | "prompt_runs" | "publishing_failures" | "sync_jobs";
+  type: string;
+};
+
+export type WorkspaceDiagnosticsSnapshot = {
+  aiJobs: {
+    failed: number;
+    recent: number;
+    running: number;
+  };
+  publishing: {
+    failedJobs: number;
+    queuedJobs: number;
+    retryableFailures: number;
+    scheduledDue: number;
+  };
+  recentFailures: WorkspaceFailureDiagnostic[];
+  syncJobs: {
+    failed: number;
+    recent: number;
+    running: number;
+  };
+  tokens: {
+    active: number;
+    expired: number;
+    revoked: number;
+  };
+};
+
 export type OperationalDiagnostics = {
   checkedAt: string;
   env: EnvDiagnostics;
   groups: DiagnosticGroup[];
   overall: Exclude<DiagnosticStatus, "scaffolded">;
-  phase:
-    | "08-settings-diagnostics-env-security"
-    | "11-ai-foundation-prompt-registry-structured-outputs"
-    | "13-voice-modeling-and-embeddings-foundation"
-    | "14-blog-system"
-    | "15-publishing-state-machine-dry-run-calendar"
-    | "16-x-oauth-and-read-sync"
-    | "17-x-write-publishing-adapter";
+  phase: "23-hardening-export-delete-observability";
+  runtime: null | WorkspaceDiagnosticsSnapshot;
   service: "creatoros-personal";
 };
 
@@ -180,10 +209,95 @@ function buildDesignSystemGroup(): DiagnosticGroup {
   };
 }
 
-export function getOperationalDiagnostics(source: NodeJS.ProcessEnv | EnvSource = process.env): OperationalDiagnostics {
+function scaffoldedOperationalGroup(id: DiagnosticGroupId, label: string, summary: string): DiagnosticGroup {
+  return {
+    id,
+    items: [{ key: `${id.toUpperCase().replace(/-/g, "_")}_SNAPSHOT`, label: "Runtime database snapshot", required: false, secret: false, state: "missing" }],
+    label,
+    status: "scaffolded",
+    summary,
+  };
+}
+
+function buildWorkspaceOperationalGroups(snapshot?: null | WorkspaceDiagnosticsSnapshot): DiagnosticGroup[] {
+  if (!snapshot) {
+    return [
+      scaffoldedOperationalGroup("publishing", "Publishing Safety", "Runtime publishing job, queue, and failure counts load on authenticated diagnostics surfaces."),
+      scaffoldedOperationalGroup("jobs", "Job Queues", "AI and sync job runtime counts load on authenticated diagnostics surfaces."),
+      scaffoldedOperationalGroup("tokens", "Personal Save Tokens", "Token lifecycle counts load on authenticated diagnostics surfaces."),
+      scaffoldedOperationalGroup("recent-failures", "Recent Failures", "Recent sanitized failure summaries load on authenticated diagnostics surfaces."),
+    ];
+  }
+
+  return [
+    {
+      id: "publishing",
+      items: [
+        { key: "PUBLISHING_FAILED_JOBS", label: `Failed publishing jobs: ${snapshot.publishing.failedJobs}`, required: true, secret: false, state: "invalid" as const },
+        { key: "PUBLISHING_RETRYABLE_FAILURES", label: `Retryable publishing failures: ${snapshot.publishing.retryableFailures}`, required: true, secret: false, state: "invalid" as const },
+        { key: "PUBLISHING_QUEUED_JOBS", label: `Queued/running publishing jobs: ${snapshot.publishing.queuedJobs}`, required: false, secret: false, state: "present" },
+        { key: "PUBLISHING_SCHEDULED_DUE", label: `Due scheduled posts: ${snapshot.publishing.scheduledDue}`, required: false, secret: false, state: "present" },
+      ],
+      label: "Publishing Safety",
+      status: snapshot.publishing.failedJobs > 0 || snapshot.publishing.retryableFailures > 0 ? "degraded" : "ready",
+      summary: "Publishing queue, failure, retry, approval, and scheduler signals are visible without X token material.",
+    },
+    {
+      id: "jobs",
+      items: [
+        { key: "AI_JOBS_FAILED", label: `AI jobs failed: ${snapshot.aiJobs.failed}`, required: true, secret: false, state: "invalid" as const },
+        { key: "AI_JOBS_RUNNING", label: `AI jobs running: ${snapshot.aiJobs.running}`, required: false, secret: false, state: "present" },
+        { key: "SYNC_JOBS_FAILED", label: `Sync jobs failed: ${snapshot.syncJobs.failed}`, required: true, secret: false, state: "invalid" as const },
+        { key: "SYNC_JOBS_RUNNING", label: `Sync jobs running: ${snapshot.syncJobs.running}`, required: false, secret: false, state: "present" },
+      ],
+      label: "Job Queues",
+      status: snapshot.aiJobs.failed > 0 || snapshot.syncJobs.failed > 0 ? "degraded" : "ready",
+      summary: `Stored jobs observed: AI ${snapshot.aiJobs.recent}, sync ${snapshot.syncJobs.recent}. Failed states are surfaced for operator review.`,
+    },
+    {
+      id: "tokens",
+      items: [
+        { key: "TOKENS_ACTIVE", label: `Active personal save tokens: ${snapshot.tokens.active}`, required: false, secret: true, state: "present" },
+        { key: "TOKENS_REVOKED", label: `Revoked personal save tokens: ${snapshot.tokens.revoked}`, required: false, secret: true, state: "present" },
+        { key: "TOKENS_EXPIRED", label: `Expired personal save tokens: ${snapshot.tokens.expired}`, required: false, secret: true, state: "present" },
+      ],
+      label: "Personal Save Tokens",
+      status: "ready",
+      summary: "Personal save-token lifecycle counts are visible, while raw tokens, hashes, prefixes, and pepper material remain hidden.",
+    },
+    {
+      id: "recent-failures",
+      items: snapshot.recentFailures.length > 0
+        ? snapshot.recentFailures.map((failure, index) => ({
+            key: `RECENT_FAILURE_${index + 1}`,
+            label: `${failure.source} ${failure.type}: ${failure.message}`,
+            required: false,
+            secret: false,
+            state: "invalid" as const,
+          }))
+        : [{ key: "RECENT_FAILURES_CLEAR", label: "No recent stored failures", required: false, secret: false, state: "present" }],
+      label: "Recent Failures",
+      status: snapshot.recentFailures.length > 0 ? "degraded" : "ready",
+      summary: "Recent stored AI, sync, and publishing failures are summarized with secret redaction.",
+    },
+  ];
+}
+
+function sanitizeWorkspaceSnapshot(snapshot: WorkspaceDiagnosticsSnapshot): WorkspaceDiagnosticsSnapshot {
+  return {
+    ...snapshot,
+    recentFailures: snapshot.recentFailures.map((failure) => ({
+      ...failure,
+      message: sanitizedFailureMessage(failure.message),
+    })),
+  };
+}
+
+export function getOperationalDiagnostics(source: NodeJS.ProcessEnv | EnvSource = process.env, runtime: null | WorkspaceDiagnosticsSnapshot = null): OperationalDiagnostics {
   const env = getServerEnvDiagnostics(source);
+  const safeRuntime = runtime ? sanitizeWorkspaceSnapshot(runtime) : null;
   const envGroups = groupDefinitions.map((definition) => buildEnvGroup(definition, source, env));
-  const groups = [...envGroups, buildDesignSystemGroup()];
+  const groups = [...envGroups, ...buildWorkspaceOperationalGroups(safeRuntime), buildDesignSystemGroup()];
   const overall = groups.some((group) => group.status === "missing" || group.status === "degraded") ? "degraded" : "ready";
 
   return {
@@ -191,9 +305,193 @@ export function getOperationalDiagnostics(source: NodeJS.ProcessEnv | EnvSource 
     env,
     groups,
     overall,
-    phase: "17-x-write-publishing-adapter",
+    phase: "23-hardening-export-delete-observability",
+    runtime: safeRuntime,
     service: "creatoros-personal",
   };
+}
+
+type RuntimeRow = Record<string, unknown>;
+type RuntimeQueryError = { message: string };
+type RuntimeSelectResult = { data: null | RuntimeRow[]; error: null | RuntimeQueryError };
+type RuntimeCountResult = { count: null | number; error: null | RuntimeQueryError };
+type RuntimeSelectChain = {
+  eq(key: string, value: unknown): RuntimeSelectChain;
+  limit(count: number): Promise<RuntimeSelectResult>;
+  order(key: string, options?: { ascending?: boolean }): RuntimeSelectChain;
+};
+type RuntimeCountChain = PromiseLike<RuntimeCountResult> & {
+  eq(key: string, value: unknown): RuntimeCountChain;
+  is(key: string, value: unknown): RuntimeCountChain;
+  lte(key: string, value: unknown): RuntimeCountChain;
+  or(expression: string): RuntimeCountChain;
+};
+type RuntimeQueryClient = {
+  from(table: string): {
+    select(columns: string): RuntimeSelectChain;
+    select(columns: string, options: { count: "exact"; head: true }): RuntimeCountChain;
+  };
+};
+
+function runtimeClient(admin: Pick<AdminContext, "supabase">): RuntimeQueryClient {
+  return admin.supabase as unknown as RuntimeQueryClient;
+}
+
+async function runtimeRows(admin: Pick<AdminContext, "supabase" | "userId">, table: string, columns: string, limit = 25) {
+  const { data, error } = await runtimeClient(admin)
+    .from(table)
+    .select(columns)
+    .eq("user_id", admin.userId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    throw new Error(`Failed to load diagnostics for ${table}: ${error.message}`);
+  }
+
+  return data ?? [];
+}
+
+async function runtimeCount(
+  admin: Pick<AdminContext, "supabase" | "userId">,
+  table: string,
+  build?: (query: RuntimeCountChain) => RuntimeCountChain,
+) {
+  let query = runtimeClient(admin)
+    .from(table)
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", admin.userId);
+
+  if (build) {
+    query = build(query);
+  }
+
+  const { count, error } = await query;
+
+  if (error) {
+    throw new Error(`Failed to count diagnostics for ${table}: ${error.message}`);
+  }
+
+  return count ?? 0;
+}
+
+function sanitizedFailureMessage(value: unknown) {
+  const message = typeof value === "string" && value.trim().length > 0 ? value : "stored failure";
+  const sanitized = redactAuditMetadata({ message });
+  return sanitized && typeof sanitized === "object" && !Array.isArray(sanitized) && typeof sanitized.message === "string"
+    ? sanitized.message.slice(0, 180)
+    : "stored failure";
+}
+
+function failureAt(row: RuntimeRow) {
+  return typeof row.created_at === "string" ? row.created_at : typeof row.updated_at === "string" ? row.updated_at : new Date(0).toISOString();
+}
+
+function recentFailure(source: WorkspaceFailureDiagnostic["source"], row: RuntimeRow): WorkspaceFailureDiagnostic {
+  return {
+    at: failureAt(row),
+    id: typeof row.id === "string" ? row.id : "unknown",
+    message: sanitizedFailureMessage(row.error ?? row.sanitized_message),
+    source,
+    type: typeof row.job_type === "string" ? row.job_type : typeof row.failure_type === "string" ? row.failure_type : typeof row.prompt_name === "string" ? row.prompt_name : "unknown",
+  };
+}
+
+export async function getWorkspaceDiagnosticsSnapshot(admin: Pick<AdminContext, "supabase" | "userId">): Promise<WorkspaceDiagnosticsSnapshot> {
+  const now = Date.now();
+  const nowIso = new Date(now).toISOString();
+  const [
+    aiJobs,
+    syncJobs,
+    publishingFailures,
+    promptRuns,
+    aiFailed,
+    aiRunning,
+    aiTotal,
+    syncFailed,
+    syncRunning,
+    syncTotal,
+    publishingFailedJobs,
+    publishingQueuedJobs,
+    retryableFailures,
+    scheduledDue,
+    activeTokens,
+    expiredTokens,
+    revokedTokens,
+  ] = await Promise.all([
+    runtimeRows(admin, "ai_jobs", "id,job_type,status,error,created_at,updated_at"),
+    runtimeRows(admin, "sync_jobs", "id,job_type,status,error,created_at,updated_at"),
+    runtimeRows(admin, "publishing_failures", "id,failure_type,sanitized_message,retryable,created_at"),
+    runtimeRows(admin, "prompt_runs", "id,prompt_name,status,error,created_at"),
+    runtimeCount(admin, "ai_jobs", (query) => query.eq("status", "failed")),
+    runtimeCount(admin, "ai_jobs", (query) => query.eq("status", "running")),
+    runtimeCount(admin, "ai_jobs"),
+    runtimeCount(admin, "sync_jobs", (query) => query.eq("status", "failed")),
+    runtimeCount(admin, "sync_jobs", (query) => query.eq("status", "running")),
+    runtimeCount(admin, "sync_jobs"),
+    runtimeCount(admin, "publishing_jobs", (query) => query.eq("status", "failed")),
+    runtimeCount(admin, "publishing_jobs", (query) => query.or("status.eq.queued,status.eq.running")),
+    runtimeCount(admin, "publishing_failures", (query) => query.eq("retryable", true)),
+    runtimeCount(admin, "scheduled_posts", (query) => query.eq("status", "scheduled").lte("scheduled_for", nowIso)),
+    runtimeCount(admin, "personal_save_tokens", (query) => query.eq("status", "active").is("revoked_at", null)),
+    runtimeCount(admin, "personal_save_tokens", (query) => query.lte("expires_at", nowIso)),
+    runtimeCount(admin, "personal_save_tokens", (query) => query.or("status.eq.revoked,revoked_at.not.is.null")),
+  ]);
+  const recentFailures = [
+    ...aiJobs.filter((row) => row.status === "failed").map((row) => recentFailure("ai_jobs", row)),
+    ...syncJobs.filter((row) => row.status === "failed").map((row) => recentFailure("sync_jobs", row)),
+    ...promptRuns.filter((row) => row.status === "failed").map((row) => recentFailure("prompt_runs", row)),
+    ...publishingFailures.map((row) => recentFailure("publishing_failures", row)),
+  ]
+    .sort((left, right) => new Date(right.at).getTime() - new Date(left.at).getTime())
+    .slice(0, 5);
+
+  return {
+    aiJobs: {
+      failed: aiFailed,
+      recent: aiTotal,
+      running: aiRunning,
+    },
+    publishing: {
+      failedJobs: publishingFailedJobs,
+      queuedJobs: publishingQueuedJobs,
+      retryableFailures,
+      scheduledDue,
+    },
+    recentFailures,
+    syncJobs: {
+      failed: syncFailed,
+      recent: syncTotal,
+      running: syncRunning,
+    },
+    tokens: {
+      active: activeTokens,
+      expired: expiredTokens,
+      revoked: revokedTokens,
+    },
+  };
+}
+
+export async function getOperationalDiagnosticsForAdmin(admin: Pick<AdminContext, "supabase" | "userId">, source: NodeJS.ProcessEnv | EnvSource = process.env): Promise<OperationalDiagnostics> {
+  try {
+    return getOperationalDiagnostics(source, await getWorkspaceDiagnosticsSnapshot(admin));
+  } catch (error) {
+    const fallback = getOperationalDiagnostics(source);
+    return {
+      ...fallback,
+      groups: fallback.groups.map((group): DiagnosticGroup =>
+        group.id === "recent-failures"
+          ? {
+              ...group,
+              items: [{ key: "RUNTIME_DIAGNOSTICS_ERROR", label: sanitizedFailureMessage(error instanceof Error ? error.message : "runtime diagnostics failed"), required: false, secret: false, state: "invalid" as const }],
+              status: "degraded" as const,
+              summary: "Runtime diagnostics could not load; configuration diagnostics remain available.",
+            }
+          : group,
+      ),
+      overall: "degraded" as const,
+    };
+  }
 }
 
 export function getFoundationDiagnostics(source: NodeJS.ProcessEnv = process.env) {

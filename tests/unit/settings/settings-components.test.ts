@@ -33,7 +33,8 @@ const diagnostics = {
     },
   ],
   overall: "degraded",
-  phase: "08-settings-diagnostics-env-security",
+  phase: "23-hardening-export-delete-observability",
+  runtime: null,
   service: "creatoros-personal",
 } satisfies OperationalDiagnostics;
 

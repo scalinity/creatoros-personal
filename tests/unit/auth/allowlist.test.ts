@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { authorizeAdminIdentity, isAdminEmail, parseAdminEmails } from "@/lib/auth/allowlist";
-import { redactAuditMetadata } from "@/lib/audit/redaction";
+import { redactAuditMetadata, redactAuditString } from "@/lib/audit/redaction";
 
 describe("admin allowlist helpers", () => {
   it("normalizes, validates, and deduplicates configured admin emails", () => {
@@ -46,6 +46,12 @@ describe("audit metadata redaction", () => {
       },
       token: "[redacted]",
     });
+  });
+
+  it("redacts standalone error strings that look like secrets", () => {
+    expect(redactAuditString("provider failed with client_secret=abc123")).toBe("[redacted]");
+    expect(redactAuditString("database postgresql://user:pass@localhost/db refused connection")).toBe("[redacted]");
+    expect(redactAuditString("jwt eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.signature12345 failed")).toBe("[redacted]");
   });
 });
 

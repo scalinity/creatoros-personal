@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
-import { getOperationalDiagnostics } from "@/lib/server-only/diagnostics";
+import { getOperationalDiagnostics, getWorkspaceDiagnosticsSnapshot } from "@/lib/server-only/diagnostics";
 
 const validEnv = {
   NEXT_PUBLIC_APP_URL: "http://localhost:3000",
@@ -34,7 +34,7 @@ describe("operational diagnostics", () => {
     const diagnostics = getOperationalDiagnostics(validEnv);
 
     expect(diagnostics.overall).toBe("ready");
-    expect(diagnostics.phase).toBe("17-x-write-publishing-adapter");
+    expect(diagnostics.phase).toBe("23-hardening-export-delete-observability");
     expect(diagnostics.groups.map((group) => group.id)).toEqual([
       "auth",
       "database",
@@ -42,9 +42,14 @@ describe("operational diagnostics", () => {
       "x",
       "cron",
       "security",
+      "publishing",
+      "jobs",
+      "tokens",
+      "recent-failures",
       "design-system",
     ]);
     expect(diagnostics.groups.find((group) => group.id === "design-system")?.status).toBe("ready");
+    expect(diagnostics.groups.find((group) => group.id === "publishing")?.status).toBe("scaffolded");
     expect(JSON.stringify(diagnostics)).not.toContain("service-role-placeholder");
     expect(JSON.stringify(diagnostics)).not.toContain("anthropic-placeholder");
     expect(JSON.stringify(diagnostics)).not.toContain("0123456789abcdef");
@@ -73,5 +78,111 @@ describe("operational diagnostics", () => {
     expect(aiGroup?.status).toBe("ready");
     expect(aiGroup?.items.find((item) => item.key === "OPENAI_API_KEY")?.required).toBe(false);
     expect(diagnostics.env.valid).toBe(true);
+  });
+
+  it("summarizes runtime job, publishing, token, and recent failure signals when supplied", () => {
+    const diagnostics = getOperationalDiagnostics(validEnv, {
+      aiJobs: { failed: 1, recent: 4, running: 1 },
+      publishing: { failedJobs: 1, queuedJobs: 2, retryableFailures: 1, scheduledDue: 0 },
+      recentFailures: [
+        {
+          at: "2026-04-28T12:00:00.000Z",
+          id: "failure-1",
+          message: "provider secret sk-test-should-redact failed",
+          source: "ai_jobs",
+          type: "coach",
+        },
+      ],
+      syncJobs: { failed: 0, recent: 2, running: 0 },
+      tokens: { active: 1, expired: 0, revoked: 2 },
+    });
+
+    expect(diagnostics.groups.find((group) => group.id === "jobs")?.status).toBe("degraded");
+    expect(diagnostics.groups.find((group) => group.id === "publishing")?.status).toBe("degraded");
+    expect(diagnostics.groups.find((group) => group.id === "tokens")?.status).toBe("ready");
+    expect(diagnostics.groups.find((group) => group.id === "recent-failures")?.status).toBe("degraded");
+    expect(JSON.stringify(diagnostics)).not.toContain("sk-test-should-redact");
+  });
+
+  it("uses exact runtime count queries instead of recent-row samples for status totals", async () => {
+    const countValues = new Map([
+      ["ai_jobs|status=failed", 41],
+      ["ai_jobs|status=running", 2],
+      ["ai_jobs|total", 80],
+      ["sync_jobs|status=failed", 3],
+      ["sync_jobs|status=running", 1],
+      ["sync_jobs|total", 15],
+      ["publishing_jobs|status=failed", 7],
+      ["publishing_jobs|or:status.eq.queued,status.eq.running", 4],
+      ["publishing_failures|retryable=true", 5],
+      ["scheduled_posts|status=scheduled|scheduled_for<=2026-", 6],
+      ["personal_save_tokens|status=active|revoked_at=null", 2],
+      ["personal_save_tokens|expires_at<=2026-", 1],
+      ["personal_save_tokens|or:status.eq.revoked,revoked_at.not.is.null", 9],
+    ]);
+    const rowsByTable = new Map([
+      ["ai_jobs", []],
+      ["sync_jobs", []],
+      ["publishing_failures", []],
+      ["prompt_runs", []],
+    ]);
+    const supabase = {
+      from(table: string) {
+        return {
+          select(_columns: string, options?: { count?: "exact"; head?: boolean }) {
+            if (options?.head) {
+              const filters: string[] = [];
+              const chain = {
+                eq(key: string, value: unknown) {
+                  if (key !== "user_id") filters.push(`${key}=${String(value)}`);
+                  return chain;
+                },
+                is(key: string, value: unknown) {
+                  filters.push(`${key}=${String(value)}`);
+                  return chain;
+                },
+                lte(key: string, value: unknown) {
+                  filters.push(`${key}<=${String(value).slice(0, 5)}`);
+                  return chain;
+                },
+                or(expression: string) {
+                  filters.push(`or:${expression}`);
+                  return chain;
+                },
+                then<TResult1 = { count: number; error: null }, TResult2 = never>(
+                  onfulfilled?: ((value: { count: number; error: null }) => TResult1 | PromiseLike<TResult1>) | null,
+                  onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+                ) {
+                  const key = `${table}|${filters.length > 0 ? filters.join("|") : "total"}`;
+                  return Promise.resolve({ count: countValues.get(key) ?? 0, error: null }).then(onfulfilled, onrejected);
+                },
+              };
+              return chain;
+            }
+
+            const chain = {
+              eq() {
+                return chain;
+              },
+              order() {
+                return chain;
+              },
+              limit() {
+                return Promise.resolve({ data: rowsByTable.get(table) ?? [], error: null });
+              },
+            };
+            return chain;
+          },
+        };
+      },
+    };
+
+    const snapshot = await getWorkspaceDiagnosticsSnapshot({ supabase, userId: "owner-1" } as unknown as Parameters<typeof getWorkspaceDiagnosticsSnapshot>[0]);
+
+    expect(snapshot.aiJobs.failed).toBe(41);
+    expect(snapshot.aiJobs.recent).toBe(80);
+    expect(snapshot.publishing.failedJobs).toBe(7);
+    expect(snapshot.publishing.retryableFailures).toBe(5);
+    expect(snapshot.tokens.revoked).toBe(9);
   });
 });
