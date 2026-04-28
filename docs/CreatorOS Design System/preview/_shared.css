@@ -1,0 +1,14 @@
+@import url("../globals.css");
+@import url("../components.css");
+body { padding: 16px; min-height: 0; }
+body::before { z-index: 0; }
+.card-frame { position: relative; z-index: 1; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.swatch-tile { width: 100%; height: 56px; border: 1px solid var(--rule-hairline); border-radius: var(--radius-sm); }
+.swatch-tile-name { font-family: var(--font-mono); font-size: 11px; color: var(--ink-secondary); margin-top: 4px; }
+.swatch-tile-token { font-family: var(--font-mono); font-size: 10px; color: var(--ink-muted); }
+.grid { display: grid; gap: 12px; }
+.cols-4 { grid-template-columns: repeat(4, 1fr); }
+.cols-5 { grid-template-columns: repeat(5, 1fr); }
+.cols-3 { grid-template-columns: repeat(3, 1fr); }
+.cols-2 { grid-template-columns: repeat(2, 1fr); }

@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<title>globals.css — Tokens Overview</title>
+<link rel="stylesheet" href="globals.css" />
+<style>
+  body { padding: 28px 32px; min-height: 0; }
+  body::before { z-index: 0; }
+  .wrap { position: relative; z-index: 1; max-width: 1100px; margin: 0 auto; }
+  .head { margin-bottom: 24px; padding-bottom: 14px; border-bottom: 1px solid var(--rule-hairline); }
+  .eyebrow { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.08em; color: var(--ink-tertiary); margin-bottom: 6px; }
+  .h { font-family: var(--font-display); font-size: 36px; letter-spacing: -0.02em; font-weight: 500; line-height: 1.05; }
+  .lede { color: var(--ink-secondary); font-size: 14px; line-height: 1.6; max-width: 620px; margin-top: 8px; }
+  .meta { font-family: var(--font-mono); font-size: 10px; color: var(--ink-muted); letter-spacing: 0.08em; margin-top: 10px; }
+
+  .section { margin-top: 28px; }
+  .sec-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; }
+  .folio { font-family: var(--font-mono); color: var(--accent-vermillion); font-size: 11px; letter-spacing: 0.06em; }
+  .sec-label { font-variant-caps: all-small-caps; letter-spacing: 0.08em; font-weight: 600; font-size: 13px; color: var(--ink-secondary); }
+  .sec-rule { flex: 1; height: 1px; background: var(--rule-hairline); margin-left: 8px; }
+
+  .grid { display: grid; gap: 10px; }
+  .c4 { grid-template-columns: repeat(4, 1fr); }
+  .c6 { grid-template-columns: repeat(6, 1fr); }
+  .c3 { grid-template-columns: repeat(3, 1fr); }
+
+  .swatch { padding: 0; border: 1px solid var(--rule-hairline); border-radius: 4px; overflow: hidden; background: var(--bg-surface); }
+  .swatch-tile { height: 56px; }
+  .swatch-foot { padding: 8px 10px; }
+  .swatch-name { font-family: var(--font-mono); font-size: 11px; color: var(--ink-secondary); }
+  .swatch-token { font-family: var(--font-mono); font-size: 10px; color: var(--ink-muted); }
+
+  .type-row { display: grid; grid-template-columns: 70px 1fr; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--rule-hairline); align-items: baseline; }
+  .type-row:last-child { border: 0; }
+  .type-meta { font-family: var(--font-mono); font-size: 10px; color: var(--ink-tertiary); }
+
+  .space-row { display: flex; align-items: center; gap: 10px; padding: 5px 0; }
+  .space-tok { font-family: var(--font-mono); font-size: 10px; color: var(--ink-tertiary); width: 130px; }
+  .space-bar { height: 10px; background: var(--accent-vermillion-soft); border: 1px solid var(--accent-vermillion); }
+
+  .radius-row { display: flex; gap: 14px; }
+  .radius-cell { text-align: center; }
+  .radius-tile { width: 56px; height: 56px; background: var(--accent-vermillion-soft); border: 1px solid var(--accent-vermillion); margin: 0 auto 6px; }
+  .radius-tok { font-family: var(--font-mono); font-size: 10px; color: var(--ink-tertiary); }
+
+  .light-strip { padding: 14px 16px; background: oklch(0.95 0.012 80); color: oklch(0.18 0.012 60); border: 1px solid oklch(0.85 0.010 60); border-radius: 4px; display: flex; gap: 16px; align-items: center; }
+  .light-strip .tile { width: 36px; height: 36px; border: 1px solid oklch(0.85 0.010 60); border-radius: 2px; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="head">
+      <div class="eyebrow">§ TOKENS · globals.css</div>
+      <div class="h">The full token sheet</div>
+      <p class="lede">Color, type, spacing, and radius tokens for CreatorOS — dark-first, warm ink, vermillion as the only loud color. This is the live render of <code style="font-family:var(--font-mono);font-size:12px;color:var(--accent-vermillion)">globals.css</code>.</p>
+      <div class="meta">DARK THEME · OKLCH PALETTE · FRAUNCES + PUBLIC SANS + JETBRAINS MONO</div>
+    </div>
+
+    <div class="section">
+      <div class="sec-head"><span class="folio">§ 01</span><span class="sec-label">Surfaces</span><span class="sec-rule"></span></div>
+      <div class="grid c4">
+        <div class="swatch"><div class="swatch-tile" style="background:var(--bg-canvas)"></div><div class="swatch-foot"><div class="swatch-name">Canvas</div><div class="swatch-token">--bg-canvas</div></div></div>
+        <div class="swatch"><div class="swatch-tile" style="background:var(--bg-surface)"></div><div class="swatch-foot"><div class="swatch-name">Surface</div><div class="swatch-token">--bg-surface</div></div></div>
+        <div class="swatch"><div class="swatch-tile" style="background:var(--bg-surface-2)"></div><div class="swatch-foot"><div class="swatch-name">Surface 2</div><div class="swatch-token">--bg-surface-2</div></div></div>
+        <div class="swatch"><div class="swatch-tile" style="background:var(--bg-inset)"></div><div class="swatch-foot"><div class="swatch-name">Inset</div><div class="swatch-token">--bg-inset</div></div></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="sec-head"><span class="folio">§ 02</span><span class="sec-label">Ink</span><span class="sec-rule"></span></div>
+      <div class="grid c4">
+        <div class="swatch"><div class="swatch-tile" style="background:var(--ink-primary)"></div><div class="swatch-foot"><div class="swatch-name">Primary</div><div class="swatch-token">--ink-primary</div></div></div>
+        <div class="swatch"><div class="swatch-tile" style="background:var(--ink-secondary)"></div><div class="swatch-foot"><div class="swatch-name">Secondary</div><div class="swatch-token">--ink-secondary</div></div></div>
+        <div class="swatch"><div class="swatch-tile" style="background:var(--ink-tertiary)"></div><div class="swatch-foot"><div class="swatch-name">Tertiary</div><div class="swatch-token">--ink-tertiary</div></div></div>
+        <div class="swatch"><div class="swatch-tile" style="background:var(--ink-muted)"></div><div class="swatch-foot"><div class="swatch-name">Muted</div><div class="swatch-token">--ink-muted</div></div></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="sec-head"><span class="folio">§ 03</span><span class="sec-label">Vermillion + semantic</span><span class="sec-rule"></span></div>
+      <div class="grid c6">
+        <div class="swatch"><div class="swatch-tile" style="background:var(--accent-vermillion)"></div><div class="swatch-foot"><div class="swatch-name">Vermillion</div><div class="swatch-token">--accent-vermillion</div></div></div>
+        <div class="swatch"><div class="swatch-tile" style="background:var(--accent-vermillion-hover)"></div><div class="swatch-foot"><div class="swatch-name">Hover</div><div class="swatch-token">--accent-vermillion-hover</div></div></div>
+        <div class="swatch"><div class="swatch-tile" style="background:var(--success-moss)"></div><div class="swatch-foot"><div class="swatch-name">Moss</div><div class="swatch-token">--success-moss</div></div></div>
+        <div class="swatch"><div class="swatch-tile" style="background:var(--warning-ochre)"></div><div class="swatch-foot"><div class="swatch-name">Ochre</div><div class="swatch-token">--warning-ochre</div></div></div>
+        <div class="swatch"><div class="swatch-tile" style="background:var(--danger-rust)"></div><div class="swatch-foot"><div class="swatch-name">Rust</div><div class="swatch-token">--danger-rust</div></div></div>
+        <div class="swatch"><div class="swatch-tile" style="background:var(--info-ink)"></div><div class="swatch-foot"><div class="swatch-name">Info ink</div><div class="swatch-token">--info-ink</div></div></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="sec-head"><span class="folio">§ 04</span><span class="sec-label">Type — three families</span><span class="sec-rule"></span></div>
+      <div class="type-row"><div class="type-meta">display</div><div style="font-family:var(--font-display);font-size:36px;line-height:1.1;letter-spacing:-0.02em">Fraunces — Editorial workshop</div></div>
+      <div class="type-row"><div class="type-meta">sans</div><div style="font-family:var(--font-sans);font-size:18px;line-height:1.5">Public Sans — UI default for body, labels, and dense text.</div></div>
+      <div class="type-row"><div class="type-meta">mono</div><div style="font-family:var(--font-mono);font-size:14px;font-variant-numeric:tabular-nums lining-nums">JetBrains Mono — 0123456789 · DRAFT-471 · 2026-04-21 14:08</div></div>
+    </div>
+
+    <div class="section">
+      <div class="sec-head"><span class="folio">§ 05</span><span class="sec-label">Spacing — 4px grid</span><span class="sec-rule"></span></div>
+      <div class="space-row"><span class="space-tok">--space-1 · 4px</span><span class="space-bar" style="width:4px"></span></div>
+      <div class="space-row"><span class="space-tok">--space-2 · 8px</span><span class="space-bar" style="width:8px"></span></div>
+      <div class="space-row"><span class="space-tok">--space-3 · 12px</span><span class="space-bar" style="width:12px"></span></div>
+      <div class="space-row"><span class="space-tok">--space-4 · 16px</span><span class="space-bar" style="width:16px"></span></div>
+      <div class="space-row"><span class="space-tok">--space-6 · 24px</span><span class="space-bar" style="width:24px"></span></div>
+      <div class="space-row"><span class="space-tok">--space-8 · 32px</span><span class="space-bar" style="width:32px"></span></div>
+      <div class="space-row"><span class="space-tok">--space-12 · 48px</span><span class="space-bar" style="width:48px"></span></div>
+      <div class="space-row"><span class="space-tok">--space-16 · 64px</span><span class="space-bar" style="width:64px"></span></div>
+    </div>
+
+    <div class="section">
+      <div class="sec-head"><span class="folio">§ 06</span><span class="sec-label">Radius — never pills</span><span class="sec-rule"></span></div>
+      <div class="radius-row">
+        <div class="radius-cell"><div class="radius-tile" style="border-radius:0"></div><div class="radius-tok">none · 0</div></div>
+        <div class="radius-cell"><div class="radius-tile" style="border-radius:2px"></div><div class="radius-tok">sm · 2px</div></div>
+        <div class="radius-cell"><div class="radius-tile" style="border-radius:4px"></div><div class="radius-tok">md · 4px</div></div>
+        <div class="radius-cell"><div class="radius-tile" style="border-radius:6px"></div><div class="radius-tok">lg · 6px</div></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="sec-head"><span class="folio">§ 07</span><span class="sec-label">Light theme — bone &amp; warm ink</span><span class="sec-rule"></span></div>
+      <div class="light-strip">
+        <div class="tile" style="background:oklch(0.95 0.012 80)"></div>
+        <div class="tile" style="background:oklch(0.18 0.012 60)"></div>
+        <div class="tile" style="background:oklch(0.55 0.18 35)"></div>
+        <div style="font-family:var(--font-display);font-size:18px">Same warm ink. Bone canvas. Never pure black/white.</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

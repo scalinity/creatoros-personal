@@ -1,0 +1,36 @@
+/* CreatorOS — Sample data for the showcase. Domain-true, no lorem ipsum. */
+window.SAMPLE = {
+  posts: [
+    { id: "p1", author: "ada_writes", time: "2026-04-21 14:08", text: "Most 'AI safety' arguments collapse the moment you ask: safety from what, on whose timescale, measured how?", likes: "147", reposts: "31", replies: "23", quotes: "8", views: "12.4K", engagement: "9.2" },
+    { id: "p2", author: "ada_writes", time: "2026-04-19 09:31", text: "The product manager's job is not to be right. It is to make the team capable of being right faster.", likes: "412", reposts: "98", replies: "44", quotes: "27", views: "38.1K", engagement: "8.7" },
+    { id: "p3", author: "ada_writes", time: "2026-04-18 22:14", text: "Stop calling it 'technical debt'. Call it 'work we owe ourselves' and watch how the conversation changes.", likes: "289", reposts: "62", replies: "19", quotes: "11", views: "21.6K", engagement: "8.4" },
+    { id: "p4", author: "ada_writes", time: "2026-04-17 11:02", text: "Three years of writing online taught me one thing: the audience finds the writer who refuses to round off.", likes: "73", reposts: "14", replies: "9", quotes: "2", views: "6.2K", engagement: "7.1" },
+    { id: "p5", author: "ada_writes", time: "2026-04-15 16:48", text: "Your roadmap is a hypothesis. Your backlog is its dependencies. Your retro is the experiment writeup.", likes: "186", reposts: "41", replies: "12", quotes: "6", views: "14.8K", engagement: "8.0" },
+    { id: "p6", author: "ada_writes", time: "2026-04-14 08:55", text: "If your strategy fits on one slide, it isn't a strategy — it's a slogan with a Gantt chart attached.", likes: "521", reposts: "117", replies: "58", quotes: "34", views: "47.3K", engagement: "9.1" },
+    { id: "p7", author: "ada_writes", time: "2026-04-12 19:23", text: "Replacing 'I think' with 'I notice' did more for my writing than any editor ever did.", likes: "98", reposts: "22", replies: "7", quotes: "3", views: "8.9K", engagement: "7.6" },
+    { id: "p8", author: "ada_writes", time: "2026-04-11 13:40", text: "There is no neutral framing. Choosing not to frame is itself a frame — and usually the worst available one.", likes: "264", reposts: "57", replies: "31", quotes: "14", views: "19.7K", engagement: "8.5" },
+    { id: "p9", author: "ada_writes", time: "2026-04-10 07:18", text: "The first draft exists to prove the second draft is possible. Stop trying to skip it.", likes: "342", reposts: "81", replies: "26", quotes: "19", views: "28.4K", engagement: "8.8" },
+    { id: "p10", author: "ada_writes", time: "2026-04-08 15:33", text: "Every metric you ship is a hypothesis about what your users care about. Most are wrong on day one.", likes: "127", reposts: "29", replies: "11", quotes: "5", views: "10.2K", engagement: "7.9" },
+  ],
+  voiceProfile: {
+    generated: "2026-04-22",
+    posts: 487,
+    tone: "Analytical, mildly contrarian, allergic to platitude. Prefers structural critique over emotional reaction.",
+    avgSentence: 14,
+    hooks: "Assertion-then-qualification. Re-framing of stale terms (e.g. \"technical debt → work we owe\"). Inverted aphorisms.",
+    phrases: "\"the moment you ask\", \"refuses to round off\", \"on day one\", \"is itself a frame\".",
+    ctas: "Implicit. Rarely asks for engagement; lets the assertion do the work.",
+    refreshed: "2026-04-22 09:14",
+  },
+  scores: [
+    { label: "Hook strength", score: 8.4 },
+    { label: "Clarity", score: 9.1 },
+    { label: "Specificity", score: 7.6 },
+    { label: "Tension", score: 8.0 },
+    { label: "Rhythm", score: 7.2 },
+    { label: "Memorability", score: 8.8 },
+    { label: "Authority", score: 9.0 },
+    { label: "Concision", score: 7.4 },
+    { label: "Voice match", score: 9.3 },
+  ],
+};

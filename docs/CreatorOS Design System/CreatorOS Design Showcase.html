@@ -1,0 +1,588 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>CreatorOS — Design System</title>
+<link rel="stylesheet" href="globals.css" />
+<link rel="stylesheet" href="components.css" />
+<style>
+  /* Showcase-specific layout */
+  .showcase { max-width: 1200px; margin: 0 auto; padding: var(--space-12) var(--space-8); position: relative; z-index: 1; }
+  .showcase-head { margin-bottom: var(--space-16); }
+  .showcase-eyebrow { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-tertiary); letter-spacing: 0.08em; margin-bottom: var(--space-3); }
+  .showcase-title { font-family: var(--font-display); font-size: var(--text-4xl); font-weight: 500; letter-spacing: -0.02em; line-height: 1.05; margin-bottom: var(--space-4); }
+  .showcase-lede { font-size: var(--text-md); color: var(--ink-secondary); line-height: 1.7; max-width: 640px; }
+  .showcase-meta { display: flex; gap: var(--space-6); font-size: var(--text-xxs); color: var(--ink-muted); margin-top: var(--space-6); padding-top: var(--space-4); border-top: 1px solid var(--rule-hairline); letter-spacing: 0.08em; }
+  .section { margin-bottom: var(--space-20); }
+  .section-grid { display: grid; gap: var(--space-6); }
+  .grid-2 { grid-template-columns: repeat(2, 1fr); }
+  .grid-3 { grid-template-columns: repeat(3, 1fr); }
+  .grid-4 { grid-template-columns: repeat(4, 1fr); }
+  .grid-9 { grid-template-columns: repeat(3, 1fr); }
+  @media (min-width: 900px) { .grid-9 { grid-template-columns: repeat(3, 1fr); } }
+  .specimen { padding: var(--space-4); border: 1px solid var(--rule-hairline); border-radius: var(--radius-md); background: var(--bg-surface); }
+  .specimen-label { font-size: var(--text-xxs); color: var(--ink-muted); letter-spacing: 0.1em; margin-bottom: var(--space-3); font-variant-caps: all-small-caps; }
+  .swatch { height: 64px; border: 1px solid var(--rule-hairline); border-radius: var(--radius-sm); margin-bottom: var(--space-2); }
+  .swatch-name { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-primary); }
+  .swatch-token { font-family: var(--font-mono); font-size: var(--text-xxs); color: var(--ink-tertiary); }
+  .type-row { display: grid; grid-template-columns: 80px 1fr; gap: var(--space-4); padding: var(--space-3) 0; border-bottom: 1px solid var(--rule-hairline); align-items: baseline; }
+  .type-row:last-child { border-bottom: 0; }
+  .type-row .meta { font-family: var(--font-mono); font-size: var(--text-xxs); color: var(--ink-tertiary); }
+  .ramp-display { font-family: var(--font-display); }
+  .ramp-sans { font-family: var(--font-sans); }
+  .ramp-mono { font-family: var(--font-mono); }
+  .space-row { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) 0; border-bottom: 1px solid var(--rule-hairline); }
+  .space-row:last-child { border-bottom: 0; }
+  .space-bar { background: var(--accent-vermillion-soft); height: 12px; border: 1px solid var(--accent-vermillion); }
+  .space-token { font-family: var(--font-mono); font-size: var(--text-xs); width: 110px; color: var(--ink-tertiary); }
+  .space-px { font-family: var(--font-mono); font-size: var(--text-xxs); color: var(--ink-muted); }
+  .radius-sample { width: 64px; height: 64px; background: var(--accent-vermillion-soft); border: 1px solid var(--accent-vermillion); margin-bottom: var(--space-2); }
+  .row { display: flex; gap: var(--space-3); flex-wrap: wrap; align-items: center; }
+  .stack { display: flex; flex-direction: column; gap: var(--space-3); }
+  .ornament-divider { text-align: center; color: var(--accent-vermillion); font-family: var(--font-display); font-size: var(--text-lg); margin: var(--space-12) 0; letter-spacing: 0.5em; }
+  /* Embedded shell preview */
+  .shell-preview { border: 1px solid var(--rule-hairline); border-radius: var(--radius-md); overflow: hidden; height: 480px; background: var(--bg-canvas); position: relative; }
+  .shell-preview .app-shell { min-height: 100%; height: 100%; }
+  .toast-stack { display: flex; flex-direction: column; gap: var(--space-3); align-items: flex-start; }
+  .chat-thread { display: flex; flex-direction: column; padding: var(--space-4); border: 1px solid var(--rule-hairline); border-radius: var(--radius-md); background: var(--bg-surface); }
+  .post-list { background: var(--bg-surface); border: 1px solid var(--rule-hairline); border-radius: var(--radius-md); }
+  .post-list .post-row:last-child { border-bottom: 0; }
+  .anti-page-corner { position: fixed; bottom: var(--space-4); right: var(--space-4); z-index: 100; }
+</style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="components.jsx"></script>
+  <script type="text/babel" src="sample-data.jsx"></script>
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    function SectionHeader({ folio, label, sub }) {
+      return <RuleHeader folio={folio} label={label} sub={sub} />;
+    }
+
+    function ColorSwatch({ name, token, varName }) {
+      return (
+        <div className="specimen" data-screen-label="color-swatch">
+          <div className="swatch" style={{ background: `var(${varName})` }} />
+          <div className="swatch-name">{name}</div>
+          <div className="swatch-token">{token}</div>
+        </div>
+      );
+    }
+
+    function App() {
+      const [theme, setTheme] = useTheme();
+      const [tab, setTab] = useState("primitives");
+      const [dialogOpen, setDialogOpen] = useState(false);
+      const [sheetOpen, setSheetOpen] = useState(false);
+      const [cmdkOpen, setCmdkOpen] = useState(false);
+      const [toasts, setToasts] = useState([]);
+      const [active, setActive] = useState("history");
+      const addToast = (variant, title, body) => {
+        const id = Math.random().toString(36).slice(2);
+        setToasts((t) => [...t, { id, variant, title, body }]);
+      };
+      const removeToast = (id) => setToasts((t) => t.filter((x) => x.id !== id));
+
+      useEffect(() => {
+        const h = (e) => { if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); setCmdkOpen(true); } };
+        window.addEventListener("keydown", h);
+        return () => window.removeEventListener("keydown", h);
+      }, []);
+
+      const colors = [
+        { name: "Canvas", token: "--bg-canvas", v: "--bg-canvas" },
+        { name: "Surface", token: "--bg-surface", v: "--bg-surface" },
+        { name: "Surface 2", token: "--bg-surface-2", v: "--bg-surface-2" },
+        { name: "Inset", token: "--bg-inset", v: "--bg-inset" },
+        { name: "Ink primary", token: "--ink-primary", v: "--ink-primary" },
+        { name: "Ink secondary", token: "--ink-secondary", v: "--ink-secondary" },
+        { name: "Ink tertiary", token: "--ink-tertiary", v: "--ink-tertiary" },
+        { name: "Ink muted", token: "--ink-muted", v: "--ink-muted" },
+        { name: "Vermillion", token: "--accent-vermillion", v: "--accent-vermillion" },
+        { name: "Vermillion soft", token: "--accent-vermillion-soft", v: "--accent-vermillion-soft" },
+        { name: "Moss", token: "--success-moss", v: "--success-moss" },
+        { name: "Ochre", token: "--warning-ochre", v: "--warning-ochre" },
+        { name: "Rust", token: "--danger-rust", v: "--danger-rust" },
+        { name: "Rule hairline", token: "--rule-hairline", v: "--rule-hairline" },
+      ];
+
+      const typeRamp = [
+        { token: "--text-4xl", size: "64px", text: "Editorial Workshop" },
+        { token: "--text-3xl", size: "48px", text: "Aa Bb 0123456789" },
+        { token: "--text-2xl", size: "36px", text: "On whose timescale" },
+        { token: "--text-xl",  size: "28px", text: "Section heading" },
+        { token: "--text-lg",  size: "22px", text: "Sub-heading" },
+        { token: "--text-md",  size: "18px", text: "Long-form reading body" },
+        { token: "--text-base",size: "16px", text: "Body text — default UI size." },
+        { token: "--text-sm",  size: "14px", text: "Dense table, secondary UI" },
+        { token: "--text-xs",  size: "12px", text: "Captions, table numerics" },
+        { token: "--text-xxs", size: "11px", text: "FOLIO MARKS, EYEBROWS" },
+      ];
+
+      const spaces = [
+        { tok: "--space-1", px: "4px" },
+        { tok: "--space-2", px: "8px" },
+        { tok: "--space-3", px: "12px" },
+        { tok: "--space-4", px: "16px" },
+        { tok: "--space-5", px: "20px" },
+        { tok: "--space-6", px: "24px" },
+        { tok: "--space-8", px: "32px" },
+        { tok: "--space-10", px: "40px" },
+        { tok: "--space-12", px: "48px" },
+        { tok: "--space-16", px: "64px" },
+        { tok: "--space-20", px: "80px" },
+        { tok: "--space-24", px: "96px" },
+      ];
+
+      const tableColumns = [
+        { key: "time", label: "Posted", sortable: true, render: (r) => <span className="mono" style={{ color: "var(--ink-tertiary)" }}>{r.time}</span> },
+        { key: "text", label: "Post", render: (r) => <div style={{ maxWidth: 380, lineHeight: 1.5 }}>{r.text}</div> },
+        { key: "likes", label: "Likes", sortable: true, numeric: true },
+        { key: "reposts", label: "Reposts", sortable: true, numeric: true },
+        { key: "replies", label: "Replies", sortable: true, numeric: true },
+        { key: "views", label: "Views", sortable: true, numeric: true },
+        { key: "engagement", label: "Score", sortable: true, numeric: true, render: (r) => <span className="mono" style={{ color: "var(--accent-vermillion)" }}>{r.engagement}</span> },
+      ];
+
+      const [page, setPage] = useState(2);
+
+      return (
+        <div className="showcase" data-screen-label="01 Showcase">
+          {/* HEADER */}
+          <header className="showcase-head">
+            <div className="showcase-eyebrow">CREATOROS PERSONAL · DESIGN SYSTEM · v0.1</div>
+            <h1 className="showcase-title">A Private Quarterly,<br/>For One Reader.</h1>
+            <p className="showcase-lede dropcap">Editorial workshop crossed with a financial terminal — built for the writer who needs the room to read their own words back at full size, and the room to interrogate the numbers behind them. This page exercises every primitive, composite, and app-specific component the system ships with.</p>
+            <div className="showcase-meta">
+              <span>EDITION § 01</span>
+              <span>FOLIO 487 POSTS</span>
+              <span>VOICE PROFILE 2026-04-22</span>
+              <span style={{ marginLeft: "auto" }}>
+                <button className="topbar-cmd" onClick={() => setTheme(theme === "light" ? "dark" : "light")}>
+                  <span className="folio">{theme === "light" ? "☾ DARK" : "☀ LIGHT"}</span>
+                </button>
+              </span>
+            </div>
+          </header>
+
+          {/* §01 FOUNDATIONS */}
+          <section className="section">
+            <SectionHeader folio="§ 01" label="FOUNDATIONS" sub="Tokens · Type · Space · Radius · Motion" />
+
+            <h3 style={{ marginBottom: "var(--space-4)", marginTop: "var(--space-6)" }}>Color</h3>
+            <div className="section-grid grid-4">
+              {colors.map((c) => <ColorSwatch key={c.token} {...c} varName={c.v} />)}
+            </div>
+
+            <h3 style={{ margin: "var(--space-10) 0 var(--space-4)" }}>Type ramp — Display (Fraunces)</h3>
+            <div className="specimen">
+              {typeRamp.map((t) => (
+                <div key={t.token} className="type-row">
+                  <div className="meta">{t.size}<br/><span style={{ color: "var(--ink-muted)" }}>{t.token}</span></div>
+                  <div style={{ fontFamily: "var(--font-display)", fontSize: `var(${t.token})`, lineHeight: 1.1, letterSpacing: "-0.01em" }}>{t.text}</div>
+                </div>
+              ))}
+            </div>
+
+            <h3 style={{ margin: "var(--space-10) 0 var(--space-4)" }}>Type ramp — Sans (Public Sans) & Mono (JetBrains Mono)</h3>
+            <div className="section-grid grid-2">
+              <div className="specimen">
+                <div className="specimen-label">SANS · BODY</div>
+                <p className="ramp-sans" style={{ fontSize: "var(--text-md)", lineHeight: 1.7 }}>The product manager's job is not to be right. It is to make the team capable of being right faster.</p>
+                <p className="ramp-sans smallcaps" style={{ marginTop: "var(--space-3)", color: "var(--ink-tertiary)" }}>SMALLCAPS · EYEBROWS · STATUS LABELS</p>
+              </div>
+              <div className="specimen">
+                <div className="specimen-label">MONO · NUMERICS & IDS</div>
+                <p className="ramp-mono" style={{ fontSize: "var(--text-md)", fontVariantNumeric: "tabular-nums lining-nums" }}>0123456789</p>
+                <p className="ramp-mono" style={{ marginTop: "var(--space-2)", color: "var(--ink-tertiary)", fontSize: "var(--text-sm)" }}>DRAFT-471 · 2026-04-21 · #a3f2c1</p>
+              </div>
+            </div>
+
+            <h3 style={{ margin: "var(--space-10) 0 var(--space-4)" }}>Spacing</h3>
+            <div className="specimen">
+              {spaces.map((s) => (
+                <div key={s.tok} className="space-row">
+                  <span className="space-token">{s.tok}</span>
+                  <span className="space-px">{s.px}</span>
+                  <span className="space-bar" style={{ width: `var(${s.tok})` }} />
+                </div>
+              ))}
+            </div>
+
+            <h3 style={{ margin: "var(--space-10) 0 var(--space-4)" }}>Radius & Motion</h3>
+            <div className="section-grid grid-4">
+              <div className="specimen"><div className="radius-sample" style={{ borderRadius: "0" }} /><div className="swatch-token">--radius-none · 0</div></div>
+              <div className="specimen"><div className="radius-sample" style={{ borderRadius: "var(--radius-sm)" }} /><div className="swatch-token">--radius-sm · 2px</div></div>
+              <div className="specimen"><div className="radius-sample" style={{ borderRadius: "var(--radius-md)" }} /><div className="swatch-token">--radius-md · 4px</div></div>
+              <div className="specimen"><div className="radius-sample" style={{ borderRadius: "var(--radius-lg)" }} /><div className="swatch-token">--radius-lg · 6px</div></div>
+            </div>
+            <div className="section-grid grid-3" style={{ marginTop: "var(--space-4)" }}>
+              <div className="specimen">
+                <div className="specimen-label">DURATION · BASE 220ms</div>
+                <div style={{ height: 8, background: "var(--bg-inset)", border: "1px solid var(--rule-hairline)", overflow: "hidden", marginTop: "var(--space-3)" }}>
+                  <div style={{ height: "100%", background: "var(--accent-vermillion)", width: "60%", animation: "skel-sweep 2.4s var(--ease-standard) infinite" }} />
+                </div>
+              </div>
+              <div className="specimen">
+                <div className="specimen-label">EASE · STANDARD</div>
+                <div className="mono" style={{ fontSize: "var(--text-xs)", marginTop: "var(--space-3)", color: "var(--ink-tertiary)" }}>cubic-bezier(0.2, 0, 0, 1)</div>
+              </div>
+              <div className="specimen">
+                <div className="specimen-label">REDUCED MOTION</div>
+                <div style={{ fontSize: "var(--text-xs)", marginTop: "var(--space-3)", color: "var(--ink-tertiary)", lineHeight: 1.5 }}>Count-ups, ink-bleed, stagger reveals collapse to instant state. Page transitions halve.</div>
+              </div>
+            </div>
+          </section>
+
+          <div className="ornament-divider">❦ ❦ ❦</div>
+
+          {/* §02 PRIMITIVES */}
+          <section className="section">
+            <SectionHeader folio="§ 02" label="PRIMITIVES" sub="Buttons · Fields · Selection · Surfaces" />
+
+            <h3 style={{ margin: "var(--space-6) 0 var(--space-4)" }}>Buttons</h3>
+            <div className="specimen">
+              <div className="row" style={{ marginBottom: "var(--space-3)" }}>
+                <Button variant="primary" size="sm">Save Draft</Button>
+                <Button variant="primary" size="md">Save Draft</Button>
+                <Button variant="primary" size="lg">Save Draft</Button>
+                <Button variant="primary" loading>Saving</Button>
+              </div>
+              <div className="row" style={{ marginBottom: "var(--space-3)" }}>
+                <Button variant="secondary">Regenerate</Button>
+                <Button variant="tertiary">View original</Button>
+                <Button variant="destructive">Delete draft</Button>
+                <Button variant="primary" disabled>Disabled</Button>
+              </div>
+            </div>
+
+            <h3 style={{ margin: "var(--space-10) 0 var(--space-4)" }}>Fields</h3>
+            <div className="section-grid grid-2">
+              <div className="specimen">
+                <Input label="POST URL" placeholder="https://x.com/ada_writes/status/…" mono />
+                <Input label="DRAFT TITLE" defaultValue="On the failure of slogans-as-strategy" />
+                <Input label="API KEY" error="Invalid format. Expected sk-prefix." defaultValue="invalid-key" mono />
+                <Textarea label="POST DRAFT" defaultValue="Most 'AI safety' arguments collapse the moment you ask: safety from what, on whose timescale, measured how?" />
+              </div>
+              <div className="specimen">
+                <Select label="REWRITE STYLE" options={[{ value: "contra", label: "Contrarian" }, { value: "concise", label: "Concise" }, { value: "expand", label: "Expanded" }]} />
+                <div style={{ marginTop: "var(--space-4)", display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
+                  <Checkbox label="Include voice-match score" defaultChecked />
+                  <Checkbox label="Show diff against original" />
+                  <Checkbox label="Cite source posts in chat" defaultChecked />
+                </div>
+                <div style={{ marginTop: "var(--space-4)", display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
+                  <Switch label="Auto-archive used drafts" defaultChecked />
+                  <Switch label="Stream assistant responses" defaultChecked />
+                  <Switch label="Pin Inspector across navigation" />
+                </div>
+              </div>
+            </div>
+
+            <h3 style={{ margin: "var(--space-10) 0 var(--space-4)" }}>Badges, Tabs & Tooltip</h3>
+            <div className="specimen">
+              <div className="row" style={{ marginBottom: "var(--space-4)" }}>
+                <Badge variant="neutral">DRAFT</Badge>
+                <Badge variant="accent">SCHEDULED</Badge>
+                <Badge variant="success">PUBLISHED</Badge>
+                <Badge variant="warning">DRIFT</Badge>
+                <Badge variant="danger">FAILED</Badge>
+                <Badge variant="outline">ARCHIVED</Badge>
+              </div>
+              <div style={{ marginBottom: "var(--space-4)" }}>
+                <Tabs value={tab} onChange={setTab} tabs={[
+                  { value: "primitives", label: "PRIMITIVES" },
+                  { value: "composites", label: "COMPOSITES" },
+                  { value: "domain", label: "DOMAIN" },
+                  { value: "shell", label: "SHELL" },
+                ]} />
+              </div>
+              <div className="row">
+                <Tooltip content="Recompute voice profile from last 500 posts">
+                  <Button variant="secondary" size="sm">Hover · Tooltip</Button>
+                </Tooltip>
+                <Button variant="secondary" size="sm" onClick={() => setDialogOpen(true)}>Open Dialog</Button>
+                <Button variant="secondary" size="sm" onClick={() => setSheetOpen(true)}>Open Sheet</Button>
+                <Button variant="secondary" size="sm" onClick={() => setCmdkOpen(true)}>Open ⌘K</Button>
+                <Button variant="secondary" size="sm" onClick={() => addToast("success", "DRAFT SAVED", "DRAFT-471 stored to local archive.")}>Toast: success</Button>
+                <Button variant="secondary" size="sm" onClick={() => addToast("warning", "VOICE DRIFT", "Recent posts deviate 18% from baseline.")}>Toast: warning</Button>
+                <Button variant="secondary" size="sm" onClick={() => addToast("danger", "SYNC FAILED", "X API returned 429. Retrying in 60s.")}>Toast: danger</Button>
+              </div>
+            </div>
+          </section>
+
+          <div className="ornament-divider">❦ ❦ ❦</div>
+
+          {/* §03 DATA & CONTENT */}
+          <section className="section">
+            <SectionHeader folio="§ 03" label="DATA & CONTENT" sub="Cards · Tables · States · Empty · Error" />
+
+            <h3 style={{ margin: "var(--space-6) 0 var(--space-4)" }}>RuleHeader & Cards</h3>
+            <div className="section-grid grid-3" style={{ marginBottom: "var(--space-6)" }}>
+              <Card>
+                <Card.RuleHeader folio="§ 04" label="DRAFT" sub="DRAFT-471" />
+                <Card.Body>
+                  <p style={{ color: "var(--ink-secondary)", lineHeight: 1.7 }}>Default surface. Hairline border, no shadow. The workhorse container.</p>
+                </Card.Body>
+              </Card>
+              <Card variant="inset">
+                <Card.RuleHeader folio="§ 05" label="INSET" sub="code blocks, refs" />
+                <Card.Body>
+                  <p style={{ color: "var(--ink-secondary)", lineHeight: 1.7, fontFamily: "var(--font-mono)", fontSize: "var(--text-sm)" }}>const profile = await voice.refresh();</p>
+                </Card.Body>
+              </Card>
+              <Card variant="elevated">
+                <Card.RuleHeader folio="§ 06" label="ELEVATED" sub="rare" />
+                <Card.Body>
+                  <p style={{ color: "var(--ink-secondary)", lineHeight: 1.7 }}>Used only for transient surfaces — popovers and overlays.</p>
+                </Card.Body>
+              </Card>
+            </div>
+
+            <h3 style={{ margin: "var(--space-10) 0 var(--space-4)" }}>KeyValueRow</h3>
+            <Card>
+              <Card.Body>
+                <KeyValueRow k="Draft ID" mono>DRAFT-471</KeyValueRow>
+                <KeyValueRow k="Status"><Badge variant="accent">SCHEDULED</Badge></KeyValueRow>
+                <KeyValueRow k="Created" mono>2026-04-21 14:08</KeyValueRow>
+                <KeyValueRow k="Voice match" mono>9.3 / 10</KeyValueRow>
+                <KeyValueRow k="Tags">contrarian, ai-safety, structural</KeyValueRow>
+              </Card.Body>
+            </Card>
+
+            <h3 style={{ margin: "var(--space-10) 0 var(--space-4)" }}>Table — Post History</h3>
+            <Table columns={tableColumns} rows={SAMPLE.posts} selectedId="p2" />
+            <div style={{ marginTop: "var(--space-4)", display: "flex", justifyContent: "flex-end" }}>
+              <Pagination page={page} total={47} onChange={setPage} />
+            </div>
+
+            <h3 style={{ margin: "var(--space-10) 0 var(--space-4)" }}>Empty · Loading · Error</h3>
+            <div className="section-grid grid-3">
+              <EmptyState ornament="❦" title="NO INSPIRATION SAVED" body="Right-click any post in your timeline to save it here. Saved posts can be transformed, countered, or rewritten in your voice." action={<Button variant="primary" size="sm">Browse Timeline</Button>} />
+              <Card>
+                <Card.Body>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
+                    <LoadingSkeleton width="40%" height={11} />
+                    <LoadingSkeleton width="100%" height={20} />
+                    <LoadingSkeleton width="92%" height={16} />
+                    <LoadingSkeleton width="78%" height={16} />
+                    <div style={{ display: "flex", gap: "var(--space-2)", marginTop: "var(--space-3)" }}>
+                      <LoadingSkeleton width={48} height={28} />
+                      <LoadingSkeleton width={48} height={28} />
+                      <LoadingSkeleton width={48} height={28} />
+                    </div>
+                  </div>
+                </Card.Body>
+              </Card>
+              <ErrorFallback code="500" title="VOICE PROFILE UNAVAILABLE" body="The analyzer encountered a malformed cache from the 2026-04-12 run. Recomputing from scratch will take ~40s." action={<Button variant="primary" size="sm">Recompute Profile</Button>} />
+            </div>
+          </section>
+
+          <div className="ornament-divider">❦ ❦ ❦</div>
+
+          {/* §04 INTELLIGENCE */}
+          <section className="section">
+            <SectionHeader folio="§ 04" label="INTELLIGENCE" sub="Scores · Metrics · Confidence · Assumptions" />
+
+            <h3 style={{ margin: "var(--space-6) 0 var(--space-4)" }}>Algo Analyzer — Score Set</h3>
+            <Card>
+              <Card.Body>
+                <div style={{ display: "grid", gridTemplateColumns: "1.2fr 2fr", gap: "var(--space-8)", alignItems: "start" }}>
+                  <div className="score-large">
+                    <ScoreGauge variant="large" score={8.4} label="OVERALL — HOOK & VOICE" />
+                  </div>
+                  <div className="section-grid grid-3">
+                    {SAMPLE.scores.map((s) => (
+                      <ScoreGauge key={s.label} score={s.score} label={s.label} />
+                    ))}
+                  </div>
+                </div>
+              </Card.Body>
+            </Card>
+
+            <h3 style={{ margin: "var(--space-10) 0 var(--space-4)" }}>MetricBlock — Dashboard Grid</h3>
+            <div className="section-grid grid-4">
+              <MetricBlock value="487" label="Posts archived" delta="+24 / 30d" deltaDir="up" />
+              <MetricBlock value="9.2" label="Median voice match" delta="+0.3 / 30d" deltaDir="up" />
+              <MetricBlock value="3.2×" label="First-principles vs reaction" delta="+0.4× / 30d" deltaDir="up" />
+              <MetricBlock value="18%" label="Drift from baseline" delta="−4% / 30d" deltaDir="down" />
+            </div>
+
+            <h3 style={{ margin: "var(--space-10) 0 var(--space-4)" }}>Confidence labels & Assumption flags</h3>
+            <div className="section-grid grid-2">
+              <Card>
+                <Card.Body>
+                  <p style={{ marginBottom: "var(--space-3)", color: "var(--ink-secondary)", lineHeight: 1.7 }}>
+                    Your archived "first-principles" posts outperform "reaction" posts 3.2× on bookmarks. <ConfidenceLabel kind="FACT" />
+                  </p>
+                  <p style={{ marginBottom: "var(--space-3)", color: "var(--ink-secondary)", lineHeight: 1.7 }}>
+                    The mechanism appears to be reread-ability: structured teardowns become reference material. <ConfidenceLabel kind="INFERENCE" />
+                  </p>
+                  <p style={{ color: "var(--ink-secondary)", lineHeight: 1.7 }}>
+                    Doubling teardown frequency would lift quarterly bookmarks ~40%. <ConfidenceLabel kind="SPECULATION" />
+                  </p>
+                </Card.Body>
+              </Card>
+              <div className="stack">
+                <AssumptionFlag onDismiss={() => {}}>
+                  Assuming you want the rewrite to preserve the "assertion-then-qualification" hook pattern, because it appears in 71% of your top-decile posts. Flag if wrong.
+                </AssumptionFlag>
+                <AssumptionFlag onDismiss={() => {}}>
+                  Assuming your audience for this draft is technically literate (PMs, engineers), based on archive composition. Flag if wrong.
+                </AssumptionFlag>
+              </div>
+            </div>
+          </section>
+
+          <div className="ornament-divider">❦ ❦ ❦</div>
+
+          {/* §05 WORKSHOP */}
+          <section className="section">
+            <SectionHeader folio="§ 05" label="WORKSHOP" sub="Posts · Rewrites · Voice · Coach · Replies" />
+
+            <h3 style={{ margin: "var(--space-6) 0 var(--space-4)" }}>PostRow — Post History</h3>
+            <div className="post-list">
+              {SAMPLE.posts.slice(0, 5).map((p, i) => <PostRow key={p.id} post={p} selected={i === 1} onClick={() => {}} />)}
+            </div>
+
+            <h3 style={{ margin: "var(--space-10) 0 var(--space-4)" }}>RewriteCard — with diff</h3>
+            <div className="section-grid grid-2">
+              <RewriteCard
+                index={1}
+                kind="CONTRARIAN"
+                rewrite="Most 'AI safety' arguments aren't arguments at all — they're vocabulary tests. Whoever defines the word last wins, and nobody noticed they stopped reasoning ten paragraphs ago."
+                score={8.7}
+              />
+              <RewriteCard
+                index={3}
+                kind="CONCISE · WITH DIFF"
+                showDiff
+                original="Most 'AI safety' arguments collapse the moment you ask: safety from what, on whose timescale, measured how?"
+                rewrite="'AI safety' is three questions in a trench coat: from what, on whose clock, by whose ruler?"
+                score={9.1}
+              />
+            </div>
+
+            <h3 style={{ margin: "var(--space-10) 0 var(--space-4)" }}>VoiceProfileCard</h3>
+            <VoiceProfileCard profile={SAMPLE.voiceProfile} />
+
+            <h3 style={{ margin: "var(--space-10) 0 var(--space-4)" }}>ChatMessage — AI Coach thread</h3>
+            <div className="chat-thread">
+              <ChatMessage role="user" text="Why are my reaction posts underperforming this quarter?" />
+              <ChatMessage role="assistant" text='Your "first-principles" posts outperform your "reaction" posts 3.2× on bookmarks this quarter.' citations={["DRAFT-471", "POST-2941"]} confidence="FACT" />
+              <ChatMessage role="user" text="Is that a 30-day window or year-to-date?" />
+              <ChatMessage role="assistant" text="Trailing 90 days, comparing top-decile of each cohort. The gap widens to 4.1× when restricted to posts ≥120 words." citations={["RUN-08812"]} confidence="INFERENCE" />
+              <ChatMessage role="assistant" text="Lean further into structured teardown formats — they look like reference material to your audience, which compounds bookmarks over weeks." streaming confidence="SPECULATION" />
+            </div>
+
+            <h3 style={{ margin: "var(--space-10) 0 var(--space-4)" }}>ReplyDraftCard</h3>
+            <ReplyDraftCard
+              parent={{ author: "patio11", text: "Most strategy decks are slogans plus a Gantt chart. The slogan can't survive contact with reality, and the Gantt chart isn't a plan — it's a schedule of hopes." }}
+              kind="THOUGHTFUL"
+              draft="The Gantt chart problem is downstream of the slogan problem. Once you commit to a one-line strategy, every dependency becomes load-bearing on a sentence that was optimized for memorability, not for being true."
+            />
+
+            <h3 style={{ margin: "var(--space-10) 0 var(--space-4)" }}>InspirationCard — with plagiarism warning</h3>
+            <InspirationCard
+              post={SAMPLE.posts[5]}
+              plagiarismRisk="78% structural similarity to DRAFT-389 — review before publishing."
+              notes={`Hook reuses the assertion-then-qualification pattern. Could counter with a specificity attack on "slogan".`}
+            />
+          </section>
+
+          <div className="ornament-divider">❦ ❦ ❦</div>
+
+          {/* §06 SHELL */}
+          <section className="section">
+            <SectionHeader folio="§ 06" label="SHELL" sub="AppShell · Sidebar · TopBar · Inspector · ⌘K" />
+            <div className="shell-preview">
+              <AppShell
+                sidebar={<Sidebar active={active} onNavigate={setActive} onToggle={() => {}} />}
+                topbar={<TopBar
+                  crumbs={["§ 03 — POST HISTORY", "DRAFT-471"]}
+                  onCmdK={() => setCmdkOpen(true)}
+                  onToggleTheme={() => setTheme(theme === "light" ? "dark" : "light")}
+                  theme={theme}
+                  sync={{ status: "ok", time: "14:08" }}
+                />}
+                inspector={
+                  <Inspector>
+                    <RuleHeader folio="§ Ⅲ" label="POST DETAIL" sub="DRAFT-471" />
+                    <KeyValueRow k="Status"><Badge variant="accent">SCHEDULED</Badge></KeyValueRow>
+                    <KeyValueRow k="Hook" mono>8.4 / 10</KeyValueRow>
+                    <KeyValueRow k="Voice" mono>9.3 / 10</KeyValueRow>
+                    <KeyValueRow k="Created" mono>2026-04-21</KeyValueRow>
+                    <div style={{ marginTop: "var(--space-4)" }}>
+                      <ScoreGauge score={8.4} label="hook strength" />
+                    </div>
+                  </Inspector>
+                }
+              >
+                <RuleHeader folio="§ 03" label="POST HISTORY" sub="487 posts · sorted by engagement" actions={<><Button variant="secondary" size="sm">Export</Button><Button variant="primary" size="sm">New Draft</Button></>} />
+                <div className="post-list" style={{ marginTop: "var(--space-3)" }}>
+                  {SAMPLE.posts.slice(0, 3).map((p, i) => <PostRow key={p.id} post={p} selected={i === 0} />)}
+                </div>
+              </AppShell>
+            </div>
+          </section>
+
+          <div className="ornament-divider">❦ ❦ ❦</div>
+
+          {/* §07 THEME */}
+          <section className="section">
+            <SectionHeader folio="§ 07" label="THEME" sub="Dark default · Light bone" actions={
+              <Button variant="primary" size="sm" onClick={() => setTheme(theme === "light" ? "dark" : "light")}>
+                Toggle to {theme === "light" ? "Dark" : "Light"}
+              </Button>
+            } />
+            <p style={{ color: "var(--ink-secondary)", maxWidth: 640, lineHeight: 1.7 }}>
+              Theme persists to localStorage and respects <span className="mono">prefers-color-scheme</span> on first load. Every component above re-renders against the active palette — no hardcoded colors, only semantic tokens. Currently rendering: <span className="smallcaps" style={{ color: "var(--accent-vermillion)" }}>{theme}</span>.
+            </p>
+            <div className="section-grid grid-3" style={{ marginTop: "var(--space-6)" }}>
+              <Card><Card.Body><Button variant="primary">Primary</Button></Card.Body></Card>
+              <Card><Card.Body><ScoreGauge score={9.0} label="theme test" /></Card.Body></Card>
+              <Card><Card.Body><Badge variant="accent">SCHEDULED</Badge> <Badge variant="success">PUBLISHED</Badge> <Badge variant="warning">DRIFT</Badge></Card.Body></Card>
+            </div>
+          </section>
+
+          {/* OVERLAYS */}
+          <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} title="Discard Draft?" footer={<><Button variant="tertiary" onClick={() => setDialogOpen(false)}>Cancel</Button><Button variant="destructive" onClick={() => setDialogOpen(false)}>Discard</Button></>}>
+            <p>DRAFT-471 has unsaved edits since 14:08. Discarding will revert to the last archived revision. This cannot be undone.</p>
+          </Dialog>
+
+          <Sheet open={sheetOpen} onClose={() => setSheetOpen(false)} title="POST DETAIL">
+            <KeyValueRow k="Author" mono>@ada_writes</KeyValueRow>
+            <KeyValueRow k="Posted" mono>2026-04-21 14:08</KeyValueRow>
+            <KeyValueRow k="Likes" mono>147</KeyValueRow>
+            <KeyValueRow k="Reposts" mono>31</KeyValueRow>
+            <KeyValueRow k="Replies" mono>23</KeyValueRow>
+            <KeyValueRow k="Engagement" mono>9.2</KeyValueRow>
+            <div style={{ marginTop: "var(--space-6)" }}>
+              <ScoreGauge score={9.2} label="engagement score" />
+            </div>
+          </Sheet>
+
+          <CommandPalette open={cmdkOpen} onClose={() => setCmdkOpen(false)} />
+
+          {/* TOAST STACK */}
+          <div style={{ position: "fixed", bottom: "var(--space-6)", right: "var(--space-6)", zIndex: 150 }} className="toast-stack">
+            {toasts.map((t) => (
+              <Toast key={t.id} variant={t.variant} title={t.title} body={t.body} onDismiss={() => removeToast(t.id)} />
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>
