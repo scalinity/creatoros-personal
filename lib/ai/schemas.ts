@@ -6,6 +6,8 @@ export const approvalRecommendationSchema = z.enum(["approve", "block", "revise"
 export const experimentDecisionSchema = z.enum(["continue", "iterate", "scale", "stop"]);
 
 const nonEmptyString = z.string().trim().min(1);
+const boundedAiString = nonEmptyString.max(1_200);
+const replyTextString = nonEmptyString.max(280);
 const score100Schema = z.number().min(0).max(100);
 const score10Schema = z.number().min(0).max(10);
 
@@ -19,6 +21,11 @@ export const evidenceCitationSchema = z.object({
 export const generatedDraftSchema = z.object({
   rationale: nonEmptyString,
   text: nonEmptyString,
+});
+
+const replyDraftOutputSchema = z.object({
+  rationale: boundedAiString,
+  text: replyTextString,
 });
 
 export const brainDumpBlogOutlineSchema = z.object({
@@ -124,9 +131,9 @@ export const threadWriterOutputSchema = z.object({
 });
 
 export const replyWriterOutputSchema = z.object({
-  drafts: z.array(generatedDraftSchema).min(1),
+  drafts: z.array(replyDraftOutputSchema).min(1).max(3),
   hostility_risk: z.enum(["high", "low", "medium"]),
-  risk_notes: z.array(nonEmptyString),
+  risk_notes: z.array(boundedAiString).max(5),
 });
 
 export const quotePostWriterOutputSchema = z.object({
@@ -198,11 +205,17 @@ export const blogRepurposingOutputSchema = z.object({
 });
 
 export const accountResearchOutputSchema = z.object({
-  audience_hypotheses: z.array(nonEmptyString),
-  content_pillars: z.array(nonEmptyString),
-  ethical_learnings: z.array(nonEmptyString),
-  idea_seeds: z.array(nonEmptyString),
-  patterns: z.array(nonEmptyString),
+  audience_hypotheses: z.array(boundedAiString).max(8),
+  blog_ideas: z.array(boundedAiString).max(8).default([]),
+  campaign_ideas: z.array(boundedAiString).max(8).default([]),
+  content_pillars: z.array(boundedAiString).max(8),
+  ethical_learnings: z.array(boundedAiString).max(8),
+  format_patterns: z.array(boundedAiString).max(8).default([]),
+  hook_patterns: z.array(boundedAiString).max(8).default([]),
+  idea_seeds: z.array(boundedAiString).max(12),
+  patterns: z.array(boundedAiString).max(12),
+  positioning: boundedAiString.optional().default("Positioning could not be inferred from the available posts."),
+  reply_strategy: z.array(boundedAiString).max(8).default([]),
 });
 
 export const inspirationTransformOutputSchema = z.object({

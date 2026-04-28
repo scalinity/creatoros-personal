@@ -1,16 +1,14 @@
 # Implementation Status
 
 Last updated: 2026-04-28
-Current phase: Phase 20 - Inspiration Library and Chrome Extension Save Token complete
-Next prompt: `21_REPLY_GUY_AND_ACCOUNT_RESEARCH.md`
+Current phase: Phase 21 - Reply Guy and Account Researcher complete
+Next prompt: `22_GROWTH_CAMPAIGNS_EXPERIMENTS_REVIEWS.md`
 
 ## Current State
 
-CreatorOS now has a protected `/inspiration` library for saving, searching, editing, archiving, and transforming inspiration sources. Transform workflows cover structure, hook pattern, argument pattern, original version, counterpoint, voice-profile version, and 10 unrelated posts from the same abstract pattern. Source text is treated as untrusted data, AI transforms are schema-validated, and deterministic similarity checks persist plagiarism-risk warnings.
+CreatorOS now has protected `/reply-guy` and `/account-research` workspaces for target-account intelligence, pasted-post fallback, saved target accounts, AI account reports, top-post and pattern analysis, generated ideas, reply draft generation, copy/use tracking, and guarded publishing handoff. Reply workflows stay one-post-at-a-time, cap generated variants, require explicit owner actions, and create only pending publishing drafts for later approval.
 
-CreatorOS also has scoped personal save token management at `/settings/tokens`. Tokens are generated as shown-once raw values, stored as peppered hashes, scoped to `inspiration:create`, revocable, rotatable, rate-limited, and audited on success and failure. The extension-compatible `POST /api/inspiration/save` endpoint requires `Authorization: Bearer <personal_save_token>`, rejects unapproved Chrome extension origins through `CHROME_EXTENSION_ORIGINS`, and cannot read/update/delete records, publish, or call AI transforms.
-
-X write publishing, read sync, manual imports, blog workflows, analytics, dashboard, coach retrieval, and the publishing state machine remain intact. Reply-guy/account research, the growth operating layer, final hardening/export-delete coverage, and production extension bundling remain intentionally unimplemented.
+CreatorOS still has the Phase 20 inspiration library and scoped extension save-token system, plus X write publishing, read sync, manual imports, blog workflows, analytics, dashboard, coach retrieval, and the publishing state machine. Growth campaigns/reviews, final hardening/export-delete coverage, and deployment readiness remain intentionally unimplemented.
 
 The original documentation package remains under `docs/`:
 
@@ -54,11 +52,75 @@ The original documentation package remains under `docs/`:
 - [x] `18_ANALYTICS_DASHBOARD_AND_REPORTS.md` - Build deterministic analytics, velocity, aggregates, cadence, score explanations, and post/blog/campaign metrics.
 - [x] `19_COACH_RETRIEVAL_AND_CONTENT_PLAYBOOKS.md` - Build internal-evidence coach, retrieval, embeddings, keyword fallback, citations, and playbooks.
 - [x] `20_INSPIRATION_LIBRARY_AND_CHROME_EXTENSION_SAVE_TOKEN.md` - Build scoped inspiration save endpoint, personal save tokens, token settings, and extension scaffold.
-- [ ] `21_REPLY_GUY_AND_ACCOUNT_RESEARCHER.md` - Build account research, reply drafts, and handoff workflows.
-- [ ] `22_GROWTH_SYSTEM_CAMPAIGNS_EXPERIMENTS_REVIEWS.md` - Build goals, pillars, positioning, campaigns, experiments, reviews, and profile audits.
+- [x] `21_REPLY_GUY_AND_ACCOUNT_RESEARCHER.md` - Build account research, reply drafts, and handoff workflows.
+- [ ] `22_GROWTH_CAMPAIGNS_EXPERIMENTS_REVIEWS.md` - Build goals, pillars, positioning, campaigns, experiments, reviews, and profile audits.
 - [ ] `23_HARDENING_EXPORT_DELETE_OBSERVABILITY.md` - Add rate limits, diagnostics, export/delete, error boundaries, observability, and production safeguards.
 - [ ] `24_TESTING_E2E_DEPLOYMENT_READINESS.md` - Complete Vitest, Playwright, RLS, mocked AI/X, publishing dry-run, and design regression coverage.
 - [ ] `25_FINAL_PRODUCTION_REVIEW_AND_HANDOFF.md` - Complete final acceptance review, limitations, and handoff.
+
+## Phase 21 Completed Work
+
+- Replaced `/reply-guy` scaffold with a protected target-account workspace, saved-target table, manual target-post paste fallback, pasted-post batch import, selected-post reply generation, copy/use tracking, and one-draft publishing handoff.
+- Added server-only reply-guy services for target account CRUD, target post imports, prompt-injection-safe reply context construction, AI reply draft persistence, copied/used counters, and pending publishing draft creation without approval or external writes.
+- Replaced `/account-research` scaffold with a protected research workspace that accepts usernames, saved target accounts, and pasted posts; displays reports, top posts, pattern cards, generated idea buckets, and save-to-composer actions.
+- Added server-only account-research services for pasted-post normalization, optional saved-target persistence, top-post ranking, AI report execution, `account_research_reports` persistence, and composer idea creation.
+- Expanded account-research structured output support and the mock prompt runner so generated blog ideas, campaign ideas, hook/format patterns, positioning, and reply strategy remain schema-validated.
+- Added Phase 21 tests covering pasted target-post parsing, X status URL validation, target-account normalization, reply generation caps, account/post mismatch rejection, duplicate imports, handoff guardrails, no autonomous reply UI copy, account-research idea metadata, and AI schema output shape.
+- Resolved Phase 21 review-orchestrator findings around X status validation, author/account matching, duplicate imports, redirect handling, user notices, archive cascade, handoff idempotency, AI output bounds, accessible archive actions, disabled handoff reasons, and long-text wrapping.
+- Verified the new React surfaces avoid direct `useEffect` and route all server mutations through admin-guarded, rate-limited actions.
+
+## Phase 21 Files Changed
+
+- `app/(app)/reply-guy/page.tsx` and `app/(app)/reply-guy/actions.ts` - Protected reply-guy route and audited, rate-limited server actions.
+- `app/(app)/account-research/page.tsx` and `app/(app)/account-research/actions.ts` - Protected account-research route and server actions.
+- `components/reply-guy/index.tsx` - Target account table, manual import UI, reply draft cards, copy/use controls, and publishing handoff UI.
+- `components/account-research/index.tsx` - Research form, report history, top-post table, pattern cards, and generated idea save controls.
+- `lib/reply-guy/index.ts` and `lib/reply-guy/validation.ts` - Reply-guy service layer, schemas, import parsing, AI draft generation, tracking, and publishing handoff.
+- `lib/account-research/index.ts` and `lib/account-research/validation.ts` - Account-research service layer, schemas, pasted-post handling, AI report persistence, and composer idea saving.
+- `lib/ai/schemas.ts` and `lib/ai/prompts/index.ts` - Account-research output schema and mock provider shape expansion.
+- `app/globals.css` - Phase 21 network/reply/account-research layouts and responsive behavior.
+- `tests/unit/reply-guy/phase21-reply-account.test.ts` - Focused Phase 21 regression tests.
+- `docs/IMPLEMENTATION_STATUS.md` - This Phase 21 ledger update.
+
+## Phase 21 Checks and Commands Run
+
+| Command or check | Result |
+|---|---|
+| Required docs read | Root `README.md` is absent. Read `docs/IMPLEMENTATION_STATUS.md`, `docs/docs/SPEC.md`, `docs/docs/API_CONTRACTS.md`, `docs/docs/AI_PROMPTS.md`, `docs/docs/UX_SPEC.md`, `docs/docs/X_INTEGRATION.md`, and `docs/docs/SECURITY.md`. |
+| Bootstrap check | Confirmed Next.js 16.2.4, React 19.2.5, pnpm via `pnpm-lock.yaml` and `packageManager`, no monorepo indicators, Vitest and Playwright test setup. |
+| Package-manager execution | The `pnpm` binary is not on PATH in this shell, so checks were run with the pinned `npx pnpm@10.33.2` form. |
+| Sequential Thinking MCP | Requested by repo instructions but not available in this Codex session; planning, reflection, and verification were performed explicitly with available tools. |
+| Morph codebase search/edit | Used Morph for Phase 21 codebase searches and code edits. Used exact filesystem editing only for the >2,000-line stylesheet edits, matching Morph tool guidance for very large files. |
+| `npx pnpm@10.33.2 test tests/unit/reply-guy/phase21-reply-account.test.ts` before implementation | Failed as expected because Phase 21 reply/account components and services were not implemented yet. |
+| `npx pnpm@10.33.2 test tests/unit/reply-guy/phase21-reply-account.test.ts` after implementation | Passed: 1 file, 10 tests. |
+| `npx pnpm@10.33.2 typecheck` | Passed. |
+| `npx pnpm@10.33.2 lint` | Passed with no warnings. |
+| `npx pnpm@10.33.2 test` | Passed: 32 files, 149 tests. |
+| `npx pnpm@10.33.2 build` | Passed; Next lists `/reply-guy` and `/account-research` as dynamic protected routes. |
+| `npx pnpm@10.33.2 test:e2e` | Passed: 1 Chromium login smoke test. Playwright emitted pre-existing npm config and `NO_COLOR`/`FORCE_COLOR` warnings only. |
+| Direct `useEffect` check | Morph search found no direct `useEffect` calls in the new Phase 21 route/component/service files. |
+| Phase 21 review-orchestrator pass | Completed with parallel code-review, code-audit, security, database, and frontend/design reviewers. Blocking findings were resolved before this ledger update. |
+
+## Phase 21 Known Limitations and Blockers
+
+- Live arbitrary X public-account lookup is not added in this phase because the existing X client is scoped around the connected owner account; account research can use saved `target_account_posts` including X-sourced rows when available, and manual pasted-post fallback is fully implemented and tested.
+- Reply draft copying is tracked by an explicit Mark copied action after browser copy. This keeps persistence server-side and auditable without exposing private write actions to client-only clipboard events.
+- Publishing handoff creates a pending reply publishing draft only. Approval, scheduling, live posting, reconciliation, and failures remain owned by the existing publishing state machine.
+- Real Anthropic/OpenAI reply/account-research runs were not exercised against live provider credentials in automated checks; tests use the existing mock AI provider.
+- Rate limits use the existing process-memory fixed-window store. This remains a later hardening item for distributed/serverless deployments.
+
+## Phase 21 Acceptance Gates
+
+- [x] Owner can research an account from pasted posts or saved target-account post data.
+- [x] Owner can save target accounts and generated account-research ideas.
+- [x] Owner can generate reply drafts for a selected/manual target post and optionally create pending publishing drafts for explicit later approval.
+- [x] Reply generation is capped, one-post-oriented, and has no autonomous engagement or batch-publishing path.
+- [x] External target posts are treated as untrusted data in AI context and never as system instructions.
+- [x] No billing, marketing, public onboarding, DM automation, platform bypass, scraping private data, or secret exposure was added.
+
+## Phase 21 Next Step
+
+Run `22_GROWTH_CAMPAIGNS_EXPERIMENTS_REVIEWS.md` next. Stop here for Phase 21.
 
 ## Phase 20 Completed Work
 
