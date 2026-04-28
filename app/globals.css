@@ -1113,6 +1113,25 @@ h6 {
   margin-bottom: var(--space-4);
 }
 
+.x-connection-panel {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.x-connection-card .card-body {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.x-connection-actions {
+  border-bottom: var(--border-hairline);
+  padding-bottom: var(--space-3);
+}
+
+.x-connection-inline-form {
+  margin: 0;
+}
+
 .post-history-page {
   display: flex;
   flex-direction: column;

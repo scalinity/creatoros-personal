@@ -1,18 +1,16 @@
 # Implementation Status
 
 Last updated: 2026-04-28
-Current phase: Phase 15 - Publishing State Machine, Dry Run, and Calendar complete
-Next prompt: `16_X_OAUTH_AND_READ_SYNC.md`
+Current phase: Phase 16 - X OAuth and Read Sync complete
+Next prompt: `17_X_WRITE_PUBLISHING_ADAPTER.md`
 
 ## Current State
 
-CreatorOS now has a protected dry-run publishing workstation. The owner can create publishing drafts manually or from content ideas, generated outputs, and blog posts; edit drafts; run duplicate/similarity/risk guardrails; approve exact payloads; schedule approved drafts; run deterministic dry-run jobs; retry retryable failures; cancel drafts; and review publishing state in `/publishing` and `/calendar`.
+CreatorOS now has a protected X read connection layer. The owner can start the official OAuth 2.0 Authorization Code with PKCE flow using least-privilege read scopes, complete the callback, store encrypted X access and refresh tokens server-side, disconnect X by clearing token material, and run manual read sync from `/settings/x-connection`. Sync jobs import/update owner posts, persist metric snapshots, handle missing metrics as non-destructive unknown/zero values with metadata, and record sanitized sync failures. A `CRON_SECRET`-protected `/api/cron/x-sync` route is available for scheduled read sync.
 
-The publishing state machine enforces owner approval before scheduling or dry-run execution. Approval stores a payload hash over the exact preview payload, and content-impacting edits invalidate approval until the owner re-approves. Dry-run publishing records `publishing_jobs` and `publishing_failures` with `external_call: false` and never writes to X or creates published-post records.
+The X settings page now shows sanitized connection state, granted scopes, capability flags, token expiry, last sync status, and live/mock sync controls without exposing token values. Explicit mock sync remains available for dry-run verification when credentials are absent; live sync does not fake success without a connected account.
 
-Publishing APIs and server actions are admin-guarded, Zod-validated, rate-limited, audit-logged, and use sanitized error envelopes. Source handoffs from the composer and blog system now create publishing drafts, but AI can only create or suggest content; it cannot approve, schedule, or publish.
-
-The owner-facing AI workflows remain bounded to analysis, drafting, local saves, voice modeling, retrieval infrastructure, blog generation, and publishing dry runs. X OAuth/sync, live X writes, full analytics reports, coach chat, account research, inspiration extension tokens, billing, marketing, autonomous engagement, public onboarding, and uncontrolled external action remain intentionally unimplemented.
+Publishing remains bounded to Phase 15 dry-run behavior. X write publishing, publishing scope escalation, media upload, live publish reconciliation, full analytics reports, coach chat, account research, inspiration extension tokens, billing, marketing, autonomous engagement, public onboarding, and uncontrolled external action remain intentionally unimplemented.
 
 The original documentation package remains under `docs/`:
 
@@ -51,7 +49,7 @@ The original documentation package remains under `docs/`:
 - [x] `13_VOICE_MODELING_AND_EMBEDDINGS_FOUNDATION.md` - Build voice profile generation and retrieval substrate.
 - [x] `14_BLOG_SYSTEM.md` - Build blog CRUD, versions, exports, and repurposing workflows.
 - [x] `15_PUBLISHING_STATE_MACHINE_DRY_RUN_CALENDAR.md` - Build approval state machine, calendar, queue, dry run, jobs, failures, retries, and audit surfaces before external writes.
-- [ ] `16_X_OAUTH_AND_READ_SYNC.md` - Implement X OAuth, encrypted tokens, refresh, sync, metrics, capability flags, and disconnect behavior.
+- [x] `16_X_OAUTH_AND_READ_SYNC.md` - Implement X OAuth, encrypted tokens, refresh, sync, metrics, capability flags, and disconnect behavior.
 - [ ] `17_X_WRITE_PUBLISHING_ADAPTER.md` - Enable official X writes under approval, capability, duplicate, rate-limit, reconciliation, and audit guardrails.
 - [ ] `18_ANALYTICS_DASHBOARD_AND_REPORTS.md` - Build deterministic analytics, velocity, aggregates, cadence, score explanations, and post/blog/campaign metrics.
 - [ ] `19_COACH_RETRIEVAL_AND_CONTENT_PLAYBOOKS.md` - Build internal-evidence coach, retrieval, embeddings, keyword fallback, citations, and playbooks.
@@ -61,6 +59,92 @@ The original documentation package remains under `docs/`:
 - [ ] `23_HARDENING_EXPORT_DELETE_OBSERVABILITY.md` - Add rate limits, diagnostics, export/delete, error boundaries, observability, and production safeguards.
 - [ ] `24_TESTING_E2E_DEPLOYMENT_READINESS.md` - Complete Vitest, Playwright, RLS, mocked AI/X, publishing dry-run, and design regression coverage.
 - [ ] `25_FINAL_PRODUCTION_REVIEW_AND_HANDOFF.md` - Complete final acceptance review, limitations, and handoff.
+
+## Phase 16 Completed Work
+
+- Added server-only X OAuth helpers for PKCE state/verifier generation, authorization URL creation, token exchange, token refresh, read-scope normalization, and capability flag derivation.
+- Added encrypted X connection storage using the existing AES-256-GCM token helper with per-user access/refresh token purposes and service-role-only `x_connections` token writes.
+- Added sanitized X connection loading, disconnect behavior that clears encrypted token columns, degraded connection marking, and token refresh failure audit behavior.
+- Added a typed X API v2 read client for `/2/users/me` and `/2/users/:id/tweets`, including explicit fields/expansions, public/private metric parsing where returned, rate-limit reset capture, and sanitized API errors.
+- Added explicit mock X client support for dry-run/local read sync without credentials.
+- Added X read sync service that records `sync_jobs`, imports/updates owner posts, persists `post_metric_snapshots`, preserves missing metrics gracefully, records rate-limit reset metadata, and audits `x_sync_started/succeeded/failed`.
+- Added protected API routes for `/api/x/oauth/start`, `/api/x/oauth/callback`, `/api/x/disconnect`, `/api/x/sync`, and `CRON_SECRET`-protected `/api/cron/x-sync`.
+- Replaced `/settings/x-connection` placeholder with a protected connection ledger, capability table, connect/disconnect controls, and live/mock sync forms.
+- Updated operational diagnostics to report Phase 16 X OAuth/read sync readiness.
+- Added focused Phase 16 unit tests for scope normalization/capabilities, encrypted token persistence, and mocked read sync with metric snapshots.
+- Added a post-metric snapshot RLS hardening migration so snapshot inserts must reference a post owned by the same authenticated user.
+- Resolved phase review findings around failed-sync API envelopes, OAuth input bounds, UI notice allowlisting, capability-gated live sync, private metric access gating, metric unknown metadata, media include mapping, partial-failure job status, refresh capability preservation, annotation-preserving resync, and soft-delete-safe post upserts.
+- Added focused Phase 16 unit tests for scope normalization/capabilities, encrypted token persistence, X media include mapping, mocked read sync with metric snapshots, annotation-preserving resync, and settings UI safety states.
+
+## Phase 16 Files Changed
+
+- `app/(app)/settings/x-connection/page.tsx` - Protected X connection settings route.
+- `app/(app)/settings/x-connection/actions.ts` - Guarded disconnect and manual sync server actions.
+- `app/api/x/_utils.ts` - Shared X API envelope helpers.
+- `app/api/x/oauth/start/route.ts` - Protected OAuth start route with PKCE cookies and read scopes.
+- `app/api/x/oauth/callback/route.ts` - Protected OAuth callback route with state validation and encrypted token storage.
+- `app/api/x/disconnect/route.ts` - Protected disconnect route that clears token material.
+- `app/api/x/sync/route.ts` - Protected manual read sync route.
+- `app/api/cron/x-sync/route.ts` - `CRON_SECRET`-protected scheduled read sync route.
+- `components/settings/x-connection-panel.tsx` - X connection status, capability, and sync UI.
+- `app/globals.css` - X connection settings layout styles.
+- `lib/db/service-role.ts` - Server-only Supabase service-role client helper.
+- `lib/x/client.ts` - Typed X API v2 read/mock client.
+- `lib/x/oauth.ts` - OAuth, encryption, token refresh, capability, status, and disconnect services.
+- `lib/x/sync.ts` - Read sync service, sync job lifecycle, post persistence, and snapshots.
+- `lib/x/validation.ts` - X route/action validation schemas.
+- `lib/x/index.ts` - Server-only X service exports.
+- `lib/server-only/diagnostics.ts` - Phase 16 diagnostics summary/current phase.
+- `tests/unit/x/phase16-x-oauth-sync.test.ts` - Phase 16 X service tests.
+- `tests/unit/diagnostics/operational-diagnostics.test.ts` - Updated current phase expectation.
+- `supabase/migrations/20260428065428_phase16_metric_snapshot_post_ownership_rls.sql` - Hardened metric snapshot ownership RLS.
+- `docs/IMPLEMENTATION_STATUS.md` - Updated this Phase 16 ledger.
+
+## Phase 16 Checks and Commands Run
+
+| Command or check | Result |
+|---|---|
+| Required docs read | Root `README.md` is absent. Read `docs/README.md`, `docs/IMPLEMENTATION_STATUS.md`, `docs/docs/X_INTEGRATION.md`, `docs/docs/API_CONTRACTS.md`, `docs/docs/SECURITY.md`, `docs/docs/DEPLOYMENT.md`, `docs/docs/ARCHITECTURE.md`, `docs/docs/DATA_MODEL.md`, `docs/docs/DESIGN_SYSTEM_IMPLEMENTATION.md`, and `docs/design/component-map.md`. |
+| Documentation lookup | Ref MCP returned quota errors; official X docs were checked directly for OAuth 2.0 PKCE and user post read endpoints. |
+| Bootstrap check | Confirmed Next.js 16.2.4, React 19.2.5, pnpm via `pnpm-lock.yaml` and `packageManager`, no monorepo indicators, Vitest and Playwright test setup. |
+| Package-manager execution | The `pnpm` binary is not on PATH in this shell, so checks were run with the pinned `npx pnpm@10.33.2` form. |
+| Sequential Thinking MCP | Requested by repo instructions but not available in this Codex session; planning, reflection, and verification were performed explicitly with available tools. |
+| Morph codebase search/edit | Used for codebase searches and file edits across X services, routes, settings UI, CSS, diagnostics, tests, and this status ledger. |
+| `npx pnpm@10.33.2 test tests/unit/x/phase16-x-oauth-sync.test.ts` | Passed after review fixes: 1 test file, 6 tests. |
+| `npx pnpm@10.33.2 test tests/unit/x/phase16-x-oauth-sync.test.ts tests/unit/diagnostics/operational-diagnostics.test.ts` | Passed before review fixes: 2 test files, 6 tests. |
+| `npx pnpm@10.33.2 typecheck` | Passed before and after review fixes. |
+| `npx pnpm@10.33.2 lint` | Passed before and after review fixes. |
+| `npx pnpm@10.33.2 test` | Passed after review fixes: 26 test files, 104 tests. |
+| `npx pnpm@10.33.2 build` | Passed after review fixes; Next listed `/api/x/oauth/start`, `/api/x/oauth/callback`, `/api/x/disconnect`, `/api/x/sync`, `/api/cron/x-sync`, and `/settings/x-connection` as dynamic routes. |
+| `npx pnpm@10.33.2 test:e2e` | Passed after review fixes: 1 Chromium login smoke test. Playwright emitted the pre-existing npm config and `NO_COLOR`/`FORCE_COLOR` warnings only. |
+| Phase 16 review-orchestrator pass | Completed with parallel review agents; all blocking findings were resolved. Persistent process-wide app rate limits remain documented as a later hardening concern. |
+| Generated-file hygiene | Restored build-generated `next-env.d.ts` route import churn; no final diff remains in that file. |
+
+## Phase 16 Known Limitations and Blockers
+
+- Live X OAuth and live X API sync were not exercised against real X credentials in automated verification; tests cover the encrypted storage path and mocked sync pipeline.
+- Publishing scope escalation and all X write behavior remain deferred to Phase 17. Phase 16 requests read scopes by default and rejects publishing-mode OAuth start.
+- X private/non-public metrics may be absent depending on account/API access; missing values are preserved in metadata and stored as zero in numeric columns for schema compatibility.
+- Scheduled cron sync selects the configured owner profile via `ADMIN_EMAILS` or an admin profile row and requires hosted `CRON_SECRET` configuration.
+- Rate-limit state is captured from X response headers when returned, but distributed/persistent app-side rate limiting remains a later hardening concern.
+
+## Phase 16 Acceptance Gates
+
+- [x] Owner can start official X OAuth read connection when credentials are configured.
+- [x] OAuth callback validates state, exchanges the PKCE code, fetches the authenticated X profile, and stores encrypted tokens.
+- [x] Tokens are encrypted at rest and never shown to the client or diagnostics surfaces.
+- [x] Granted scopes and capability flags are stored and rendered as sanitized settings data.
+- [x] Owner can disconnect X and clear encrypted access/refresh token material.
+- [x] Manual sync imports/updates posts and metric snapshots with an explicit mock path for credential-free verification.
+- [x] Sync failures are recorded in `sync_jobs`, surfaced in settings/API responses, audited, and non-destructive.
+- [x] `CRON_SECRET`-protected scheduled read sync route exists.
+- [x] No X writes, publishing scopes by default, billing, marketing, public onboarding, autonomous engagement, or approval bypass was added.
+
+## Phase 16 Next Step
+
+Run `17_X_WRITE_PUBLISHING_ADAPTER.md` next. Stop here for Phase 16.
+
+---
 
 ## Phase 15 Completed Work
 

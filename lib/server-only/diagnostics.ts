@@ -34,7 +34,8 @@ export type OperationalDiagnostics = {
     | "11-ai-foundation-prompt-registry-structured-outputs"
     | "13-voice-modeling-and-embeddings-foundation"
     | "14-blog-system"
-    | "15-publishing-state-machine-dry-run-calendar";
+    | "15-publishing-state-machine-dry-run-calendar"
+    | "16-x-oauth-and-read-sync";
   service: "creatoros-personal";
 };
 
@@ -79,8 +80,8 @@ const groupDefinitions = [
   {
     id: "x",
     label: "X Config",
-    readySummary: "X OAuth config is present. OAuth and token storage are not implemented in Phase 08.",
-    degradedSummary: "X config is incomplete; OAuth must remain disabled until fixed.",
+    readySummary: "X OAuth read config, encrypted token storage, read sync routes, and capability diagnostics are available.",
+    degradedSummary: "X config is incomplete; live OAuth and live sync remain disabled while explicit mock sync can still verify the pipeline.",
     items: [
       { key: "X_CLIENT_ID", label: "Client ID", secret: false },
       { key: "X_CLIENT_SECRET", label: "Client secret", secret: true },
@@ -189,7 +190,7 @@ export function getOperationalDiagnostics(source: NodeJS.ProcessEnv | EnvSource 
     env,
     groups,
     overall,
-    phase: "15-publishing-state-machine-dry-run-calendar",
+    phase: "16-x-oauth-and-read-sync",
     service: "creatoros-personal",
   };
 }
