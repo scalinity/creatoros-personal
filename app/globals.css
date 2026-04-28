@@ -1553,6 +1553,234 @@ h6 {
   display: contents;
 }
 
+.ai-workflow-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.workflow-title {
+  border: 0;
+  clip: rect(0 0 0 0);
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+.workflow-notice {
+  border: 1px solid currentColor;
+  font-size: var(--text-sm);
+  padding: var(--space-3) var(--space-4);
+}
+
+.workflow-notice-success {
+  background: color-mix(in oklch, var(--success-moss) 10%, transparent);
+  color: var(--success-moss);
+}
+
+.workflow-notice-warning {
+  background: color-mix(in oklch, var(--warning-ochre) 10%, transparent);
+  color: var(--warning-ochre);
+}
+
+.workflow-notice-danger {
+  background: color-mix(in oklch, var(--danger-rust) 10%, transparent);
+  color: var(--danger-rust);
+}
+
+.ai-workflow-workbench {
+  align-items: start;
+  display: grid;
+  gap: var(--space-5);
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+}
+
+.ai-workflow-main,
+.ai-workflow-inspector,
+.workflow-form,
+.analyzer-report,
+.analyzer-rewrites,
+.brain-dump-pack,
+.brain-dump-extraction,
+.brain-dump-questions,
+.brain-dump-output-section {
+  display: grid;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.ai-workflow-inspector {
+  position: sticky;
+  top: calc(48px + var(--space-5));
+}
+
+.workflow-form {
+  background: var(--bg-surface);
+  border: var(--border-hairline);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+}
+
+.workflow-form-grid,
+.analyzer-diagnosis-grid,
+.brain-dump-grid {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.workflow-checks,
+.workflow-card-actions,
+.rewrite-card-actions,
+.ai-history-row,
+.brain-dump-output-card .composer-output-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.rewrite-card-actions,
+.brain-dump-output-card .composer-output-actions {
+  min-width: 0;
+}
+
+.workflow-checks {
+  align-content: end;
+  padding-top: var(--space-5);
+}
+
+.analyzer-score-grid {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: minmax(220px, 1.2fr) repeat(3, minmax(0, 1fr));
+}
+
+.workflow-card-title,
+.rewrite-card-label {
+  color: var(--ink-primary);
+  font-size: var(--text-xs);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.workflow-copy,
+.workflow-muted,
+.rewrite-card-rationale {
+  color: var(--ink-tertiary);
+  font-size: var(--text-sm);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.workflow-muted,
+.rewrite-card-rationale {
+  margin-top: var(--space-3);
+}
+
+.workflow-list {
+  color: var(--ink-secondary);
+  display: grid;
+  font-size: var(--text-sm);
+  gap: var(--space-2);
+  line-height: 1.55;
+  margin: 0;
+  overflow-wrap: anywhere;
+  padding-left: var(--space-5);
+}
+
+.rewrite-card-head {
+  align-items: flex-start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.rewrite-card-text {
+  color: var(--ink-primary);
+  font-size: var(--text-base);
+  line-height: 1.65;
+  margin-top: var(--space-3);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.inline-form {
+  display: contents;
+}
+
+.ai-workflow-history {
+  background: var(--bg-surface);
+  border: var(--border-hairline);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.ai-history-row {
+  border-bottom: var(--border-hairline);
+  color: var(--ink-secondary);
+  justify-content: space-between;
+  padding: var(--space-3);
+  text-decoration: none;
+}
+
+.ai-history-row:last-child {
+  border-bottom: 0;
+}
+
+.ai-history-row:hover,
+.ai-history-row:focus-visible,
+.ai-history-row[aria-current="page"] {
+  background: var(--bg-surface-2);
+  color: var(--ink-primary);
+}
+
+.ai-history-score {
+  color: var(--accent-vermillion);
+  flex: 0 0 auto;
+  font-size: var(--text-sm);
+  min-width: 3ch;
+}
+
+.ai-history-text {
+  flex: 1;
+  font-size: var(--text-xs);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.brain-dump-output-card {
+  background: var(--bg-surface);
+  border: var(--border-hairline);
+  border-left: 2px solid var(--accent-vermillion);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+}
+
+.brain-dump-output-card .composer-output-actions {
+  border-top: 0;
+  margin-top: 0;
+  padding-top: 0;
+}
+
+.brain-dump-output-card .composer-output-head {
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.brain-dump-output-card .composer-output-text {
+  overflow-wrap: anywhere;
+}
+
 .command-palette-overlay {
   align-items: flex-start;
   background: oklch(0 0 0 / 0.45);
@@ -1845,12 +2073,14 @@ h6 {
   }
 
   .post-history-workbench,
-  .composer-workbench {
+  .composer-workbench,
+  .ai-workflow-workbench {
     grid-template-columns: 1fr;
   }
 
   .post-history-inspector,
-  .composer-inspector {
+  .composer-inspector,
+  .ai-workflow-inspector {
     position: static;
   }
 }
@@ -1900,7 +2130,11 @@ h6 {
   .post-history-form-grid,
   .composer-metrics,
   .composer-filters,
-  .composer-form-grid {
+  .composer-form-grid,
+  .workflow-form-grid,
+  .analyzer-diagnosis-grid,
+  .analyzer-score-grid,
+  .brain-dump-grid {
     grid-template-columns: 1fr;
   }
 

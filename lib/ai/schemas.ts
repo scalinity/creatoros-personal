@@ -21,6 +21,33 @@ export const generatedDraftSchema = z.object({
   text: nonEmptyString,
 });
 
+export const brainDumpBlogOutlineSchema = z.object({
+  rationale: nonEmptyString,
+  sections: z.array(nonEmptyString).min(1),
+  thesis: nonEmptyString,
+  title: nonEmptyString,
+});
+
+export const brainDumpVideoScriptSchema = z.object({
+  beats: z.array(nonEmptyString).min(1),
+  cta: nonEmptyString,
+  hook: nonEmptyString,
+  title: nonEmptyString,
+});
+
+export const brainDumpCampaignIdeaSchema = z.object({
+  angle: nonEmptyString,
+  name: nonEmptyString,
+  rationale: nonEmptyString,
+  sequence: z.array(nonEmptyString).min(1),
+});
+
+export const brainDumpStrategySchema = z.object({
+  content_pillars: z.array(nonEmptyString).min(1),
+  next_actions: z.array(nonEmptyString).min(1),
+  positioning: nonEmptyString,
+});
+
 export const metricScoresSchema = z.object({
   algorithm_hygiene_risk: score10Schema,
   clarity: score10Schema,
@@ -47,22 +74,26 @@ export const algoAnalysisOutputSchema = z.object({
 });
 
 export const brainDumpOutputSchema = z.object({
-  campaign_angles: z.array(nonEmptyString),
+  blog_outlines: z.array(brainDumpBlogOutlineSchema).min(1),
+  campaign_angles: z.array(nonEmptyString).min(1),
+  campaign_ideas: z.array(brainDumpCampaignIdeaSchema).min(1),
   contradictions: z.array(nonEmptyString),
-  extracted_claims: z.array(nonEmptyString),
+  extracted_claims: z.array(nonEmptyString).min(1),
   extracted_examples: z.array(nonEmptyString),
   extracted_stories: z.array(nonEmptyString),
-  extracted_themes: z.array(nonEmptyString),
-  longform_angles: z.array(nonEmptyString),
-  questions: z.array(nonEmptyString),
-  strong_lines: z.array(nonEmptyString),
-  x_posts: z.array(generatedDraftSchema),
+  extracted_themes: z.array(nonEmptyString).min(1),
+  longform_angles: z.array(nonEmptyString).min(1),
+  questions: z.array(nonEmptyString).min(1),
+  strategy: brainDumpStrategySchema,
+  strong_lines: z.array(nonEmptyString).min(1),
+  video_scripts: z.array(brainDumpVideoScriptSchema).min(1),
+  x_posts: z.array(generatedDraftSchema).min(1),
   x_threads: z.array(
     z.object({
       hook: nonEmptyString,
       items: z.array(nonEmptyString).min(1),
     }),
-  ),
+  ).min(1),
 });
 
 export const coachChatOutputSchema = z.object({

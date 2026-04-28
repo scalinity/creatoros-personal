@@ -64,8 +64,8 @@ function nowIso() {
 
 function metadataWithPhase(metadata: Record<string, Json> = {}) {
   return {
-    ...metadata,
     phase: PHASE,
+    ...metadata,
   } satisfies Record<string, Json>;
 }
 
@@ -272,7 +272,7 @@ export async function createGeneratedOutput(admin: AdminContext, input: Generate
     metadata: {
       input_id: input.inputId,
       input_type: input.inputType,
-      phase: PHASE,
+      phase: input.metadata.phase ?? PHASE,
       type: input.type,
     },
     success: true,

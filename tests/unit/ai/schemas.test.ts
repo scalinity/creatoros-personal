@@ -34,11 +34,39 @@ describe("AI structured output schemas", () => {
 
     expect(output.overall_score).toBe(74);
     expect(output.metric_scores.hook_strength).toBe(7);
+    expect(
+      algoAnalysisOutputSchema.safeParse({
+        ...output,
+        heuristic_disclaimer: "This is the official X algorithm ranking result.",
+      }).success,
+    ).toBe(false);
+    expect(
+      algoAnalysisOutputSchema.safeParse({
+        ...output,
+        metric_scores: { ...output.metric_scores, hook_strength: 11 },
+      }).success,
+    ).toBe(false);
   });
 
   it("validates brain dump transformation packs", () => {
     const result = brainDumpOutputSchema.safeParse({
+      blog_outlines: [
+        {
+          rationale: "Long-form expansion.",
+          sections: ["Capture", "Score", "Reuse"],
+          thesis: "Better creator systems make quality repeatable.",
+          title: "A Creator System for Repeatable Quality",
+        },
+      ],
       campaign_angles: ["Systems as taste"],
+      campaign_ideas: [
+        {
+          angle: "Show the operating layer behind the work.",
+          name: "Systems as Taste",
+          rationale: "Turns a broad idea into a sequence.",
+          sequence: ["Capture", "Score", "Rewrite"],
+        },
+      ],
       contradictions: [],
       extracted_claims: ["Better workflows make quality less heroic."],
       extracted_examples: [],
@@ -46,11 +74,30 @@ describe("AI structured output schemas", () => {
       extracted_themes: ["workflow"],
       longform_angles: ["A field guide to creator operating systems"],
       questions: ["Where does the current process leak quality?"],
+      strategy: {
+        content_pillars: ["systems"],
+        next_actions: ["Save one generated post", "Turn the outline into a blog draft"],
+        positioning: "Practical systems for thoughtful creators.",
+      },
       strong_lines: ["Quality should not require heroic memory."],
+      video_scripts: [
+        {
+          beats: ["Name the leak", "Show the fix", "Close with the payoff"],
+          cta: "Capture one idea today.",
+          hook: "Your best ideas are leaking out of the system.",
+          title: "Stop Losing Good Hooks",
+        },
+      ],
       x_posts: [{ rationale: "Concise thesis", text: "Quality should not require heroic memory." }],
       x_threads: [{ hook: "The better system is boring.", items: ["Start with capture.", "Then score."] }],
     });
 
     expect(result.success).toBe(true);
+    expect(
+      brainDumpOutputSchema.safeParse({
+        ...(result.success ? result.data : {}),
+        blog_outlines: [],
+      }).success,
+    ).toBe(false);
   });
 });

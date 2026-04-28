@@ -1,16 +1,18 @@
 # Implementation Status
 
 Last updated: 2026-04-28
-Current phase: Phase 11 - AI Foundation, Prompt Registry, and Structured Outputs completed
-Next prompt: `12_ALGO_ANALYZER_AND_BRAIN_DUMP.md`
+Current phase: Phase 12 - Algorithm Analyzer and Brain Dump Transformer complete
+Next prompt: `13_VOICE_MODELING_AND_EMBEDDINGS_FOUNDATION.md`
 
 ## Current State
 
-CreatorOS now has a server-only AI foundation for future AI workflows. The AI layer includes a provider interface, streaming-by-default fetch-based Anthropic and optional OpenAI adapters, a mock provider for tests and dry runs, runtime provider configuration with provider/model compatibility checks, retry/timeout/abort handling, structured-output parsing with one repair attempt, provider-native JSON schema metadata where supported, versioned prompt registry coverage for all documented v1 prompts, safe untrusted context-packet and prompt-input rendering, Zod schemas for core outputs, `ai_jobs`/`prompt_runs` logging helpers, AI job audit events, AI rate-limit defaults, and protected `/api/ai/diagnostics` output.
+CreatorOS now has the first two complete owner-facing AI workflows on top of the server-only AI foundation. `/algo-analyzer` is a protected private workstation page for heuristic draft scoring with a large draft textarea, content-type selector, voice-profile placeholder toggle, thread-expansion toggle, publish-readiness toggle, nine metric scores, overall gauge, diagnosis, risk warnings, rewrite cards, client copy actions, save-to-generated-output, save-to-idea, and persisted `algo_analysis_reports`.
 
-The AI settings page now exposes provider readiness, prompt registry, structured-output, run-log, and rate-limit diagnostics without revealing provider keys. OpenAI is optional when Anthropic or mock mode is selected; selected providers are treated as unavailable if their required key is missing or the selected model is incompatible. Prompt runs can persist through an admin Supabase context, fail loudly on admin-context logging errors, or gracefully no-op in local/dev tests when no admin DB context is available without leaking sensitive input fields.
+`/brain-dump` is a protected private workstation page for turning raw messy notes into structured content. It saves the raw dump, extracts themes, claims, stories, examples, contradictions, and strong lines, then generates posts, threads, blog outlines, video scripts, campaign ideas, strategy notes, and clarifying questions. Selected generated items can be saved to `generated_outputs` for later composer use.
 
-The owner-facing AI feature workflows remain intentionally deferred: no algorithm analyzer execution page, brain-dump generation UI, coach chat, blog writer, embeddings refresh route, account research, inspiration transform, X OAuth/sync, X writes, publishing approval/scheduling, billing, marketing, autonomous engagement, public onboarding, or uncontrolled external action has been added.
+Both workflows use server actions with admin guards, Zod validation, in-memory rate limits, sanitized error redirects, server-only `runStructuredPrompt`, structured AI output schemas, mock-provider coverage in tests, `ai_jobs`/`prompt_runs` logging through the AI runner, workflow-specific audit events, and RLS-backed Supabase persistence through the authenticated admin context. Save actions derive generated output text from persisted reports/dumps rather than trusting hidden browser fields.
+
+The owner-facing AI workflows remain bounded to analysis, drafting, and local saves. Voice modeling is still a placeholder until Phase 13. Publishing draft creation, approval, scheduling, X OAuth/sync, X writes, blog editor creation, coach chat, embeddings, account research, inspiration transform, billing, marketing, autonomous engagement, public onboarding, and uncontrolled external action remain intentionally unimplemented.
 
 The original documentation package remains under `docs/`:
 
@@ -45,6 +47,8 @@ The original documentation package remains under `docs/`:
 - [x] `09_SCORING_IMPORTS_POST_HISTORY.md` - Build scoring, imports, and post-history workflow.
 - [x] `10_CONTENT_IDEAS_GENERATED_OUTPUTS_COMPOSER_BASE.md` - Build content idea CRUD, generated-output storage/actions, source tracking, and composer workspace base.
 - [x] `11_AI_FOUNDATION_PROMPT_REGISTRY_STRUCTURED_OUTPUTS.md` - Implement server-only AI provider abstraction, prompt registry, structured outputs, mock provider, `ai_jobs`, and `prompt_runs`.
+- [x] `12_ALGO_ANALYZER_AND_BRAIN_DUMP.md` - Build heuristic draft analysis and brain-dump transformation workflows.
+- [ ] `13_VOICE_MODELING_AND_EMBEDDINGS_FOUNDATION.md` - Build voice profile generation and retrieval substrate.
 - [ ] `10_PUBLISHING_SYSTEM.md` - Build approval state machine, calendar, queue, dry run, jobs, failures, retries, and audit surfaces before external writes.
 - [ ] `11_X_OAUTH_AND_SYNC.md` - Implement X OAuth, encrypted tokens, refresh, sync, metrics, capability flags, and disconnect behavior.
 - [ ] `12_X_WRITE_AND_PUBLISH_SYSTEM.md` - Enable official X writes under approval, capability, duplicate, rate-limit, reconciliation, and audit guardrails.
@@ -56,6 +60,88 @@ The original documentation package remains under `docs/`:
 - [ ] `18_HARDENING.md` - Add rate limits, diagnostics, export/delete, error boundaries, observability, and production safeguards.
 - [ ] `19_TESTING.md` - Complete Vitest, Playwright, RLS, mocked AI/X, publishing dry-run, and design regression coverage.
 - [ ] `20_DEPLOYMENT.md` - Configure production deployment, Supabase, Vercel env, cron, OAuth callbacks, smoke tests, and runbook.
+
+## Phase 12 Completed Work
+
+- Expanded the brain-dump structured-output schema and prompt mock output to include blog outlines, video scripts, campaign ideas, and strategy notes in addition to posts, threads, extraction fields, and clarifying questions.
+- Added server-only algorithm analyzer validation and service modules that run `algo-analysis.v1`, validate structured output, persist `algo_analysis_reports`, write workflow audit events, and map report rows back to UI-safe objects.
+- Added server-only brain-dump validation and service modules that run `brain-dump.v1`, validate structured output, persist `brain_dumps`, write workflow audit events, and save selected generated items to `generated_outputs` by reloading the persisted source pack.
+- Added guarded server actions for analysis, brain-dump transformation, rewrite saves, idea saves, and generated-output saves, each with admin auth, Zod parsing, rate limiting, sanitized error redirects, and no browser exposure of provider keys or tokens.
+- Replaced `/algo-analyzer` and `/brain-dump` pending route shells with protected dynamic pages that load recent persisted records and render the new workflow views.
+- Added analyzer and brain-dump UI components using the existing design system: `RuleHeader`, `Card`, `ScoreGauge`, `MetricBlock`, `AssumptionFlag`, `RewriteCard`, dense cards, hairline layouts, and copy/save controls.
+- Added a tiny client `CopyButton` using an event handler only; no direct `useEffect` calls were introduced.
+- Extended generated-output validation to accept Phase 12 source/type values: `algo_analysis_report`, `video_script`, `campaign_idea`, and `strategy_note`.
+- Updated the private shell inspector copy to reflect Phase 12 live AI workflows while keeping publishing handoff clearly deferred.
+- Added focused Phase 12 unit coverage for validation, structured schema expansion, mock AI workflow persistence, source-derived save flows, prompt-run logging, rendered analyzer UI, and rendered brain-dump UI.
+- Completed a review-orchestrator substitute with four read-only review agents because the named team tooling was unavailable; blocking findings were resolved around redirect handling, hidden-field trust, persisted-source saves, output type mapping, schema minima, notice tones, and accessible workflow headings.
+
+## Phase 12 Files Changed
+
+- `app/(app)/algo-analyzer/page.tsx` - Replaced pending scaffold with protected analyzer workspace loading.
+- `app/(app)/algo-analyzer/actions.ts` - Added guarded analyzer and rewrite save server actions.
+- `app/(app)/brain-dump/page.tsx` - Replaced pending scaffold with protected brain-dump workspace loading.
+- `app/(app)/brain-dump/actions.ts` - Added guarded transform and generated-output save server actions.
+- `app/globals.css` - Added analyzer and brain-dump workflow layout/styles.
+- `components/ai/copy-button.tsx` - Added client event-handler copy control.
+- `components/analyzer/index.tsx` - Added analyzer page view, score surface, rewrite cards, and save actions.
+- `components/brain-dump/index.tsx` - Added brain-dump capture, extraction, generated pack, and save actions.
+- `components/app-shell/private-shell.tsx` - Updated private shell Phase 12 status copy.
+- `components/design-system/index.tsx` - Added `RewriteCard` primitive.
+- `lib/ai/schemas.ts` - Expanded brain-dump structured-output schemas.
+- `lib/ai/prompts/index.ts` - Updated `brain-dump.v1` mock output for the expanded schema.
+- `lib/algo-analyzer/index.ts` - Added server-only analyzer run, persistence, load, and source-derived save helpers.
+- `lib/algo-analyzer/validation.ts` - Added analyzer input/save validation.
+- `lib/brain-dumps/index.ts` - Added server-only brain-dump transform, persistence, load, and source-derived save helpers.
+- `lib/brain-dumps/validation.ts` - Added brain-dump input/save validation.
+- `lib/content/index.ts` - Preserved workflow-provided phase metadata when saving generated outputs.
+- `lib/content/validation.ts` - Added Phase 12 generated-output source/type validation values.
+- `tests/unit/ai-workflows/phase12-workflows.test.ts` - Added focused Phase 12 workflow tests.
+- `tests/unit/ai/schemas.test.ts` - Updated brain-dump schema fixture and negative schema coverage for Phase 12 outputs.
+- `docs/IMPLEMENTATION_STATUS.md` - Updated this Phase 12 ledger.
+
+## Phase 12 Checks and Commands Run
+
+| Command or check | Result |
+|---|---|
+| Required docs read | Root `README.md` is absent. Read `docs/README.md`, `docs/IMPLEMENTATION_STATUS.md`, `docs/docs/AI_PROMPTS.md`, `docs/docs/AI_SYSTEM.md`, `docs/docs/API_CONTRACTS.md`, `docs/docs/UX_SPEC.md`, `docs/docs/SPEC.md`, and local `AGENTS.md`. |
+| Bootstrap check | Confirmed Next.js 16.2.4, React 19.2.5, pnpm via `pnpm-lock.yaml` and `packageManager`, no monorepo indicators, Vitest and Playwright test setup. |
+| Sequential Thinking MCP | Requested by repo instructions but not available in this Codex session; planning, reflection, and verification were performed explicitly with the available plan tracker and checks. |
+| Morph codebase search | Used before implementation to inspect route scaffolds, auth/server-action patterns, AI runner/prompt logging, persistence tables, generated-output services, and tests; used after implementation to confirm no new direct `useEffect` calls and no client-side imports of server-only AI modules. |
+| `npx pnpm@10.33.2 test tests/unit/ai-workflows/phase12-workflows.test.ts` before implementation | Failed as expected because `@/lib/algo-analyzer` did not exist yet. |
+| Focused Phase 12 test after implementation | Passed: 1 test file, 6 tests. |
+| Compatibility focused tests after schema expansion | Passed: 4 test files, 19 tests. |
+| Focused Phase 12 tests after review fixes | Passed: 4 test files, 21 tests. |
+| `npx pnpm@10.33.2 typecheck` first Phase 12 run | Failed on strict optional test-table assertions; fixed the tests. |
+| `npx pnpm@10.33.2 typecheck` final and rerun after generated Next type import restoration | Passed. |
+| `npx pnpm@10.33.2 lint` | Passed with no warnings. |
+| `npx pnpm@10.33.2 test` | Passed: 21 test files, 80 tests. |
+| `npx pnpm@10.33.2 build` | Passed; Next listed `/algo-analyzer` and `/brain-dump` as dynamic protected routes. |
+| `npx pnpm@10.33.2 test:e2e` | Passed: 1 Chromium login smoke test. Playwright emitted the pre-existing npm config and `NO_COLOR`/`FORCE_COLOR` warnings only. |
+| Generated-file hygiene | E2E dev server rewrote `next-env.d.ts` to `.next/dev/types`; restored the tracked `.next/types/routes.d.ts` import and reran typecheck successfully. |
+| Review-orchestrator substitute | Completed with four read-only review agents; fixed blocking findings around server-action redirects, hidden-field trust, persisted-source save verification, reply/quote output type mapping, brain-dump schema minima, notice tones, accessible headings, and wrapping safeguards. |
+
+## Phase 12 Known Limitations and Blockers
+
+- Voice profile use is an explicit placeholder until `13_VOICE_MODELING_AND_EMBEDDINGS_FOUNDATION.md`; analyzer prompts pass an empty placeholder rather than a real profile.
+- Live Anthropic/OpenAI calls were not exercised because checks run without provider credentials. Mock AI tests cover schema validation, orchestration, persisted-source saves, and persistence behavior.
+- Publishing handoff remains intentionally limited to saving generated outputs or ideas. No publishing drafts, approvals, scheduling, X writes, or blog editor creation were added.
+- Server-action rate limits use the existing in-memory limiter, matching prior phases; distributed persistent rate limiting remains a later hardening concern.
+- The existing Playwright suite still has only the login/private-access smoke test. Phase 24 owns mocked AI/X E2E expansion.
+
+## Phase 12 Acceptance Gates
+
+- [x] Owner can analyze a draft and receive 9 metric scores, diagnosis, risk warnings, publish-readiness status, thread expansion, and rewrites.
+- [x] Analyzer includes the heuristic disclaimer and does not claim access to the real X algorithm.
+- [x] Owner can save rewrites to generated outputs or content ideas.
+- [x] Owner can submit a brain dump, persist the raw dump, receive extraction fields, generated posts/threads/blog outlines/scripts/campaign ideas/strategy/questions, and save generated items.
+- [x] AI outputs are schema-validated before persistence and run through `ai_jobs`/`prompt_runs` logging.
+- [x] No voice modeling, publishing handoff, blog editor, external X write, billing, marketing, autonomous engagement, or public onboarding was added.
+
+## Phase 12 Next Step
+
+Run `13_VOICE_MODELING_AND_EMBEDDINGS_FOUNDATION.md` next. Stop here for Phase 12.
+
+---
 
 ## Phase 11 Completed Work
 

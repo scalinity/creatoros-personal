@@ -78,16 +78,16 @@ export function PrivateAppShell({ children, logoutAction, viewerEmail }: Private
         inspector={
           <Inspector title="Workspace Status">
             <div className="inspector-stack">
-              <KeyValueRow label="Phase" value="11 AI foundation" />
+              <KeyValueRow label="Phase" value="12 analyzer and brain dump" />
               <KeyValueRow label="Auth" value="allowlisted admin" />
               <KeyValueRow label="Admin" mono value={viewerEmail} />
-              <KeyValueRow label="Data" value="AI runs guarded" />
+              <KeyValueRow label="Data" value="AI workflows guarded" />
               <KeyValueRow label="Route" mono value={currentRoute?.path ?? pathname} />
               <Badge variant="success">private session</Badge>
               <p className="inspector-note">
-                App routes and server handlers require Supabase session plus ADMIN_EMAILS allowlist. The AI foundation now provides
-                server-only providers, prompt registry, structured output validation, and safe run logging; feature-specific AI workflows
-                and publishing handoff remain later phases.
+                App routes and server handlers require Supabase session plus ADMIN_EMAILS allowlist. The AI foundation now powers
+                persisted heuristic draft analysis and brain-dump transformation workflows with prompt-run logging, structured-output
+                validation, and generated-output save paths; publishing handoff remains a later approval-system phase.
               </p>
             </div>
           </Inspector>

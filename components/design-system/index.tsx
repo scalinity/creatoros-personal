@@ -435,3 +435,23 @@ export function AssumptionFlag({ children, className, label = "Assumption", ...p
     </aside>
   );
 }
+
+export type RewriteCardProps = HTMLAttributes<HTMLElement> & {
+  actions?: ReactNode;
+  label?: ReactNode;
+  rationale: ReactNode;
+  text: ReactNode;
+};
+
+export function RewriteCard({ actions, className, label = "Rewrite", rationale, text, ...props }: RewriteCardProps) {
+  return (
+    <article className={cn("rewrite-card", className)} {...props}>
+      <div className="rewrite-card-head">
+        <span className="rewrite-card-label smallcaps">{label}</span>
+        {actions ? <div className="rewrite-card-actions">{actions}</div> : null}
+      </div>
+      <p className="rewrite-card-text">{text}</p>
+      <p className="rewrite-card-rationale">{rationale}</p>
+    </article>
+  );
+}
