@@ -1,16 +1,16 @@
 # Implementation Status
 
 Last updated: 2026-04-28
-Current phase: Phase 17 - X Write Publishing Adapter complete
-Next prompt: `18_ANALYTICS_DASHBOARD_AND_REPORTS.md`
+Current phase: Phase 18 - Analytics Dashboard and Reports complete
+Next prompt: `19_COACH_RETRIEVAL_CONTENT_PLAYBOOK.md`
 
 ## Current State
 
-CreatorOS now connects the publishing state machine to official X write endpoints behind explicit owner approval, account-bound payload hashes, capability checks, sanitized failure records, and audit logs. The owner can escalate X scopes for publishing, preview the exact approved content/account/capability payload, run dry-runs, publish approved single posts/replies/threads/quote-post drafts, and execute due scheduled posts through a `CRON_SECRET`-protected cron route.
+CreatorOS now has deterministic, explainable analytics across imported/manual owner posts, metric snapshots, publishing drafts/jobs/failures, scheduled/published rows, blogs, campaigns, and experiments. `/analytics` loads real owner-scoped data and surfaces dense MetricBlocks, top/bottom post tables, topic/format/hook/day/hour aggregates, cadence, velocity from valid same-post metric snapshots, score explanations, and explicit unknowns where source data does not exist.
 
-The X write adapter supports live and mocked clients, thread ordering with partial-failure capture, retryable rate-limit failures with deferred scheduled rows, published-post reconciliation, post/archive metric snapshots, media upload only when configured/capable, and delete-own-post only behind an explicit confirmation and delete capability flag. Publishing OAuth requests are hard-gated to `tweet.write` and `media.write`; no autonomous engagement or platform-rule bypass behavior was added.
+The private `/dashboard` is wired to real counts for X status, publishing permission, queue health, row-level publishing workload detail, failed jobs, imported posts, ideas, generated outputs, blogs, top posts, active campaigns, active experiments, and Phase 19 coach placeholders that are labeled as speculation/inference instead of fake recommendations.
 
-Full analytics reports, coach chat, account research, inspiration extension tokens, billing, marketing, autonomous engagement, public onboarding, and uncontrolled external action remain intentionally unimplemented.
+X write publishing, read sync, manual imports, blog workflows, and the publishing state machine remain intact. Coach chat, account research, inspiration extension tokens, billing, marketing, autonomous engagement, public onboarding, and uncontrolled external action remain intentionally unimplemented.
 
 The original documentation package remains under `docs/`:
 
@@ -51,7 +51,7 @@ The original documentation package remains under `docs/`:
 - [x] `15_PUBLISHING_STATE_MACHINE_DRY_RUN_CALENDAR.md` - Build approval state machine, calendar, queue, dry run, jobs, failures, retries, and audit surfaces before external writes.
 - [x] `16_X_OAUTH_AND_READ_SYNC.md` - Implement X OAuth, encrypted tokens, refresh, sync, metrics, capability flags, and disconnect behavior.
 - [x] `17_X_WRITE_PUBLISHING_ADAPTER.md` - Enable official X writes under approval, capability, duplicate, rate-limit, reconciliation, and audit guardrails.
-- [ ] `18_ANALYTICS_DASHBOARD_AND_REPORTS.md` - Build deterministic analytics, velocity, aggregates, cadence, score explanations, and post/blog/campaign metrics.
+- [x] `18_ANALYTICS_DASHBOARD_AND_REPORTS.md` - Build deterministic analytics, velocity, aggregates, cadence, score explanations, and post/blog/campaign metrics.
 - [ ] `19_COACH_RETRIEVAL_AND_CONTENT_PLAYBOOKS.md` - Build internal-evidence coach, retrieval, embeddings, keyword fallback, citations, and playbooks.
 - [ ] `20_INSPIRATION_LIBRARY_AND_CHROME_EXTENSION_SAVE_TOKEN.md` - Build scoped inspiration save endpoint, personal save tokens, token settings, and extension scaffold.
 - [ ] `21_REPLY_GUY_AND_ACCOUNT_RESEARCHER.md` - Build account research, reply drafts, and handoff workflows.
@@ -59,6 +59,66 @@ The original documentation package remains under `docs/`:
 - [ ] `23_HARDENING_EXPORT_DELETE_OBSERVABILITY.md` - Add rate limits, diagnostics, export/delete, error boundaries, observability, and production safeguards.
 - [ ] `24_TESTING_E2E_DEPLOYMENT_READINESS.md` - Complete Vitest, Playwright, RLS, mocked AI/X, publishing dry-run, and design regression coverage.
 - [ ] `25_FINAL_PRODUCTION_REVIEW_AND_HANDOFF.md` - Complete final acceptance review, limitations, and handoff.
+
+## Phase 18 Completed Work
+
+- Added a server-only analytics loader that gathers owner-scoped posts, metric snapshots, publishing rows, blog rows, campaign rows, and experiment rows through the existing admin Supabase context without selecting secret-bearing X token columns.
+- Added pure analytics builders for performance summaries, metric coverage, top/bottom owner posts, topic/format/hook/day/hour aggregates, cadence, post-publish velocity, publishing/blog/campaign/experiment metrics, score explanations, and explicit unknown metrics.
+- Replaced `/analytics` scaffold with a dense analytics workbench using MetricBlocks, row-header tables, score gauge, explanation cards, unknown-data flags, and responsive layouts.
+- Replaced `/dashboard` scaffold with real data cards for X status, publishing permission, queue health, row-level queue detail, failed jobs, archive counts, top posts, active campaigns, experiments, and labeled Phase 19 recommendation placeholders.
+- Added Phase 18 unit coverage for analytics aggregation, owner-only filtering, known-zero metrics, unusable velocity pairs, media/video fallback scoring, dashboard queue counts, and dashboard secret non-leakage.
+- Verified no direct `useEffect` calls were introduced in the new analytics/dashboard components.
+- Ran a review-orchestrator pass with parallel review agents and resolved blocking findings around owner-only analytics, zero-metric handling, velocity readiness, queue detail, row semantics, accessible truncated links, score formula explanations, and server-only loader isolation.
+
+## Phase 18 Files Changed
+
+- `app/(app)/analytics/page.tsx` - Protected analytics route wired to server-only `loadAnalyticsReport`.
+- `app/(app)/dashboard/page.tsx` - Protected dashboard route wired to server-only `loadDashboardSummary`.
+- `app/globals.css` - Responsive analytics/dashboard layouts and table row-header styling.
+- `components/analytics/index.tsx` - Analytics report UI, aggregate tables, velocity table, score explanations, unknown flags, and accessible post links.
+- `components/dashboard/index.tsx` - Real-data dashboard cockpit UI with queue detail and accessible post/draft links.
+- `components/design-system/index.tsx` - Shared table row-header support.
+- `lib/analytics/index.ts` - Pure deterministic report builders, queue row derivation, and dashboard summary builder.
+- `lib/analytics/loaders.ts` - Server-only admin Supabase analytics/dashboard data loader.
+- `tests/unit/analytics/phase18-analytics.test.ts` - Phase 18 aggregation, edge-case, and dashboard tests.
+- `docs/IMPLEMENTATION_STATUS.md` - This Phase 18 ledger update.
+
+## Phase 18 Checks and Commands Run
+
+| Command or check | Result |
+|---|---|
+| Required docs read | Root `README.md` is absent. Read `docs/README.md`, `docs/IMPLEMENTATION_STATUS.md`, `docs/docs/GROWTH_SYSTEM.md`, `docs/docs/SPEC.md`, `docs/docs/UX_SPEC.md`, `docs/docs/DATA_MODEL.md`, and `docs/docs/TEST_PLAN.md`. |
+| Bootstrap check | Confirmed Next.js 16.2.4, React 19.2.5, pnpm via `pnpm-lock.yaml` and `packageManager`, no monorepo indicators, Vitest and Playwright test setup. |
+| Package-manager execution | The `pnpm` binary is not on PATH in this shell, so checks were run with the pinned `npx pnpm@10.33.2` form. |
+| Sequential Thinking MCP | Requested by repo instructions but not available in this Codex session; planning, reflection, and verification were performed explicitly with available tools. |
+| Morph codebase search/edit | Used Morph for codebase search and all code/status edits. |
+| `npx pnpm@10.33.2 test tests/unit/analytics/phase18-analytics.test.ts` before implementation | Failed as expected because `@/lib/analytics` did not exist yet. |
+| `npx pnpm@10.33.2 test tests/unit/analytics/phase18-analytics.test.ts` after review fixes | Passed: 1 file, 4 tests. |
+| `npx pnpm@10.33.2 typecheck` | Passed. |
+| `npx pnpm@10.33.2 lint` | Passed with no warnings. |
+| `npx pnpm@10.33.2 test` | Passed: 28 files, 116 tests. |
+| `npx pnpm@10.33.2 build` | Passed; Next listed `/analytics` and `/dashboard` as dynamic routes. |
+| `npx pnpm@10.33.2 test:e2e` | Passed: 1 Chromium login smoke test. Playwright emitted pre-existing npm config and `NO_COLOR`/`FORCE_COLOR` warnings only. |
+| Phase 18 review-orchestrator pass | Completed with parallel code, UI, and security review agents. Blocking findings were resolved before this ledger update. |
+
+## Phase 18 Known Limitations and Blockers
+
+- Follower growth remains explicitly unknown because there is no follower-history data source yet.
+- Campaign performance is counted by campaign/campaign-item rows; direct campaign-to-scored-post attribution remains limited until later growth work links campaign items to post metrics comprehensively.
+- Dashboard recommendations are placeholders labeled as inference/speculation; Phase 19 owns evidence-citing coach recommendations.
+- Analytics velocity requires at least two metric snapshots for the same post; otherwise velocity surfaces as unknown.
+
+## Phase 18 Acceptance Gates
+
+- [x] Analytics page loads with manual/imported data through admin-scoped Supabase queries.
+- [x] Dashboard shows real X, queue, failed job, post, idea, generated output, blog, campaign, experiment, and top-post counts/statuses.
+- [x] Unknown metrics are handled gracefully and explained instead of inferred.
+- [x] Aggregation and velocity tests pass.
+- [x] No billing, marketing, public onboarding, autonomous engagement, approval bypass, or secret exposure was added.
+
+## Phase 18 Next Step
+
+Run `19_COACH_RETRIEVAL_CONTENT_PLAYBOOK.md` next. Stop here for Phase 18.
 
 ## Phase 17 Completed Work
 

@@ -283,6 +283,7 @@ export type TableColumn = {
   header: ReactNode;
   key: string;
   numeric?: boolean;
+  rowHeader?: boolean;
 };
 
 export type TableRow = {
@@ -314,11 +315,17 @@ export function Table({ className, columns, rows, selectedId, "aria-label": aria
             const rowKey = row.id ?? rowIndex;
             return (
               <tr className={cn(selectedId === row.id && "row-selected")} key={String(rowKey)}>
-                {columns.map((column) => (
-                  <td className={cn(column.numeric && "num")} key={column.key}>
-                    {row[column.key]}
-                  </td>
-                ))}
+                {columns.map((column) =>
+                  column.rowHeader ? (
+                    <th className={cn(column.numeric && "num")} key={column.key} scope="row">
+                      {row[column.key]}
+                    </th>
+                  ) : (
+                    <td className={cn(column.numeric && "num")} key={column.key}>
+                      {row[column.key]}
+                    </td>
+                  ),
+                )}
               </tr>
             );
           })}

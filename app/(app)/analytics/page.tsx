@@ -1,5 +1,12 @@
-import { PendingRoutePage } from "@/app/(app)/_pending-route";
+import { AnalyticsView } from "@/components/analytics";
+import { requireAdmin } from "@/lib/auth/admin";
+import { loadAnalyticsReport } from "@/lib/analytics/loaders";
 
-export default function AnalyticsPage() {
-  return <PendingRoutePage path="/analytics" />;
+export const dynamic = "force-dynamic";
+
+export default async function AnalyticsPage() {
+  const admin = await requireAdmin();
+  const report = await loadAnalyticsReport(admin);
+
+  return <AnalyticsView report={report} />;
 }
