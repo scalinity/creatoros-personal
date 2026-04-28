@@ -13,14 +13,19 @@ const score10Schema = z.number().min(0).max(10);
 
 export const evidenceCitationSchema = z.object({
   confidence: confidenceLabelSchema.default("fact"),
-  record_id: nonEmptyString,
-  record_type: nonEmptyString,
-  snippet: nonEmptyString,
+  record_id: nonEmptyString.max(160),
+  record_type: nonEmptyString.max(80),
+  snippet: boundedAiString,
 });
 
 export const generatedDraftSchema = z.object({
-  rationale: nonEmptyString,
-  text: nonEmptyString,
+  rationale: boundedAiString,
+  text: nonEmptyString.max(2_000),
+});
+
+const profilePinnedDraftSchema = z.object({
+  rationale: boundedAiString,
+  text: replyTextString,
 });
 
 const replyDraftOutputSchema = z.object({
@@ -267,28 +272,28 @@ export const historyPlaybookOutputSchema = z.object({
 });
 
 export const growthStrategyOutputSchema = z.object({
-  cadence_recommendations: z.array(nonEmptyString),
-  campaign_recommendations: z.array(nonEmptyString),
+  cadence_recommendations: z.array(boundedAiString).max(8),
+  campaign_recommendations: z.array(boundedAiString).max(8),
   confidence_label: confidenceLabelSchema,
-  evidence: z.array(evidenceCitationSchema),
-  experiment_recommendations: z.array(nonEmptyString),
-  profile_optimization_recommendations: z.array(nonEmptyString),
-  weekly_strategy: nonEmptyString,
+  evidence: z.array(evidenceCitationSchema).max(12),
+  experiment_recommendations: z.array(boundedAiString).max(8),
+  profile_optimization_recommendations: z.array(boundedAiString).max(8),
+  weekly_strategy: boundedAiString,
 });
 
 export const experimentAnalysisOutputSchema = z.object({
   confidence_label: confidenceLabelSchema,
-  confounders: z.array(nonEmptyString),
+  confounders: z.array(boundedAiString).max(8),
   decision: experimentDecisionSchema,
   hypothesis_supported: z.boolean(),
-  next_experiment: nonEmptyString,
-  result_summary: nonEmptyString,
+  next_experiment: boundedAiString,
+  result_summary: boundedAiString,
 });
 
 export const profileAuditOutputSchema = z.object({
   confidence_label: confidenceLabelSchema,
-  findings: z.array(nonEmptyString),
-  recommendations: z.array(nonEmptyString),
+  findings: z.array(boundedAiString).max(8),
+  recommendations: z.array(boundedAiString).max(8),
   score: score100Schema,
-  suggested_pinned_post_drafts: z.array(generatedDraftSchema),
+  suggested_pinned_post_drafts: z.array(profilePinnedDraftSchema).max(3),
 });

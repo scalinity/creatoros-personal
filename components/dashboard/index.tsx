@@ -95,10 +95,11 @@ function QueuePanel({ summary }: { summary: DashboardSummary }) {
   return (
     <section className="dashboard-section" aria-label="Queue">
       <RuleHeader folio="§ 02" label="Queue" sub="publishing workload" />
-      <div className="dashboard-metrics dashboard-metrics-three">
+      <div className="dashboard-metrics">
         <MetricBlock label="Needs approval" value={summary.queue.needsApproval} />
         <MetricBlock label="Scheduled" value={summary.queue.scheduled} />
         <MetricBlock label="Failed jobs" tone={summary.queue.failedJobs > 0 ? "down" : "neutral"} value={summary.queue.failedJobs} />
+        <MetricBlock label="Failures" tone={summary.queue.failureTotal > 0 ? "down" : "neutral"} value={summary.queue.failureTotal} />
       </div>
       {summary.queueRows.length > 0 ? (
         <Table
@@ -180,11 +181,25 @@ function PerformancePanel({ summary }: { summary: DashboardSummary }) {
 function StrategyPanel({ summary }: { summary: DashboardSummary }) {
   return (
     <section className="dashboard-section" aria-label="Strategy">
-      <RuleHeader folio="§ 05" label="Strategy" sub="growth objects" />
-      <div className="dashboard-metrics dashboard-metrics-two">
+      <RuleHeader actions={<Link className="btn btn-secondary btn-sm" href="/campaigns"><span className="btn-label">Open campaigns</span></Link>} folio="§ 05" label="Strategy" sub="growth objects" />
+      <div className="dashboard-metrics">
         <MetricBlock label="Active campaigns" value={summary.strategy.activeCampaigns} />
         <MetricBlock label="Active experiments" value={summary.strategy.activeExperiments} />
+        <MetricBlock label="Active goals" value={summary.strategy.activeGoals} />
+        <MetricBlock label="Active pillars" value={summary.strategy.activePillars} />
+        <MetricBlock label="Profile score" value={summary.strategy.latestProfileScore ?? "unknown"} />
       </div>
+      {summary.strategy.latestReviewStrategy ? (
+        <Card variant="inset">
+          <Card.Header>
+            <h2 className="dashboard-card-title smallcaps">Latest growth strategy</h2>
+            <Badge variant="warning">inference</Badge>
+          </Card.Header>
+          <Card.Body>
+            <p className="dashboard-muted">{shortText(summary.strategy.latestReviewStrategy)}</p>
+          </Card.Body>
+        </Card>
+      ) : null}
     </section>
   );
 }

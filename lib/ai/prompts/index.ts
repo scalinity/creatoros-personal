@@ -94,10 +94,10 @@ const defaultSafetyNotes = [
   "Generate original work and do not copy distinctive expression from other creators.",
 ];
 
-const untrustedBoundaryPattern = /---\s*(?:BEGIN|END)_UNTRUSTED_DATA[^\n\r]*---/gi;
+const boundaryMarkerPattern = /---\s*(?:BEGIN|END)_[A-Z0-9_]+[^\n\r]*---/gi;
 
 function scrubBoundaryMarkers(value: string) {
-  return value.replace(untrustedBoundaryPattern, "[scrubbed-boundary-marker]");
+  return value.replace(boundaryMarkerPattern, "[scrubbed-boundary-marker]");
 }
 
 function packetAttribute(value: null | string | undefined) {

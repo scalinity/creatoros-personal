@@ -136,7 +136,11 @@ function VelocityTable({ rows }: { rows: VelocityPostSummary[] }) {
 function ExplanationPanel({ report }: { report: AnalyticsReport }) {
   return (
     <aside className="analytics-inspector">
-      <ScoreGauge label="Average heuristic" value={Math.round(report.performance.averageHeuristicScore ?? 0)} />
+      {report.performance.averageHeuristicScore === null ? (
+        <EmptyState message="Import scored posts or edit metrics to calculate an average heuristic score." title="Average heuristic unknown" />
+      ) : (
+        <ScoreGauge label="Average heuristic" value={Math.round(report.performance.averageHeuristicScore)} />
+      )}
       <Card variant="inset">
         <Card.Header>
           <h2 className="analytics-card-title smallcaps">Score explanations</h2>
@@ -193,8 +197,8 @@ function MetricSummary({ report }: { report: AnalyticsReport }) {
       <MetricBlock label="Avg heuristic" value={formatScore(report.performance.averageHeuristicScore)} />
       <MetricBlock delta={`${report.performance.metricCoverage.impressionsUnknown} unknown`} label="Metric coverage" value={`${report.performance.metricCoverage.impressionsKnown}/${report.performance.totalPosts}`} />
       <MetricBlock label="Scheduled" value={formatNumber(report.publishing.scheduled)} />
-      <MetricBlock label="Blogs ready" value={formatNumber(report.blogs.readyOrExported)} />
-      <MetricBlock label="Active experiments" value={formatNumber(report.experiments.active)} />
+      <MetricBlock label="Active goals" value={formatNumber(report.growth.activeGoals)} />
+      <MetricBlock label="Profile audit" value={formatScore(report.growth.latestProfileAudit?.score)} />
     </section>
   );
 }
@@ -232,7 +236,11 @@ function OperatingMetrics({ report }: { report: AnalyticsReport }) {
           <KeyValueRow label="Total" mono value={report.campaigns.total} />
           <KeyValueRow label="Active" mono value={report.campaigns.active} />
           <KeyValueRow label="Items" mono value={report.campaigns.itemCount} />
-          <KeyValueRow label="Performance" value="unknown until campaign items link to scored posts" />
+          {report.campaigns.summaries.length > 0 ? (
+            report.campaigns.summaries.slice(0, 3).map((campaign) => <KeyValueRow key={campaign.id} label="Campaign" value={`${shortText(campaign.name, 48)} / ${campaign.itemCount} items / ${campaign.status}`} />)
+          ) : (
+            <KeyValueRow label="Performance" value="unknown until campaign items link to scored posts" />
+          )}
         </Card.Body>
       </Card>
       <Card>
@@ -243,7 +251,22 @@ function OperatingMetrics({ report }: { report: AnalyticsReport }) {
           <KeyValueRow label="Total" mono value={report.experiments.total} />
           <KeyValueRow label="Active" mono value={report.experiments.active} />
           <KeyValueRow label="With results" mono value={report.experiments.withResults} />
-          <KeyValueRow label="Decisions" value={Object.keys(report.experiments.byDecision).join(", ") || "unknown"} />
+          {report.experiments.summaries.length > 0 ? (
+            report.experiments.summaries.slice(0, 3).map((experiment) => <KeyValueRow key={experiment.id} label="Experiment" value={`${shortText(experiment.title, 48)} / ${experiment.decision ?? "undecided"} / ${experiment.latestResult ?? "no result"}`} />)
+          ) : (
+            <KeyValueRow label="Decisions" value={Object.keys(report.experiments.byDecision).join(", ") || "unknown"} />
+          )}
+        </Card.Body>
+      </Card>
+      <Card>
+        <Card.Header>
+          <h2 className="analytics-card-title smallcaps">Growth layer</h2>
+        </Card.Header>
+        <Card.Body>
+          <KeyValueRow label="Goals" mono value={`${report.growth.activeGoals}/${report.growth.totalGoals} active`} />
+          <KeyValueRow label="Pillars" mono value={`${report.growth.activePillars}/${report.growth.totalPillars} active`} />
+          <KeyValueRow label="Weekly strategy" value={report.growth.latestWeeklyReview?.strategy ? shortText(report.growth.latestWeeklyReview.strategy) : "no generated review"} />
+          <KeyValueRow label="Profile findings" value={report.growth.latestProfileAudit?.findings[0] ? shortText(report.growth.latestProfileAudit.findings[0]) : "no profile audit"} />
         </Card.Body>
       </Card>
     </section>

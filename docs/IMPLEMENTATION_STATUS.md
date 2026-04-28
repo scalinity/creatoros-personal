@@ -1,14 +1,14 @@
 # Implementation Status
 
 Last updated: 2026-04-28
-Current phase: Phase 21 - Reply Guy and Account Researcher complete
-Next prompt: `22_GROWTH_CAMPAIGNS_EXPERIMENTS_REVIEWS.md`
+Current phase: Phase 22 - Growth System, Campaigns, Experiments, Reviews, and Profile Audits complete
+Next prompt: `23_HARDENING_EXPORT_DELETE_OBSERVABILITY.md`
 
 ## Current State
 
-CreatorOS now has protected `/reply-guy` and `/account-research` workspaces for target-account intelligence, pasted-post fallback, saved target accounts, AI account reports, top-post and pattern analysis, generated ideas, reply draft generation, copy/use tracking, and guarded publishing handoff. Reply workflows stay one-post-at-a-time, cap generated variants, require explicit owner actions, and create only pending publishing drafts for later approval.
+CreatorOS now has a protected growth operating layer across `/campaigns`, `/experiments`, dashboard, and analytics. The owner can define growth goals, content pillars, campaigns, campaign items, experiments, experiment outcomes, weekly/monthly strategy reviews, and profile audits. Growth AI outputs use the existing server-only prompt system with structured schemas, period-scoped evidence, sanitized citations, owner-reviewed profile recommendations, and no publishing or platform action path.
 
-CreatorOS still has the Phase 20 inspiration library and scoped extension save-token system, plus X write publishing, read sync, manual imports, blog workflows, analytics, dashboard, coach retrieval, and the publishing state machine. Growth campaigns/reviews, final hardening/export-delete coverage, and deployment readiness remain intentionally unimplemented.
+CreatorOS still has the Phase 21 reply/account-research workspaces, Phase 20 inspiration and extension-token system, plus X write publishing, read sync, manual imports, blog workflows, analytics, dashboard, coach retrieval, and the publishing state machine. Final hardening/export-delete coverage and deployment readiness remain intentionally unimplemented.
 
 The original documentation package remains under `docs/`:
 
@@ -53,10 +53,77 @@ The original documentation package remains under `docs/`:
 - [x] `19_COACH_RETRIEVAL_AND_CONTENT_PLAYBOOKS.md` - Build internal-evidence coach, retrieval, embeddings, keyword fallback, citations, and playbooks.
 - [x] `20_INSPIRATION_LIBRARY_AND_CHROME_EXTENSION_SAVE_TOKEN.md` - Build scoped inspiration save endpoint, personal save tokens, token settings, and extension scaffold.
 - [x] `21_REPLY_GUY_AND_ACCOUNT_RESEARCHER.md` - Build account research, reply drafts, and handoff workflows.
-- [ ] `22_GROWTH_CAMPAIGNS_EXPERIMENTS_REVIEWS.md` - Build goals, pillars, positioning, campaigns, experiments, reviews, and profile audits.
+- [x] `22_GROWTH_CAMPAIGNS_EXPERIMENTS_REVIEWS.md` - Build goals, pillars, positioning, campaigns, experiments, reviews, and profile audits.
 - [ ] `23_HARDENING_EXPORT_DELETE_OBSERVABILITY.md` - Add rate limits, diagnostics, export/delete, error boundaries, observability, and production safeguards.
 - [ ] `24_TESTING_E2E_DEPLOYMENT_READINESS.md` - Complete Vitest, Playwright, RLS, mocked AI/X, publishing dry-run, and design regression coverage.
 - [ ] `25_FINAL_PRODUCTION_REVIEW_AND_HANDOFF.md` - Complete final acceptance review, limitations, and handoff.
+
+## Phase 22 Completed Work
+
+- Replaced `/campaigns` and `/experiments` placeholders with protected private workspaces for goals, pillars, campaigns, campaign items, experiments, result recording, reviews, and profile audits.
+- Added `lib/growth` server-only services for owner-scoped growth CRUD, workspace loading, experiment metric deltas, AI experiment interpretation, weekly/monthly review generation, profile audit generation, audit logging, and archive helpers.
+- Added Phase 22 validation schemas for goals, pillars, campaigns, campaign items, experiments, results, reviews, audits, and archive inputs; invalid JSON object form data now fails validation instead of silently becoming `{}`.
+- Added owner-scoped relationship guards before writing campaign `pillar_id` and campaign-item `campaign_id`, `blog_post_id`, `publishing_draft_id`, `published_post_id`, and typed `entity_id` references.
+- Implemented AI growth strategist, experiment analyst, and profile auditor workflows through the existing server-only AI foundation and structured output schemas.
+- Scoped weekly/monthly review AI context to the requested period, prioritized growth-object evidence, sanitized citations, and persisted sanitized evidence both in the dedicated `evidence` column and inside the stored `report` JSON.
+- Hardened prompt boundary scrubbing so user-controlled owner notes and structured prompt data cannot inject prompt container delimiters.
+- Bounded Phase 22 AI output schemas for recommendations, evidence, experiment summaries, and profile pinned-post drafts.
+- Wired growth goals, pillars, profile audit scores, latest strategy, campaign summaries, experiment decisions, and total failure counts into dashboard and analytics views without inventing unavailable performance data.
+- Added focused Phase 22 tests for validation, CRUD/audit behavior, experiment deltas and AI decisions, weekly/monthly cited reviews, profile audits, workspace rendering, and dashboard/analytics growth summaries.
+- Ran a review-orchestrator pass with six parallel reviewers; the app thread limit prevented launching ten. Blocking findings were resolved before this ledger update.
+
+## Phase 22 Files Changed
+
+- `app/(app)/campaigns/page.tsx` and `app/(app)/campaigns/actions.ts` - Protected campaigns route and rate-limited server actions for goals, pillars, campaigns, campaign items, and reviews.
+- `app/(app)/experiments/page.tsx` and `app/(app)/experiments/actions.ts` - Protected experiments route and rate-limited server actions for experiments, results, and profile audits.
+- `components/growth/index.tsx` - Campaign cards, experiment ledger, growth review sections, profile audit card, and growth workbench forms.
+- `components/analytics/index.tsx` and `components/dashboard/index.tsx` - Visible growth insights, profile score, latest strategy, campaign/experiment summaries, and failure totals.
+- `lib/growth/index.ts` and `lib/growth/validation.ts` - Server-only growth service layer, AI orchestration, owner guards, evidence handling, and validation schemas.
+- `lib/analytics/index.ts` and `lib/analytics/loaders.ts` - Growth inputs, summaries, loader queries, dashboard strategy fields, and analytics report extensions.
+- `lib/ai/prompts/index.ts` and `lib/ai/schemas.ts` - Prompt boundary hardening and bounded Phase 22 structured output schemas.
+- `tests/unit/growth/phase22-growth.test.ts` - Focused Phase 22 regression coverage.
+- `docs/IMPLEMENTATION_STATUS.md` - This Phase 22 ledger update.
+
+## Phase 22 Checks and Commands Run
+
+| Command or check | Result |
+|---|---|
+| Required docs read | Root `README.md` is absent. Read `docs/IMPLEMENTATION_STATUS.md`, `docs/docs/GROWTH_SYSTEM.md`, `docs/docs/AI_PROMPTS.md`, `docs/docs/SPEC.md`, `docs/docs/UX_SPEC.md`, `docs/docs/DATA_MODEL.md`, `docs/docs/API_CONTRACTS.md`, `docs/docs/DESIGN_SYSTEM_IMPLEMENTATION.md`, `docs/design/component-map.md`, and `docs/design/tokens.json`. |
+| Bootstrap check | Confirmed Next.js 16.2.4, React 19.2.5, pnpm via `pnpm-lock.yaml` and `packageManager`, no monorepo indicators, Vitest and Playwright test setup. |
+| Package-manager execution | The `pnpm` binary is not on PATH in this shell, so checks were run with the pinned `npx pnpm@10.33.2` form. |
+| Sequential Thinking MCP | Requested by repo instructions but not available in this Codex session; planning, reflection, and verification were performed explicitly with available tools. |
+| Morph codebase search/edit | Used Morph for Phase 22 codebase searches and code edits. |
+| `npx pnpm@10.33.2 test tests/unit/growth/phase22-growth.test.ts` before implementation | Failed as expected because Phase 22 growth components/services were not implemented yet. |
+| `npx pnpm@10.33.2 test tests/unit/growth/phase22-growth.test.ts` after implementation and review fixes | Passed: 1 file, 7 tests. |
+| `npx pnpm@10.33.2 typecheck` | Passed. |
+| `npx pnpm@10.33.2 lint` | Passed with no warnings. |
+| `npx pnpm@10.33.2 test` | Passed: 33 files, 156 tests. |
+| `npx pnpm@10.33.2 test:e2e` | Passed: 1 Chromium login smoke test. Playwright emitted pre-existing npm config and `NO_COLOR`/`FORCE_COLOR` warnings only. |
+| `npx pnpm@10.33.2 build` | Passed; Next lists `/campaigns` and `/experiments` as dynamic protected routes. |
+| Direct `useEffect` check | Morph search found no direct `useEffect` calls in the Phase 22 route/component/service files. |
+| Phase 22 review-orchestrator pass | Completed with six parallel reviewers due thread limit. Blocking findings around review period scoping, unsanitized persisted citations, evidence truncation, related-row ownership, per-experiment AI rate-limit keys, prompt boundary injection, and monthly strategy surfacing were resolved. |
+
+## Phase 22 Known Limitations and Blockers
+
+- Real Anthropic/OpenAI growth strategist, experiment analyst, and profile audit calls were not exercised against live provider credentials in automated checks; tests use the existing mock AI provider.
+- Campaign performance does not fabricate unavailable metrics. Analytics shows campaign/experiment structure and result state; deeper campaign performance requires linked posts/drafts/published rows with available metrics.
+- Profile audits use owner-supplied manual profile snapshots in this phase; no external profile scraping or platform action was added.
+- Dashboard day/hour aggregate analytics still use the existing UTC grouping from Phase 18; timezone-aware timing analysis remains a later refinement.
+- Rate limits use the existing process-memory fixed-window store. This remains a later hardening item for distributed/serverless deployments.
+
+## Phase 22 Acceptance Gates
+
+- [x] Owner can create growth goals, content pillars, campaigns, campaign items, and experiments through protected admin routes.
+- [x] Experiments can record outcomes, calculate metric deltas, persist AI interpretation, and store decision states.
+- [x] Weekly and monthly reviews can be generated with cited, sanitized, period-scoped data.
+- [x] Profile audits produce bio/header/profile/pinned-post recommendations with owner-review wording and no publish/pin action path.
+- [x] Growth insights appear in dashboard and analytics without fake performance data.
+- [x] Growth server actions are admin-guarded, rate-limited, schema-validated, audited through services, and do not expose secrets or X tokens.
+- [x] No billing, marketing, public onboarding, autonomous engagement, mass actions, platform bypass, or secret exposure was added.
+
+## Phase 22 Next Step
+
+Run `23_HARDENING_EXPORT_DELETE_OBSERVABILITY.md` next. Stop here for Phase 22.
 
 ## Phase 21 Completed Work
 
@@ -191,7 +258,7 @@ Run `22_GROWTH_CAMPAIGNS_EXPERIMENTS_REVIEWS.md` next. Stop here for Phase 21.
 
 ## Phase 20 Next Step
 
-Run `21_REPLY_GUY_AND_ACCOUNT_RESEARCH.md` next. Stop here for Phase 20.
+Run `21_REPLY_GUY_AND_ACCOUNT_RESEARCHER.md` next. Stop here for Phase 20.
 
 ## Phase 19 Completed Work
 

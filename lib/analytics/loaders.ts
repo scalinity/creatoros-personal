@@ -14,15 +14,20 @@ import type {
   BlogPostRow,
   CampaignItemRow,
   CampaignRow,
+  ContentPillarRow,
   ExperimentResultRow,
   ExperimentRow,
+  GrowthGoalRow,
+  MonthlyReviewRow,
   PostMetricSnapshotRow,
   PostRow,
+  ProfileAuditRow,
   PublishedPostRow,
   PublishingDraftRow,
   PublishingFailureRow,
   PublishingJobRow,
   ScheduledPostRow,
+  WeeklyReviewRow,
 } from "@/types/database";
 
 async function fetchRows<T>(label: string, promise: PromiseLike<{ data: null | T[]; error: null | { message: string } }>) {
@@ -32,7 +37,25 @@ async function fetchRows<T>(label: string, promise: PromiseLike<{ data: null | T
 }
 
 async function loadAnalyticsInput(admin: AdminContext): Promise<AnalyticsInput> {
-  const [posts, postMetricSnapshots, publishingDrafts, publishingJobs, scheduledPosts, publishingFailures, publishedPosts, blogPosts, campaigns, campaignItems, experiments, experimentResults] = await Promise.all([
+  const [
+    posts,
+    postMetricSnapshots,
+    publishingDrafts,
+    publishingJobs,
+    scheduledPosts,
+    publishingFailures,
+    publishedPosts,
+    blogPosts,
+    campaigns,
+    campaignItems,
+    experiments,
+    experimentResults,
+    contentPillars,
+    growthGoals,
+    weeklyReviews,
+    monthlyReviews,
+    profileAudits,
+  ] = await Promise.all([
     fetchRows("analytics posts", admin.supabase.from("posts").select("*").eq("user_id", admin.userId).is("deleted_at", null).order("created_at_platform", { ascending: false, nullsFirst: false }).limit(1000)),
     fetchRows("analytics post metric snapshots", admin.supabase.from("post_metric_snapshots").select("*").eq("user_id", admin.userId).order("snapshot_at", { ascending: false }).limit(2000)),
     fetchRows("analytics publishing drafts", admin.supabase.from("publishing_drafts").select("*").eq("user_id", admin.userId).is("deleted_at", null).order("updated_at", { ascending: false }).limit(500)),
@@ -45,21 +68,31 @@ async function loadAnalyticsInput(admin: AdminContext): Promise<AnalyticsInput> 
     fetchRows("analytics campaign items", admin.supabase.from("campaign_items").select("*").eq("user_id", admin.userId).is("deleted_at", null).order("sequence_index", { ascending: true }).limit(1000)),
     fetchRows("analytics experiments", admin.supabase.from("experiments").select("*").eq("user_id", admin.userId).is("deleted_at", null).order("updated_at", { ascending: false }).limit(500)),
     fetchRows("analytics experiment results", admin.supabase.from("experiment_results").select("*").eq("user_id", admin.userId).order("generated_at", { ascending: false }).limit(500)),
+    fetchRows("analytics content pillars", admin.supabase.from("content_pillars").select("*").eq("user_id", admin.userId).is("deleted_at", null).order("priority", { ascending: true }).limit(200)),
+    fetchRows("analytics growth goals", admin.supabase.from("growth_goals").select("*").eq("user_id", admin.userId).is("deleted_at", null).order("updated_at", { ascending: false }).limit(200)),
+    fetchRows("analytics weekly reviews", admin.supabase.from("weekly_reviews").select("*").eq("user_id", admin.userId).order("generated_at", { ascending: false }).limit(52)),
+    fetchRows("analytics monthly reviews", admin.supabase.from("monthly_reviews").select("*").eq("user_id", admin.userId).order("generated_at", { ascending: false }).limit(24)),
+    fetchRows("analytics profile audits", admin.supabase.from("profile_audits").select("*").eq("user_id", admin.userId).order("generated_at", { ascending: false }).limit(20)),
   ]);
 
   return {
     blogPosts: blogPosts as BlogPostRow[],
     campaigns: campaigns as CampaignRow[],
     campaignItems: campaignItems as CampaignItemRow[],
+    contentPillars: contentPillars as ContentPillarRow[],
     experimentResults: experimentResults as ExperimentResultRow[],
     experiments: experiments as ExperimentRow[],
+    growthGoals: growthGoals as GrowthGoalRow[],
+    monthlyReviews: monthlyReviews as MonthlyReviewRow[],
     postMetricSnapshots: postMetricSnapshots as PostMetricSnapshotRow[],
     posts: posts as PostRow[],
+    profileAudits: profileAudits as ProfileAuditRow[],
     publishedPosts: publishedPosts as PublishedPostRow[],
     publishingDrafts: publishingDrafts as PublishingDraftRow[],
     publishingFailures: publishingFailures as PublishingFailureRow[],
     publishingJobs: publishingJobs as PublishingJobRow[],
     scheduledPosts: scheduledPosts as ScheduledPostRow[],
+    weeklyReviews: weeklyReviews as WeeklyReviewRow[],
   };
 }
 
