@@ -3,9 +3,9 @@ import { z } from "zod";
 import type { Json } from "@/types/database";
 
 const ideaStatuses = ["inbox", "active", "drafted", "used", "archived"] as const;
-const sourceEntityTypes = ["post", "brain_dump", "inspiration", "account_research", "manual", "algo_analysis_report"] as const;
+const sourceEntityTypes = ["post", "brain_dump", "inspiration", "account_research", "manual", "algo_analysis_report", "blog_post"] as const;
 const generatedOutputTypes = ["x_post", "x_thread", "reply", "quote_post", "blog_outline", "blog_draft", "campaign_sequence", "content_pack", "manual", "video_script", "campaign_idea", "strategy_note"] as const;
-const generatedInputTypes = ["content_idea", "post", "brain_dump", "inspiration", "account_research", "manual", "algo_analysis_report"] as const;
+const generatedInputTypes = ["content_idea", "post", "brain_dump", "inspiration", "account_research", "manual", "algo_analysis_report", "blog_post"] as const;
 
 const jsonValueSchema: z.ZodType<Json> = z.lazy(() =>
   z.union([

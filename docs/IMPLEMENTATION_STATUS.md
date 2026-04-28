@@ -1,18 +1,18 @@
 # Implementation Status
 
 Last updated: 2026-04-28
-Current phase: Phase 13 - Voice Modeling and Embeddings Foundation complete
-Next prompt: `14_BLOG_SYSTEM.md`
+Current phase: Phase 14 - Blog System complete
+Next prompt: `15_PUBLISHING_STATE_MACHINE_DRY_RUN_CALENDAR.md`
 
 ## Current State
 
-CreatorOS now has the voice-modeling and retrieval substrate required by later coach, composer, retrieval, and style-aware generation phases. The owner can recompute a personal voice profile from owner-authored posts and available blogs through the protected AI settings surface or the protected `/api/voice-profile` route. Voice generation is server-only, admin-guarded, schema-validated, audited, persisted to `voice_profiles`, and constrained to owner posts/blogs only. AI-supplied representative examples are allowlisted against loaded owner source IDs and their visible text is derived from the trusted source rows before persistence.
+CreatorOS now has a protected long-form blog workstation. The owner can create sourced or manual blogs, edit markdown and SEO metadata, track meaningful versions, export Markdown/HTML/JSON/MDX artifacts, and run AI-assisted outline, full draft, editor, SEO, and blog-to-X repurposing workflows. Blog pages, server actions, and API routes remain admin-guarded and server-side data access stays user-filtered.
 
-The active voice profile captures summary, tone, sentence patterns, common phrases, hooks, topic clusters, CTA patterns, formatting habits, punctuation/emoji habits, length distribution, and representative examples. The algorithm analyzer can now include the active voice profile when requested instead of the prior placeholder.
+Blog edits now use a Postgres RPC that locks the blog row and writes the matching `blog_versions` row in the same transaction. Blog-to-X repurposing creates a `blog_repurposing_jobs` row before storing generated outputs, uses valid `running`/`succeeded`/`failed` statuses, records generated-output ids back to the job, and never creates publishing drafts or external writes in this phase.
 
-Phase 13 also added a server-only embedding and retrieval foundation for owner posts, content ideas, generated outputs, brain dumps, and blogs. Embedding refresh creates an AI job, writes user-filtered 3072-dimensional embedding rows when the embedding provider is available, retires stale active embeddings for refreshed entity/model scopes, records source metrics in embedding metadata, and falls back to keyword retrieval when embeddings or the provider are unavailable. Retrieval returns the documented snake_case AI evidence shape and remains user-filtered in both vector and keyword modes.
+AI blog prompts wrap current drafts and supported source records as data-only context packets. Phase 14 supports source-linked generation from owner posts, brain dumps, content ideas, and generated outputs; unsupported future source categories are not accepted by the create schema/UI until their loaders exist. Exports use sanitized filenames, attachment disposition, safe HTML rendering, checksums, audit logs, and preserve terminal `published_externally`/`archived` statuses.
 
-The owner-facing AI workflows remain bounded to analysis, drafting, local saves, voice modeling, and retrieval infrastructure. The full coach chat, blog system, publishing state machine, X OAuth/sync, X writes, account research, inspiration transform, billing, marketing, autonomous engagement, public onboarding, and uncontrolled external action remain intentionally unimplemented.
+The owner-facing AI workflows remain bounded to analysis, drafting, local saves, voice modeling, retrieval infrastructure, and blog generation. Publishing approval/calendar, X OAuth/sync, X writes, full analytics reports, coach chat, account research, inspiration extension tokens, billing, marketing, autonomous engagement, public onboarding, and uncontrolled external action remain intentionally unimplemented.
 
 The original documentation package remains under `docs/`:
 
@@ -49,8 +49,8 @@ The original documentation package remains under `docs/`:
 - [x] `11_AI_FOUNDATION_PROMPT_REGISTRY_STRUCTURED_OUTPUTS.md` - Implement server-only AI provider abstraction, prompt registry, structured outputs, mock provider, `ai_jobs`, and `prompt_runs`.
 - [x] `12_ALGO_ANALYZER_AND_BRAIN_DUMP.md` - Build heuristic draft analysis and brain-dump transformation workflows.
 - [x] `13_VOICE_MODELING_AND_EMBEDDINGS_FOUNDATION.md` - Build voice profile generation and retrieval substrate.
-- [ ] `14_BLOG_SYSTEM.md` - Build blog CRUD, versions, exports, and repurposing workflows.
-- [ ] `15_PUBLISHING_STATE_MACHINE_DRY_RUN_AND_CALENDAR.md` - Build approval state machine, calendar, queue, dry run, jobs, failures, retries, and audit surfaces before external writes.
+- [x] `14_BLOG_SYSTEM.md` - Build blog CRUD, versions, exports, and repurposing workflows.
+- [ ] `15_PUBLISHING_STATE_MACHINE_DRY_RUN_CALENDAR.md` - Build approval state machine, calendar, queue, dry run, jobs, failures, retries, and audit surfaces before external writes.
 - [ ] `16_X_OAUTH_AND_READ_SYNC.md` - Implement X OAuth, encrypted tokens, refresh, sync, metrics, capability flags, and disconnect behavior.
 - [ ] `17_X_WRITE_PUBLISHING_ADAPTER.md` - Enable official X writes under approval, capability, duplicate, rate-limit, reconciliation, and audit guardrails.
 - [ ] `18_ANALYTICS_DASHBOARD_AND_REPORTS.md` - Build deterministic analytics, velocity, aggregates, cadence, score explanations, and post/blog/campaign metrics.
@@ -61,6 +61,90 @@ The original documentation package remains under `docs/`:
 - [ ] `23_HARDENING_EXPORT_DELETE_OBSERVABILITY.md` - Add rate limits, diagnostics, export/delete, error boundaries, observability, and production safeguards.
 - [ ] `24_TESTING_E2E_DEPLOYMENT_READINESS.md` - Complete Vitest, Playwright, RLS, mocked AI/X, publishing dry-run, and design regression coverage.
 - [ ] `25_FINAL_PRODUCTION_REVIEW_AND_HANDOFF.md` - Complete final acceptance review, limitations, and handoff.
+
+## Phase 14 Completed Work
+
+- Added protected `/blogs`, `/blogs/new`, and `/blogs/[id]` pages for the blog archive, new-blog seed form, editor, metadata panel, version timeline, export panel, and AI assists.
+- Added `lib/blogs` services for blog CRUD, safe markdown metrics, slug generation, source context loading, versioning, export artifact generation, and AI-assisted blog workflows.
+- Added Phase 14 blog validation schemas for create/update/export/AI actions with supported source types only.
+- Added protected blog server actions and API routes for create/update, export downloads, and AI blog writer modes.
+- Added AI outline, full draft, editor suggestion, SEO metadata, summary, and blog-to-X repurposing flows using registered structured output schemas.
+- Added Markdown, HTML, JSON, and MDX-ready export generation with checksums, safe content disposition, sanitized HTML, and export audit logging.
+- Added a database migration and typed RPC for atomic blog update plus version creation, with a uniqueness guard on `(blog_post_id, version_number)`.
+- Added blog-to-X generated-output handoff with repurposing jobs and no publishing draft, approval, schedule, or external platform writes.
+- Updated generated-output validation to allow `blog_post` inputs and tightened blog repurposing schema coverage.
+- Added accessible labels and overflow-safe layout polish for blog tables, landmarks, and long metadata values.
+- Updated operational diagnostics to report Phase 14.
+- Added focused Phase 14 unit tests covering validation, CRUD/version/export safety, AI draft generation, blog-to-X generated outputs, and UI rendering.
+- Completed a review-orchestrator substitute with four read-only review agents; blocking findings around repurposing job status/order, transactional versioning, API error mapping, and accessibility were resolved.
+
+## Phase 14 Files Changed
+
+- `app/(app)/blogs/page.tsx` - Protected blog archive route.
+- `app/(app)/blogs/new/page.tsx` - Protected new-blog route.
+- `app/(app)/blogs/[id]/page.tsx` - Protected blog detail/editor route.
+- `app/(app)/blogs/actions.ts` - Blog create/update and AI server actions.
+- `app/api/blogs/route.ts` - Protected blog create API.
+- `app/api/blogs/[id]/route.ts` - Protected blog update API.
+- `app/api/blogs/[id]/export/route.ts` - Protected export download API.
+- `app/api/ai/blog-writer/route.ts` - Protected blog AI route with stable sanitized error mapping.
+- `app/globals.css` - Blog workspace, editor, export, AI, and overflow-safe styles.
+- `components/blogs/index.tsx` - Blog archive, new-blog, editor, metadata, version, export, and AI panels.
+- `components/design-system/index.tsx` - Forwarded table labeling props to the actual table element.
+- `lib/blogs/index.ts` - Blog services, exports, AI workflows, source context, and repurposing job handling.
+- `lib/blogs/validation.ts` - Phase 14 blog schemas and supported source types.
+- `lib/content/validation.ts` - Added `blog_post` generated-output input type.
+- `lib/ai/schemas.ts` - Tightened blog repurposing output validation.
+- `lib/server-only/diagnostics.ts` - Updated current operational phase.
+- `supabase/migrations/20260428091400_phase14_blog_atomic_versioning.sql` - Added blog version uniqueness and transactional update/version RPC.
+- `types/database.ts` - Typed the Phase 14 blog RPC.
+- `tests/unit/blogs/phase14-blog-system.test.ts` - Added Phase 14 blog coverage and review regressions.
+- `tests/unit/diagnostics/operational-diagnostics.test.ts` - Updated expected current phase.
+- `docs/IMPLEMENTATION_STATUS.md` - Updated this Phase 14 ledger.
+
+## Phase 14 Checks and Commands Run
+
+| Command or check | Result |
+|---|---|
+| Required docs read | Root `README.md` is absent. Read `docs/IMPLEMENTATION_STATUS.md`, `docs/docs/BLOG_SYSTEM.md`, `docs/docs/API_CONTRACTS.md`, `docs/docs/AI_PROMPTS.md`, `docs/docs/UX_SPEC.md`, and `docs/design/component-map.md`. |
+| Bootstrap check | Confirmed Next.js 16.2.4, React 19.2.5, pnpm via `pnpm-lock.yaml` and `packageManager`, no monorepo indicators, Vitest and Playwright test setup. |
+| Sequential Thinking MCP | Requested by repo instructions but not available in this Codex session; planning, reflection, and verification were performed explicitly with available tools. |
+| Morph codebase search/edit | Used for codebase searches and file edits across blog routes, services, validation, design components, CSS, diagnostics, tests, and migration work. |
+| Focused Phase 14 test before implementation | Failed as expected because blog components/services did not exist yet. |
+| Focused Phase 14 tests after implementation | Passed: 1 test file, 4 tests. |
+| `npx pnpm@10.33.2 typecheck` first Phase 14 run | Failed on strict Phase 14 typing in source context/test fixtures; fixed. |
+| `npx pnpm@10.33.2 typecheck` review-fix run | Failed on the RPC test mock row type; fixed. |
+| `npx pnpm@10.33.2 typecheck` final | Passed. |
+| `npx pnpm@10.33.2 lint` | Passed. |
+| `npx pnpm@10.33.2 test` | Passed: 24 test files, 94 tests. |
+| `npx pnpm@10.33.2 build` | Passed; Next listed `/blogs`, `/blogs/[id]`, `/blogs/new`, `/api/blogs`, `/api/blogs/[id]`, `/api/blogs/[id]/export`, and `/api/ai/blog-writer` as dynamic protected routes. |
+| `npx pnpm@10.33.2 test:e2e` | Passed: 1 Chromium login smoke test. Playwright emitted pre-existing npm config and `NO_COLOR`/`FORCE_COLOR` warnings only. |
+| Generated-file hygiene | Build/E2E can rewrite Next ambient route imports; verify `next-env.d.ts` before commit and restore if needed. |
+| Review-orchestrator substitute | Completed with four read-only review agents; fixed all blocking Phase 14 findings and non-blocking accessibility polish. |
+
+## Phase 14 Known Limitations and Blockers
+
+- Live AI provider calls were not exercised during Phase 14 verification; automated checks used the mock provider even though live provider credentials are available in `.env.local`.
+- External blog publishing, Ghost/WordPress adapters, and blog publication reconciliation are intentionally out of scope for Phase 14.
+- Blog-to-X repurposing stores generated outputs only because Phase 15 publishing drafts/approval/calendar are not complete yet.
+- X-to-blog and brain-dump-to-blog are supported through source-linked AI generation when a blog is created with an existing owner post or brain dump ID; the UI does not yet include source pickers.
+- HTML export uses the built-in safe markdown renderer rather than a full Markdown/MDX compiler.
+- Server-action/API rate limits use the existing in-memory limiter, matching prior phases; distributed persistent rate limiting remains a later hardening concern.
+
+## Phase 14 Acceptance Gates
+
+- [x] Owner can create, edit, and version a blog through protected UI, server actions, and APIs.
+- [x] Owner can generate outline, full draft, editor suggestions, SEO metadata, slug, and summary using server-only structured AI workflows.
+- [x] Owner can export Markdown, HTML, JSON, and MDX-ready artifacts with safe download headers and audit logging.
+- [x] Owner can generate X repurposing outputs from a blog as saved generated outputs without publishing.
+- [x] Existing owner post and brain-dump sources can be used for X-to-blog and brain-dump-to-blog draft generation paths.
+- [x] No external blog publishing, X publishing, publishing approvals, billing, marketing, autonomous engagement, or public onboarding was added.
+
+## Phase 14 Next Step
+
+Run `15_PUBLISHING_STATE_MACHINE_DRY_RUN_CALENDAR.md` next. Stop here for Phase 14.
+
+---
 
 ## Phase 13 Completed Work
 
@@ -741,7 +825,7 @@ Run `07_PRIVATE_AUTH_ADMIN_GATE_AND_AUDIT.md` next. Stop here for Phase 06.
 |---|---|
 | Required docs read | Root `README.md` is absent. Read `docs/README.md`, `docs/IMPLEMENTATION_STATUS.md`, `docs/docs/DATA_MODEL.md`, `docs/docs/SECURITY.md`, `docs/docs/ARCHITECTURE.md`, and `docs/docs/API_CONTRACTS.md`. |
 | Bootstrap check | Confirmed Next.js 16.2.4, React 19.2.5, pnpm via `pnpm-lock.yaml`, no monorepo indicators, Vitest and Playwright test setup. |
-| Sequential Thinking MCP | Requested by repo instructions but not available in this Codex session; planning, reflection, and verification were performed explicitly with the available tools. |
+| Sequential Thinking MCP | Requested by repo instructions but not available in this Codex session; planning, reflection, and verification were performed explicitly with available tools. |
 | Morph codebase search | Ran before implementation to inspect existing Supabase migrations, `lib/db`, database types, and test patterns. |
 | Documentation lookup | Ref MCP was unavailable due account credits. Used official Supabase docs through Tavily for RLS, pgvector, and HNSW/vector-index guidance. |
 | `supabase --version` | Passed: `2.95.4`. |
@@ -815,7 +899,7 @@ Run `06_SUPABASE_SCHEMA_PUBLISHING_BLOG_GROWTH_RLS.md` next. Stop here for Phase
 |---|---|
 | Required docs read | Root `README.md` is absent. Read `docs/README.md`, `docs/IMPLEMENTATION_STATUS.md`, `docs/docs/SPEC.md`, `docs/docs/UX_SPEC.md`, `docs/design/component-map.md`, `docs/docs/DESIGN_SYSTEM_IMPLEMENTATION.md`, and `docs/docs/ARCHITECTURE.md`. |
 | Bootstrap check | Confirmed Next.js 16.2.4, React 19.2.5, pnpm via `pnpm-lock.yaml`, no monorepo indicators, Vitest and Playwright test setup. |
-| Sequential Thinking MCP | Requested by repo instructions but not available in this Codex session; planning, reflection, and verification were performed explicitly with the available tools. |
+| Sequential Thinking MCP | Requested by repo instructions but not available in this Codex session; planning, reflection, and verification were performed explicitly with available tools. |
 | Morph codebase search | Ran before implementation to inspect existing app routes, login page, AppShell primitives, design-system primitives, CSS, and tests; ran after implementation to inspect shell wiring. |
 | `npx pnpm@10.33.2 test tests/unit/design-system/primitives.test.ts` before implementation | Failed as expected because `EmptyState`, `privateRouteShells`, `privateSidebarSections`, `RouteScaffold`, and `CommandPaletteShell` were missing. |
 | `npx pnpm@10.33.2 test tests/unit/design-system/primitives.test.ts` after implementation | Passed: 1 test file, 7 tests. |

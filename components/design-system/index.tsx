@@ -296,10 +296,10 @@ export type TableProps = HTMLAttributes<HTMLDivElement> & {
   selectedId?: number | string;
 };
 
-export function Table({ className, columns, rows, selectedId, ...props }: TableProps) {
+export function Table({ className, columns, rows, selectedId, "aria-label": ariaLabel, "aria-labelledby": ariaLabelledBy, ...props }: TableProps) {
   return (
     <div className={cn("table-wrap", className)} {...props}>
-      <table className="table">
+      <table aria-label={ariaLabel} aria-labelledby={ariaLabelledBy} className="table">
         <thead>
           <tr>
             {columns.map((column) => (

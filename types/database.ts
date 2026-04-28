@@ -685,7 +685,23 @@ export type Database = {
       profile_audits: Table<ProfileAuditRow>;
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      creatoros_update_blog_with_version: {
+        Args: {
+          p_blog_id: Uuid;
+          p_change_reason: Nullable<string>;
+          p_create_version: boolean;
+          p_created_by: string;
+          p_metadata: Json;
+          p_model: Nullable<string>;
+          p_payload: Json;
+          p_prompt_version: Nullable<string>;
+          p_provider: Nullable<string>;
+          p_user_id: Uuid;
+        };
+        Returns: BlogPostRow;
+      };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };

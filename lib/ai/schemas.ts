@@ -193,7 +193,7 @@ export const seoMetadataOutputSchema = z.object({
 
 export const blogRepurposingOutputSchema = z.object({
   originality_notes: z.array(nonEmptyString),
-  posts: z.array(generatedDraftSchema),
+  posts: z.array(generatedDraftSchema).min(1),
   thread: threadWriterOutputSchema,
 });
 

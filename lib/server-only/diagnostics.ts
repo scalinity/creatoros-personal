@@ -29,7 +29,11 @@ export type OperationalDiagnostics = {
   env: EnvDiagnostics;
   groups: DiagnosticGroup[];
   overall: Exclude<DiagnosticStatus, "scaffolded">;
-  phase: "08-settings-diagnostics-env-security" | "11-ai-foundation-prompt-registry-structured-outputs" | "13-voice-modeling-and-embeddings-foundation";
+  phase:
+    | "08-settings-diagnostics-env-security"
+    | "11-ai-foundation-prompt-registry-structured-outputs"
+    | "13-voice-modeling-and-embeddings-foundation"
+    | "14-blog-system";
   service: "creatoros-personal";
 };
 
@@ -184,7 +188,7 @@ export function getOperationalDiagnostics(source: NodeJS.ProcessEnv | EnvSource 
     env,
     groups,
     overall,
-    phase: "13-voice-modeling-and-embeddings-foundation",
+    phase: "14-blog-system",
     service: "creatoros-personal",
   };
 }
