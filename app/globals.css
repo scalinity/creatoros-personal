@@ -2117,14 +2117,18 @@ h6 {
   grid-column: 1 / -1;
 }
 
+/* SCA-478 (C-8): the previous --color-* and --font-size-* tokens were never
+   defined — token naming in :root uses --rule-* / --ink-* / --text-* /
+   --accent-*. The voice-profile panel was silently rendering with `initial`
+   for these properties. */
 .voice-profile-card .key-value-row,
 .voice-profile-summary .key-value-row {
-  border-color: var(--color-border-subtle);
+  border-color: var(--rule-hairline);
 }
 
 .voice-profile-example {
-  border-inline-start: 1px solid var(--color-accent);
-  color: var(--color-text-primary);
+  border-inline-start: 1px solid var(--accent-vermillion);
+  color: var(--ink-primary);
   margin: 0;
   padding-inline-start: var(--space-3);
 }
@@ -2138,8 +2142,8 @@ h6 {
 }
 
 .voice-profile-example footer {
-  color: var(--color-text-muted);
-  font-size: var(--font-size-xs);
+  color: var(--ink-tertiary);
+  font-size: var(--text-xs);
   margin-block-start: var(--space-2);
 }
 
