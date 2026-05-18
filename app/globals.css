@@ -10,8 +10,13 @@
   --bg-inset: oklch(0.14 0.012 60);
   --ink-primary: oklch(0.94 0.015 80);
   --ink-secondary: oklch(0.78 0.015 80);
-  --ink-tertiary: oklch(0.58 0.012 80);
-  --ink-muted: oklch(0.42 0.01 80);
+  /* SCA-530 (S-24): bumped --ink-tertiary L from 0.58→0.72 and --ink-muted
+     L from 0.42→0.58 against the dark canvas at L=0.18. Prior contrast
+     was ~3:1 — borderline WCAG AA for small text. New ratios target
+     4.5:1+ for body and 3:1+ for non-text UI. Used for placeholder
+     text, score ticks, sidebar labels, command-palette group labels. */
+  --ink-tertiary: oklch(0.72 0.012 80);
+  --ink-muted: oklch(0.58 0.01 80);
   --rule-hairline: oklch(0.32 0.01 60);
   --rule-strong: oklch(0.42 0.01 60);
   --accent-vermillion: oklch(0.65 0.18 35);
@@ -376,6 +381,17 @@ h6 {
 .field-input:focus {
   border-bottom: var(--border-accent);
   padding-bottom: calc(var(--space-2) - 1px);
+}
+
+/* SCA-529 (S-23): keyboard focus indicator. The 1px vermillion border-
+   bottom alone fails WCAG 2.4.11 (focus appearance) — the prior
+   outline:none overrode the global :focus-visible. Re-apply a 2px
+   outline scoped to .field-input on keyboard focus so the indicator
+   meets contrast and thickness requirements. Mouse focus still
+   shows only the border-bottom thanks to :focus-visible specificity. */
+.field-input:focus-visible {
+  outline: 2px solid var(--accent-vermillion);
+  outline-offset: 1px;
 }
 
 .field-input::placeholder {
