@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
-test("private login form renders without public onboarding", async ({ page }) => {
+// SCA-540 (S-34): @ui tag routes this spec to the chromium project only.
+test("private login form renders without public onboarding @ui", async ({ page }) => {
   await page.goto("/login");
 
   await expect(page.getByRole("heading", { name: "CreatorOS Personal" })).toBeVisible();

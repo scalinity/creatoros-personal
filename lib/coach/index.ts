@@ -21,6 +21,27 @@ import type {
   VoiceProfileRow,
 } from "@/types/database";
 
+// =============================================================================
+// SCA-509 (S-3): lib/coach/index.ts is the AI coach entry point. The file is
+// large because it bundles several cooperating concerns:
+//
+//   1. Domain types & rowTo* adapters (CoachEvidence, CoachReport, CoachContext).
+//   2. Source-count probes (active campaigns, experiments, voice profiles,
+//      owner posts, blogs, ideas, drafts).
+//   3. Operating-evidence loaders (voice, campaign, experiment, publishing,
+//      published, blog) + retrieval merging.
+//   4. Context packet building (buildCoachContext, dedupe, fallback packets).
+//   5. Coach chat workflow (prompt input, structured output, persistence,
+//      audit, retrieval mode reporting).
+//   6. Playbook generation (history playbook prompt, structured output).
+//   7. Evidence citation sanitization (citationMap, sanitizeCitations against
+//      allowedEvidence set; filtered-count logging).
+//   8. Workspace loaders (filters, listings, notice text).
+//
+// Per SCA-526 (S-20): no line numbers in the section names — they drift on
+// every edit. Section names alone navigate the file via grep.
+// =============================================================================
+
 const PHASE = "19-coach-retrieval-and-content-playbooks";
 const maxContextPackets = 18;
 

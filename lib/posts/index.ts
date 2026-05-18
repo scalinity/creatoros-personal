@@ -24,6 +24,25 @@ import type { Database, Json, PostRow } from "@/types/database";
 
 import type { PostHistoryAggregates, PostHistoryFilters, PostHistoryPost, PostHistorySort } from "./types";
 
+// =============================================================================
+// SCA-509 (S-3): lib/posts/index.ts is the posts entry point. The file is
+// large because it bundles several cooperating concerns:
+//
+//   1. Domain types & rowTo* adapters (PostHistoryPost, ScoreBundle,
+//      PostMetricUpdateInput).
+//   2. Manual import + parsing (createManualPost, persistImportedPosts,
+//      insert/update reconciliation, import-job lifecycle).
+//   3. Metric snapshots (insertSnapshot append-only writes per import source).
+//   4. Scoring integration (quality, engagement, virality, recency-adjusted
+//      scoring via lib/scoring helpers).
+//   5. Metric editing (updatePostMetrics + changedFields audit).
+//   6. Workspace loaders (filterPosts, sortPosts, aggregatesForPosts,
+//      loadPostHistory with filters/sort).
+//
+// Per SCA-526 (S-20): no line numbers in the section names — they drift on
+// every edit. Section names alone navigate the file via grep.
+// =============================================================================
+
 type Supabase = SupabaseClient<Database>;
 
 type ScoreBundle = {

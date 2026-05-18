@@ -21,6 +21,22 @@ import type {
 } from "./validation";
 import { normalizeTargetUsername, normalizeXStatusId, parsePastedTargetPosts, parseXStatusUrl, replyGenerationSchema } from "./validation";
 
+// =============================================================================
+// SCA-509 (S-3): lib/reply-guy/index.ts is the reply-guy entry point. The file
+// is large because it bundles several cooperating concerns:
+//
+//   1. Domain types & rowTo* adapters (TargetAccount, TargetPost, ReplyDraft).
+//   2. Target-account loaders (lookup by id/username/platform-post-id).
+//   3. Target-account + target-post import (single + pasted batch parsing).
+//   4. Reply draft generation (AI prompt input, structured output, persistence).
+//   5. Reply draft tracking (copied/used state transitions, audit).
+//   6. Publishing handoff (reply draft -> publishing_drafts state machine).
+//   7. Workspace loaders (filters, listings, audit).
+//
+// Per SCA-526 (S-20): no line numbers in the section names — they drift on
+// every edit. Section names alone navigate the file via grep.
+// =============================================================================
+
 const PHASE = "21-reply-guy-account-research";
 const PROMPT_VERSION = "v1";
 

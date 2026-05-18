@@ -28,9 +28,24 @@ export default defineConfig({
     baseURL,
     trace: "on-first-retry",
   },
+  // SCA-540 (S-34): split the suite into @api (request-only) and @ui
+  // (chromium) projects. Tests tag themselves via @api / @ui in the
+  // describe / test title, and grep includes route them to the right
+  // project. @api specs hit the live dev server but never spin up a
+  // browser, so they're significantly cheaper than the full chromium
+  // path. The webServer is shared — both projects need Next running
+  // because @api specs exercise route handlers, not pure unit code.
   projects: [
     {
+      name: "api",
+      grep: /@api/,
+      use: {
+        baseURL,
+      },
+    },
+    {
       name: "chromium",
+      grep: /@ui/,
       use: { ...devices["Desktop Chrome"] },
     },
   ],

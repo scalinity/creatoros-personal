@@ -71,6 +71,25 @@ export type DecryptedXConnection = SanitizedXConnection & {
 
 type StoreClient = SupabaseClient<Database>;
 
+// =============================================================================
+// SCA-509 (S-3): lib/x/oauth.ts is the X OAuth entry point. The file is large
+// because it bundles several cooperating concerns:
+//
+//   1. Types & capabilities derivation (scopes -> capability flags + overrides).
+//   2. OAuth start (PKCE verifier/challenge, state, authorization URL builder).
+//   3. OAuth callback (token exchange, payload validation, expiry parsing).
+//   4. Token refresh (refreshStoredXConnection, transient vs invalid_grant
+//      classification, AAD re-encryption on success).
+//   5. Token storage / decrypt / sanitization (AAD versioning, legacy purposes,
+//      sanitizeXConnection for browser-safe rows).
+//   6. Connection state transitions (markXConnectionDegraded /
+//      markXConnectionRevoked, message scrubbing).
+//   7. Disconnect + revoke (X /oauth2/revoke for access + refresh, then wipe).
+//
+// Per SCA-526 (S-20): no line numbers in the section names — they drift on
+// every edit. Section names alone navigate the file via grep.
+// =============================================================================
+
 const X_AUTHORIZE_ENDPOINT = "https://x.com/i/oauth2/authorize";
 const X_TOKEN_ENDPOINT = "https://api.x.com/2/oauth2/token";
 const X_REVOKE_ENDPOINT = "https://api.x.com/2/oauth2/revoke";

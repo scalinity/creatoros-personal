@@ -31,7 +31,11 @@ async function expectOk(response: Awaited<ReturnType<APIRequestContext["post"]>>
 
 test.describe.configure({ mode: "serial" });
 
-test.describe("Phase 24 production readiness smoke flows", () => {
+// SCA-540 (S-34): @ui tag routes the smoke flows to the chromium project.
+// They mix Page and APIRequestContext but the Page path drives the smoke
+// coverage; running them under the API-only project would skip the UI
+// assertions that gate phase 24 sign-off.
+test.describe("Phase 24 production readiness smoke flows @ui", () => {
   test("private routes deny anonymous access and dashboard loads with the E2E admin fixture", async ({ page }) => {
     await page.goto("/dashboard");
     await expect(page).toHaveURL(/\/login\?error=/);

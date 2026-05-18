@@ -13,6 +13,22 @@ import type { BlogExportRow, BlogPostRow, BlogVersionRow, Database, Json, PostRo
 
 import type { BlogCreateInput, BlogUpdateInput } from "./validation";
 
+// =============================================================================
+// SCA-509 (S-3): lib/blogs/index.ts is the blog system entry point. The file
+// is large because it bundles several cooperating concerns:
+//
+//   1. Domain types & rowTo* adapters.
+//   2. Blog CRUD (create, update, load workspace/detail).
+//   3. Version + diff helpers (versioning, attribution, change detection).
+//   4. AI workflows (outline, draft, edit suggestions, SEO metadata).
+//   5. Repurposing (blog -> X threads/posts) with structured AI outputs.
+//   6. Exports (markdown, HTML, JSON, MDX) with checksums and filenames.
+//   7. Workspace loaders (filters, listings, detail views).
+//
+// Per SCA-526 (S-20): no line numbers in the section names — they drift on
+// every edit. Section names alone navigate the file via grep.
+// =============================================================================
+
 const PHASE = "14-blog-system";
 const BLOG_DRAFT_PROMPT_ID = "blog-draft.v1";
 const BLOG_EDITOR_PROMPT_ID = "blog-editor.v1";
