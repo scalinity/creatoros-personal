@@ -2,7 +2,7 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 
-import { redactAuditMetadata } from "@/lib/audit/redaction";
+import { redactAuditMetadata, redactAuditString } from "@/lib/audit/redaction";
 import type { AdminContext } from "@/lib/auth/admin";
 import type { Json } from "@/types/database";
 
@@ -176,11 +176,16 @@ export async function completeAiJob(
   }
 
   try {
+    // SCA-480 (W-1): redact + truncate before persisting. Provider errors splice
+    // upstream response bodies verbatim ("Anthropic provider unavailable: ...")
+    // and can echo token fragments. Other row fields are already redacted; this
+    // closes the only unscrubbed write path.
+    const redactedError = input.error ? redactAuditString(input.error).slice(0, 500) : null;
     const { error } = await admin.supabase
       .from("ai_jobs")
       .update({
         completed_at: new Date().toISOString(),
-        error: input.error ?? null,
+        error: redactedError,
         status: input.status,
       })
       .eq("id", input.jobId)
@@ -229,11 +234,14 @@ export async function recordPromptRun(
     const inputTokens = input.usage?.input_tokens ?? null;
     const outputTokens = input.usage?.output_tokens ?? null;
     const totalTokens = input.usage?.total_tokens ?? (inputTokens !== null && outputTokens !== null ? inputTokens + outputTokens : null);
+    // SCA-480 (W-1): redact + truncate provider error before persisting to
+    // prompt_runs.error (granted SELECT to authenticated).
+    const redactedPromptError = input.error ? redactAuditString(input.error).slice(0, 500) : null;
     const { data, error } = await admin.supabase
       .from("prompt_runs")
       .insert({
         ai_job_id: input.aiJobId ?? null,
-        error: input.error ?? null,
+        error: redactedPromptError,
         estimated_cost_usd: input.estimatedCostUsd ?? null,
         input_hash: inputHash,
         input_redacted: redacted.input,

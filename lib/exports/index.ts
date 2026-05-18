@@ -68,10 +68,15 @@ type ExportQueryClient = {
 };
 
 const logExcludedTables = new Set<FullProjectSchemaTable>(["audit_logs", "prompt_runs"]);
+// SCA-480 (W-1): include ai_jobs.error and prompt_runs.error so any export
+// path inherits the same scrub. The values are already redacted at write
+// time, but adding the columns here is belt-and-suspenders for any future
+// branch that may bypass redactAuditMetadata.
 const knownSensitiveColumns = new Set([
   "actor_email",
   "encrypted_access_token",
   "encrypted_refresh_token",
+  "error",
   "input_redacted",
   "output_redacted",
   "token_hash",
