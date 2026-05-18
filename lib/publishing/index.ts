@@ -652,7 +652,7 @@ async function loadGeneratedOutputSource(admin: AdminContext, sourceId: string) 
     .is("deleted_at", null)
     .single();
 
-  if (error || !data) throw new Error(`Generated output source not found: ${error?.message ?? "missing row"}`);
+  if (error || !data) throw new PublishingNotFoundError("Generated output source", `Generated output source not found: ${error?.message ?? "missing row"}`);
   return data;
 }
 
@@ -665,7 +665,7 @@ async function loadContentIdeaSource(admin: AdminContext, sourceId: string) {
     .is("deleted_at", null)
     .single();
 
-  if (error || !data) throw new Error(`Content idea source not found: ${error?.message ?? "missing row"}`);
+  if (error || !data) throw new PublishingNotFoundError("Content idea source", `Content idea source not found: ${error?.message ?? "missing row"}`);
   return data;
 }
 
@@ -678,7 +678,7 @@ async function loadBlogPostSource(admin: AdminContext, sourceId: string) {
     .is("deleted_at", null)
     .single();
 
-  if (error || !data) throw new Error(`Blog source not found: ${error?.message ?? "missing row"}`);
+  if (error || !data) throw new PublishingNotFoundError("Blog source", `Blog source not found: ${error?.message ?? "missing row"}`);
   return data;
 }
 
@@ -691,7 +691,7 @@ async function loadPostSource(admin: AdminContext, sourceId: string) {
     .is("deleted_at", null)
     .single();
 
-  if (error || !data) throw new Error(`Post source not found: ${error?.message ?? "missing row"}`);
+  if (error || !data) throw new PublishingNotFoundError("Post source", `Post source not found: ${error?.message ?? "missing row"}`);
   return data;
 }
 
@@ -799,7 +799,7 @@ async function loadDraft(admin: AdminContext, id: string) {
     .single();
 
   if (error || !data) {
-    throw new Error(`Publishing draft not found: ${error?.message ?? "missing row"}`);
+    throw new PublishingNotFoundError("Publishing draft", `Publishing draft not found: ${error?.message ?? "missing row"}`);
   }
 
   return rowToDraft(data);
@@ -950,8 +950,11 @@ function guardrailBlocksApproval(checks: { duplicateCheck: Record<string, Json>;
 export async function approvePublishingDraft(admin: AdminContext, input: PublishingDraftApprovalServiceInput) {
   const draft = await loadDraft(admin, input.id);
 
+  // SCA-475 (C-5): typed XPublishingGuardError so the API envelope can return
+  // 409 with a structured code instead of falling through to the 500 path or
+  // matching message substrings.
   if (["archived", "canceled", "published", "publishing"].includes(draft.status)) {
-    throw new Error(`Publishing draft in ${draft.status} status cannot be approved.`);
+    throw new XPublishingGuardError("status_conflict", `Publishing draft in ${draft.status} status cannot be approved.`);
   }
 
   const checks = await runDraftGuardrails(admin, draft, draft.id);
@@ -959,14 +962,14 @@ export async function approvePublishingDraft(admin: AdminContext, input: Publish
   const overrideReason = input.duplicateOverrideReason ?? null;
 
   if (guardrailBlocksApproval(checks, overrideReason)) {
-    throw new Error("Publishing draft requires an explicit owner override before approval.");
+    throw new XPublishingGuardError("status_conflict", "Publishing draft requires an explicit owner override before approval.");
   }
 
   const connection = await loadXConnectionStatus(admin);
   const payloadHash = computePublishingPayloadHash(draft, connection);
 
   if (input.payloadHash && input.payloadHash !== payloadHash) {
-    throw new Error("Approval payload hash does not match the current draft payload.");
+    throw new XPublishingGuardError("payload_mismatch", "Approval payload hash does not match the current draft payload.");
   }
 
   const approvedAt = nowIso();
@@ -1033,7 +1036,8 @@ export async function scheduleApprovedDraft(admin: AdminContext, input: Publishi
   const draft = await loadDraft(admin, input.id);
 
   if (draft.status !== "approved") {
-    throw new Error("Publishing draft must be approved before scheduling.");
+    // SCA-475 (C-5): typed guard so the schedule route surfaces 409, not 500.
+    throw new XPublishingGuardError("approval_required", "Publishing draft must be approved before scheduling.");
   }
 
   const connection = await loadXConnectionStatus(admin);
@@ -1178,7 +1182,7 @@ export async function runDryRunPublishingJob(admin: AdminContext, input: Publish
   assertApprovalPayload(draft, input.payloadHash ?? null, connection);
 
   const payloadHash = draft.approvalPayloadHash;
-  if (!payloadHash) throw new Error("Approved payload hash is missing.");
+  if (!payloadHash) throw new XPublishingGuardError("approval_required", "Approved payload hash is missing.");
 
   const startedAt = nowIso();
   const failed = dryRunShouldFail(draft);
@@ -1279,6 +1283,16 @@ export class XPublishingGuardError extends Error {
   ) {
     super(message);
     this.name = "XPublishingGuardError";
+  }
+}
+
+// SCA-475 (C-5): typed sentinel for "publishing draft / source not found" so
+// the publishing/_utils.ts and x/publish/_utils.ts response helpers can map
+// to 404 via instanceof rather than substring-matching on error.message.
+export class PublishingNotFoundError extends Error {
+  constructor(readonly entity: string, message?: string) {
+    super(message ?? `${entity} not found.`);
+    this.name = "PublishingNotFoundError";
   }
 }
 

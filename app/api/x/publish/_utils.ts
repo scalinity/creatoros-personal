@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 
 import { requireAdminForRoute } from "@/lib/auth/admin";
-import { runXPublishingJob } from "@/lib/publishing";
+import { PublishingNotFoundError, runXPublishingJob, XPublishingGuardError } from "@/lib/publishing";
 import { createFixedWindowRateLimiter, rateLimitHeaders } from "@/lib/rate-limit";
 import { xPublishSchema } from "@/lib/x/validation";
 
@@ -12,13 +12,34 @@ const publishLimiter = createFixedWindowRateLimiter({
   windowMs: 60 * 60 * 1_000,
 });
 
-function xPublishErrorResponse(error: unknown, headers?: Record<string, string>) {
-  const message = error instanceof Error ? error.message.toLowerCase() : "";
+// SCA-475 (C-5): typed-error classification mirrors app/api/publishing/_utils.ts
+// publishingErrorResponse. No more substring matching on error.message — the
+// prior approach would reflect a future i18n / reworded guard message as a
+// misleading 500, and matched unrelated supabase errors that happened to
+// contain "approved"/"scope"/"capability".
+const X_PUBLISH_GUARD_CODE_TO_MESSAGE: Record<string, string> = {
+  approval_required: "X publish request requires owner approval.",
+  capability_disabled: "X publish capability is disabled.",
+  confirmation_required: "X publish request requires explicit confirmation.",
+  media_asset_missing: "X publish request references missing media.",
+  media_upload_not_configured: "X publish media upload is not configured.",
+  missing_scope: "X publish scope is missing.",
+  payload_mismatch: "X publish payload hash is stale; re-approve to retry.",
+  status_conflict: "X publish draft is not in a publishable state.",
+  validation_error: "X publish request failed validation.",
+  x_connection_unavailable: "X publish connection is unavailable.",
+};
 
-  if (message.includes("not found")) return errorResponse("not_found", "X publish draft was not found.", 404, headers);
-  if (message.includes("scope")) return errorResponse("missing_scope", "X publish scope is missing.", 409, headers);
-  if (message.includes("capability")) return errorResponse("capability_disabled", "X publish capability is disabled.", 409, headers);
-  if (message.includes("approved") || message.includes("payload hash") || message.includes("route")) return errorResponse("conflict", "X publish request failed safety checks.", 409, headers);
+function xPublishErrorResponse(error: unknown, headers?: Record<string, string>) {
+  if (error instanceof PublishingNotFoundError) {
+    return errorResponse("not_found", "X publish draft was not found.", 404, headers);
+  }
+
+  if (error instanceof XPublishingGuardError) {
+    const message = X_PUBLISH_GUARD_CODE_TO_MESSAGE[error.code] ?? "X publish request failed safety checks.";
+    return errorResponse(error.code, message, 409, headers);
+  }
+
   return errorResponse("internal_error", "X publish request could not be completed.", 500, headers);
 }
 

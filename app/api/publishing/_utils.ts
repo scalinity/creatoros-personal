@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { NextResponse, type NextRequest } from "next/server";
 
-import { XPublishingGuardError } from "@/lib/publishing";
+import { PublishingNotFoundError, XPublishingGuardError } from "@/lib/publishing";
 
 export function envelope(data: unknown, headers?: Record<string, string>) {
   return NextResponse.json({ data, error: null, ok: true, request_id: randomUUID() }, { headers });
@@ -47,11 +47,9 @@ export function publishingErrorResponse(error: unknown, fallbackMessage: string,
     }
   }
 
-  const message = error instanceof Error ? error.message : "";
-  // Backward-compat fall-through for not-found errors thrown as plain Error.
-  // Specific 'not found' messages still map to 404 so existing callers do not
-  // regress; the classification above always wins for guard-typed errors.
-  if (message.toLowerCase().includes("not found")) {
+  // SCA-475 (C-5): typed not-found sentinel — no more substring matching on
+  // error.message. Plain Error throws now fall through to 500 as intended.
+  if (error instanceof PublishingNotFoundError) {
     return errorResponse("not_found", fallbackMessage, 404, headers);
   }
 
