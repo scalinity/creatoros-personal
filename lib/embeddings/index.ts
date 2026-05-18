@@ -450,24 +450,23 @@ function providerAvailable() {
 }
 
 export async function loadEmbeddingStatus(admin: AdminContext): Promise<EmbeddingStatus> {
-  const { data, error } = await admin.supabase
-    .from("embeddings")
-    .select("*")
-    .eq("user_id", admin.userId)
-    .is("deleted_at", null)
-    .order("updated_at", { ascending: false })
-    .limit(1_000);
+  // SCA-496 (W-17): count + max(updated_at) via RPC instead of pulling
+  // the full vector payload for 1000 rows just to read two scalars.
+  const { data, error } = await admin.supabase.rpc("creatoros_load_embedding_status", {
+    p_user_id: admin.userId,
+  });
 
   if (error) {
     throw new Error(`Failed to load embedding status: ${error.message}`);
   }
 
-  const rows = (data ?? []) as EmbeddingRow[];
-  const lastRefresh = rows[0]?.updated_at ?? rows[0]?.created_at ?? null;
+  const row = (data ?? [])[0] ?? { indexed_count: 0, last_refresh_at: null };
+  const indexedCount = Number(row.indexed_count ?? 0);
+  const lastRefresh = row.last_refresh_at ?? null;
 
   return {
     fallbackAvailable: true,
-    indexedCount: rows.length,
+    indexedCount,
     lastRefreshLabel: lastRefresh,
     providerAvailable: providerAvailable(),
   };

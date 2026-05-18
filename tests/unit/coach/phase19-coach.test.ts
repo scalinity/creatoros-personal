@@ -138,6 +138,67 @@ function createSupabaseMock(seedRows: Record<string, TableRow[]> = {}) {
           },
         };
       },
+      // SCA-496 (W-17): retrieval moved to server-side RPC over the
+      // halfvec HNSW index. The mock parses the halfvec text and
+      // computes cosine in JS so the test mirrors production semantics.
+      rpc(name: string, args: Record<string, unknown>) {
+        if (name === "creatoros_retrieve_embeddings_by_similarity") {
+          const queryEmbedding = JSON.parse(args.p_query_embedding as string) as number[];
+          const types = (args.p_entity_types as null | string[]) ?? null;
+          const limit = Math.max(Number(args.p_limit ?? 12), 1);
+          const dot = (a: number[], b: number[]) => {
+            const n = Math.min(a.length, b.length);
+            let acc = 0;
+            for (let i = 0; i < n; i += 1) acc += (a[i] ?? 0) * (b[i] ?? 0);
+            return acc;
+          };
+          const norm = (v: number[]) => Math.sqrt(v.reduce((sum, x) => sum + x * x, 0));
+          const queryNorm = norm(queryEmbedding);
+          const eligible = (rows.embeddings ?? []).filter((row) => {
+            if (row.user_id !== args.p_user_id) return false;
+            if (row.deleted_at) return false;
+            if (types && types.length > 0 && !types.includes(row.entity_type as string)) return false;
+            return true;
+          });
+          const scored = eligible
+            .map((row) => {
+              const embedding = Array.isArray(row.embedding) ? (row.embedding as number[]) : [];
+              const eNorm = norm(embedding);
+              const score = queryNorm === 0 || eNorm === 0 ? 0 : dot(queryEmbedding, embedding) / (queryNorm * eNorm);
+              return { row, score };
+            })
+            .sort((left, right) => right.score - left.score)
+            .slice(0, limit)
+            .map(({ row, score }) => ({
+              content: row.content,
+              created_at: row.created_at,
+              embedding_model: row.embedding_model,
+              entity_id: row.entity_id,
+              entity_type: row.entity_type,
+              id: row.id,
+              metadata: row.metadata,
+              score,
+              updated_at: row.updated_at,
+              user_id: row.user_id,
+            }));
+          return Promise.resolve({ data: scored, error: null });
+        }
+        if (name === "creatoros_load_embedding_status") {
+          const eligible = (rows.embeddings ?? []).filter(
+            (row) => row.user_id === args.p_user_id && !row.deleted_at,
+          );
+          const lastRefresh = eligible
+            .map((row) => (row.updated_at as null | string) ?? (row.created_at as null | string))
+            .filter((value): value is string => typeof value === "string")
+            .sort()
+            .pop() ?? null;
+          return Promise.resolve({
+            data: [{ indexed_count: eligible.length, last_refresh_at: lastRefresh }],
+            error: null,
+          });
+        }
+        return Promise.resolve({ data: null, error: { message: `unhandled rpc ${name}` } });
+      },
     },
   };
 }

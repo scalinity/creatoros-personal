@@ -173,29 +173,53 @@ function timestampFromMetadata(metadata: EmbeddingRow["metadata"]) {
   return typeof timestamp === "string" ? timestamp : null;
 }
 
+// SCA-496 (W-17): convert a float32 query embedding into the halfvec text
+// literal Postgres accepts. Format is the same `[a,b,c,...]` that
+// pgvector reads for both vector and halfvec.
+function formatEmbeddingAsHalfvec(values: number[]): string {
+  return `[${values.join(",")}]`;
+}
+
 async function embeddingRetrieval(admin: AdminContext, input: RetrievalQuery, provider: AiProvider): Promise<RetrievalResult | null> {
-  const { data, error } = await admin.supabase
-    .from("embeddings")
-    .select("*")
-    .eq("user_id", admin.userId)
-    .is("deleted_at", null)
-    .order("updated_at", { ascending: false })
-    .limit(500);
+  // SCA-496 (W-17): server-side top-k similarity. Replaces the prior
+  // `select(*).limit(500)` + JS cosine loop that pulled ~12 MB and ran
+  // ~1.5M FP ops per query. The RPC consults the halfvec HNSW index
+  // added in phase 26 (M-16) and ships only top-k rows back to Node
+  // — the embedding vectors themselves never cross the wire.
+  const model = (getAiRuntimeConfig().embeddingModel ?? "").toString();
+  const response = await provider.embed({ input: input.query, model });
+  const queryEmbedding = response.embeddings[0];
+  if (!queryEmbedding) return null;
+
+  const limit = input.limit ?? defaultLimit;
+  const { data, error } = await admin.supabase.rpc("creatoros_retrieve_embeddings_by_similarity", {
+    p_entity_types: input.entityTypes ?? null,
+    // Over-fetch by 2× so model-mismatched rows can be filtered without starving the result.
+    p_limit: Math.max(limit * 2, limit),
+    p_query_embedding: formatEmbeddingAsHalfvec(queryEmbedding) as never,
+    p_user_id: admin.userId,
+  });
 
   if (error) {
     throw new Error(`Failed to load embeddings for retrieval: ${error.message}`);
   }
 
-  const rows = ((data ?? []) as EmbeddingRow[]).filter((row) => matchesEntityType(row, input.entityTypes));
-  if (rows.length === 0) return null;
+  const rows = (data ?? []) as Array<{
+    content: string;
+    created_at: string;
+    embedding_model: string;
+    entity_id: string;
+    entity_type: string;
+    id: string;
+    metadata: EmbeddingRow["metadata"];
+    score: number;
+    updated_at: null | string;
+    user_id: string;
+  }>;
 
-  const model = embeddingModelForRows(rows);
-  const response = await provider.embed({ input: input.query, model });
-  const queryEmbedding = response.embeddings[0];
-
-  if (!queryEmbedding) return null;
-
-  const compatibleRows = rows.filter((row) => isCompatibleEmbeddingRow(row, model, queryEmbedding.length));
+  // Drop rows whose embedding model doesn't match the current model
+  // — their score is meaningless under a different embedding space.
+  const compatibleRows = rows.filter((row) => row.embedding_model === model);
   if (compatibleRows.length === 0) return null;
 
   const items = compatibleRows
@@ -204,17 +228,15 @@ async function embeddingRetrieval(admin: AdminContext, input: RetrievalQuery, pr
       metrics: metricsFromMetadata(row.metadata),
       record_id: row.entity_id,
       record_type: row.entity_type as EmbeddableEntityType,
-      score: cosineSimilarity(queryEmbedding, row.embedding),
+      score: row.score,
       snippet: snippetFor(row.content, queryTokens(input.query)),
       timestamp: timestampFromMetadata(row.metadata) ?? row.updated_at ?? row.created_at,
       user_id: row.user_id,
     }))
     .filter((item) => item.score > 0)
-    .sort((left, right) => right.score - left.score)
-    .slice(0, input.limit ?? defaultLimit);
+    .slice(0, limit);
 
   if (items.length === 0) return null;
-
   return { items, mode: "embedding" };
 }
 

@@ -768,6 +768,34 @@ export type Database = {
         };
         Returns: VoiceProfileRow;
       };
+      // SCA-496 (W-17): server-side top-k cosine similarity over
+      // public.embeddings via the halfvec HNSW index. The query embedding
+      // is converted to halfvec text format on the caller; the RPC never
+      // ships the row embedding back to the client.
+      creatoros_retrieve_embeddings_by_similarity: {
+        Args: {
+          p_entity_types: Nullable<string[]>;
+          p_limit: number;
+          p_query_embedding: string;
+          p_user_id: Uuid;
+        };
+        Returns: Array<{
+          content: string;
+          created_at: string;
+          embedding_model: string;
+          entity_id: string;
+          entity_type: string;
+          id: Uuid;
+          metadata: Json;
+          score: number;
+          updated_at: Nullable<string>;
+          user_id: Uuid;
+        }>;
+      };
+      creatoros_load_embedding_status: {
+        Args: { p_user_id: Uuid };
+        Returns: Array<{ indexed_count: number; last_refresh_at: Nullable<string> }>;
+      };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
