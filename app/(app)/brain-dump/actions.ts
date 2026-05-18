@@ -7,17 +7,15 @@ import { rethrowIfRedirect } from "@/lib/server-only/action-redirect";
 import { transformBrainDump, saveBrainDumpGeneratedOutput } from "@/lib/brain-dumps";
 import { brainDumpInputSchema, brainDumpSaveOutputSchema } from "@/lib/brain-dumps/validation";
 import { formDataToContentRecord } from "@/lib/content/validation";
-import { createFixedWindowRateLimiter, MemoryRateLimitStore } from "@/lib/rate-limit";
+import { createFixedWindowRateLimiter } from "@/lib/rate-limit";
 
 const transformLimiter = createFixedWindowRateLimiter({
   limit: 12,
-  store: new MemoryRateLimitStore(),
   windowMs: 60 * 60 * 1_000,
 });
 
 const saveLimiter = createFixedWindowRateLimiter({
   limit: 160,
-  store: new MemoryRateLimitStore(),
   windowMs: 60 * 60 * 1_000,
 });
 

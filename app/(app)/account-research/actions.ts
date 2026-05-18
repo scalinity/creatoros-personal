@@ -6,17 +6,15 @@ import { requireAdmin } from "@/lib/auth/admin";
 import { rethrowIfRedirect } from "@/lib/server-only/action-redirect";
 import { runAccountResearch, saveAccountResearchIdea } from "@/lib/account-research";
 import { accountResearchIdeaSaveSchema, accountResearchInputSchema, formDataToAccountResearchRecord } from "@/lib/account-research/validation";
-import { createFixedWindowRateLimiter, MemoryRateLimitStore } from "@/lib/rate-limit";
+import { createFixedWindowRateLimiter } from "@/lib/rate-limit";
 
 const researchLimiter = createFixedWindowRateLimiter({
   limit: 20,
-  store: new MemoryRateLimitStore(),
   windowMs: 60 * 60 * 1_000,
 });
 
 const ideaLimiter = createFixedWindowRateLimiter({
   limit: 60,
-  store: new MemoryRateLimitStore(),
   windowMs: 60 * 60 * 1_000,
 });
 

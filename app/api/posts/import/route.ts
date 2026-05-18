@@ -6,13 +6,12 @@ import { requireAdminForRoute } from "@/lib/auth/admin";
 import { parseManualPostInput, parsePostsCsv, parsePostsJson } from "@/lib/imports";
 import { createManualPost, persistImportedPosts } from "@/lib/posts";
 import { postsImportRouteSchema } from "@/lib/posts/validation";
-import { createFixedWindowRateLimiter, MemoryRateLimitStore, rateLimitHeaders } from "@/lib/rate-limit";
+import { createFixedWindowRateLimiter, rateLimitHeaders } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
 const importLimiter = createFixedWindowRateLimiter({
   limit: 10,
-  store: new MemoryRateLimitStore(),
   windowMs: 60 * 1_000,
 });
 

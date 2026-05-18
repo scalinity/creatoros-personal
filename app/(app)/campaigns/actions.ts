@@ -6,17 +6,15 @@ import { requireAdmin } from "@/lib/auth/admin";
 import { rethrowIfRedirect } from "@/lib/server-only/action-redirect";
 import { addCampaignItem, createCampaign, createContentPillar, createGrowthGoal, runMonthlyGrowthReview, runWeeklyGrowthReview } from "@/lib/growth";
 import { campaignCreateSchema, campaignItemCreateSchema, formDataToGrowthRecord, goalCreateSchema, monthlyReviewSchema, pillarCreateSchema, weeklyReviewSchema } from "@/lib/growth/validation";
-import { createFixedWindowRateLimiter, MemoryRateLimitStore } from "@/lib/rate-limit";
+import { createFixedWindowRateLimiter } from "@/lib/rate-limit";
 
 const mutationLimiter = createFixedWindowRateLimiter({
   limit: 80,
-  store: new MemoryRateLimitStore(),
   windowMs: 60 * 60 * 1_000,
 });
 
 const aiLimiter = createFixedWindowRateLimiter({
   limit: 20,
-  store: new MemoryRateLimitStore(),
   windowMs: 60 * 60 * 1_000,
 });
 

@@ -2,14 +2,13 @@ import type { NextRequest } from "next/server";
 
 import { requireAdminForRoute } from "@/lib/auth/admin";
 import { runXPublishingJob } from "@/lib/publishing";
-import { createFixedWindowRateLimiter, MemoryRateLimitStore, rateLimitHeaders } from "@/lib/rate-limit";
+import { createFixedWindowRateLimiter, rateLimitHeaders } from "@/lib/rate-limit";
 import { xPublishSchema } from "@/lib/x/validation";
 
 import { envelope, errorResponse, readJsonBody } from "../_utils";
 
 const publishLimiter = createFixedWindowRateLimiter({
   limit: 10,
-  store: new MemoryRateLimitStore(),
   windowMs: 60 * 60 * 1_000,
 });
 

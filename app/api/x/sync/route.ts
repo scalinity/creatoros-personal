@@ -1,7 +1,7 @@
 import { type NextRequest } from "next/server";
 
 import { requireAdminForRoute } from "@/lib/auth/admin";
-import { createFixedWindowRateLimiter, MemoryRateLimitStore, rateLimitHeaders } from "@/lib/rate-limit";
+import { createFixedWindowRateLimiter, rateLimitHeaders } from "@/lib/rate-limit";
 import { runXReadSync } from "@/lib/x/sync";
 import { xReadSyncSchema } from "@/lib/x/validation";
 
@@ -11,7 +11,6 @@ export const dynamic = "force-dynamic";
 
 const syncLimiter = createFixedWindowRateLimiter({
   limit: 5,
-  store: new MemoryRateLimitStore(),
   windowMs: 60 * 60 * 1_000,
 });
 

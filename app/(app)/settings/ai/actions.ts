@@ -5,18 +5,16 @@ import { redirect } from "next/navigation";
 import { refreshEmbeddingsForUser } from "@/lib/embeddings";
 import { requireAdmin } from "@/lib/auth/admin";
 import { rethrowIfRedirect } from "@/lib/server-only/action-redirect";
-import { createFixedWindowRateLimiter, MemoryRateLimitStore } from "@/lib/rate-limit";
+import { createFixedWindowRateLimiter } from "@/lib/rate-limit";
 import { generateVoiceProfile } from "@/lib/voice";
 
 const voiceLimiter = createFixedWindowRateLimiter({
   limit: 5,
-  store: new MemoryRateLimitStore(),
   windowMs: 24 * 60 * 60 * 1_000,
 });
 
 const embeddingLimiter = createFixedWindowRateLimiter({
   limit: 10,
-  store: new MemoryRateLimitStore(),
   windowMs: 24 * 60 * 60 * 1_000,
 });
 

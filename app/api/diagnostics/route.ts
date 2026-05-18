@@ -3,14 +3,13 @@ import { randomUUID } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 
 import { requireAdminForRoute } from "@/lib/auth/admin";
-import { createFixedWindowRateLimiter, MemoryRateLimitStore, rateLimitHeaders } from "@/lib/rate-limit";
+import { createFixedWindowRateLimiter, rateLimitHeaders } from "@/lib/rate-limit";
 import { getOperationalDiagnosticsForAdmin } from "@/lib/server-only/diagnostics";
 
 export const dynamic = "force-dynamic";
 
 const diagnosticsLimiter = createFixedWindowRateLimiter({
   limit: 30,
-  store: new MemoryRateLimitStore(),
   windowMs: 60_000,
 });
 

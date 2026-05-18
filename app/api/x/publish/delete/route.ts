@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 
 import { requireAdminForRoute } from "@/lib/auth/admin";
 import { deleteOwnXPost } from "@/lib/publishing";
-import { createFixedWindowRateLimiter, MemoryRateLimitStore, rateLimitHeaders } from "@/lib/rate-limit";
+import { createFixedWindowRateLimiter, rateLimitHeaders } from "@/lib/rate-limit";
 import { xDeleteOwnPostSchema } from "@/lib/x/validation";
 
 import { envelope, errorResponse, readJsonBody } from "../../_utils";
@@ -11,7 +11,6 @@ export const dynamic = "force-dynamic";
 
 const deleteLimiter = createFixedWindowRateLimiter({
   limit: 5,
-  store: new MemoryRateLimitStore(),
   windowMs: 60 * 60 * 1_000,
 });
 

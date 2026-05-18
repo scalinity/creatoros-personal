@@ -4,20 +4,18 @@ import { redirect } from "next/navigation";
 
 import { requireAdmin } from "@/lib/auth/admin";
 import { rethrowIfRedirect } from "@/lib/server-only/action-redirect";
-import { createFixedWindowRateLimiter, MemoryRateLimitStore } from "@/lib/rate-limit";
+import { createFixedWindowRateLimiter } from "@/lib/rate-limit";
 import { disconnectXConnection } from "@/lib/x/oauth";
 import { runXReadSync } from "@/lib/x/sync";
 import { formDataToXRecord, xDisconnectSchema, xReadSyncSchema } from "@/lib/x/validation";
 
 const xConnectionMutationLimiter = createFixedWindowRateLimiter({
   limit: 10,
-  store: new MemoryRateLimitStore(),
   windowMs: 60_000,
 });
 
 const xSyncLimiter = createFixedWindowRateLimiter({
   limit: 5,
-  store: new MemoryRateLimitStore(),
   windowMs: 60 * 60 * 1_000,
 });
 

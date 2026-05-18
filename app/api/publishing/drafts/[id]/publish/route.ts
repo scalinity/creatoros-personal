@@ -3,7 +3,7 @@ import { NextRequest } from "next/server";
 import { requireAdminForRoute } from "@/lib/auth/admin";
 import { runXPublishingJob } from "@/lib/publishing";
 import { publishingDraftPublishSchema } from "@/lib/publishing/validation";
-import { createFixedWindowRateLimiter, MemoryRateLimitStore, rateLimitHeaders } from "@/lib/rate-limit";
+import { createFixedWindowRateLimiter, rateLimitHeaders } from "@/lib/rate-limit";
 
 import { envelope, errorResponse, publishingErrorResponse, readJsonBody } from "../../../_utils";
 
@@ -11,7 +11,6 @@ export const dynamic = "force-dynamic";
 
 const publishLimiter = createFixedWindowRateLimiter({
   limit: 10,
-  store: new MemoryRateLimitStore(),
   windowMs: 60 * 60 * 1_000,
 });
 

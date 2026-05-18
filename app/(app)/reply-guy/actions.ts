@@ -24,17 +24,15 @@ import {
   targetPostImportSchema,
   targetPostPasteSchema,
 } from "@/lib/reply-guy/validation";
-import { createFixedWindowRateLimiter, MemoryRateLimitStore } from "@/lib/rate-limit";
+import { createFixedWindowRateLimiter } from "@/lib/rate-limit";
 
 const mutationLimiter = createFixedWindowRateLimiter({
   limit: 80,
-  store: new MemoryRateLimitStore(),
   windowMs: 60 * 60 * 1_000,
 });
 
 const aiLimiter = createFixedWindowRateLimiter({
   limit: 30,
-  store: new MemoryRateLimitStore(),
   windowMs: 60 * 60 * 1_000,
 });
 

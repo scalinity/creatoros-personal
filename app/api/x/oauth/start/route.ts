@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { logAuditEvent } from "@/lib/audit";
 import { requireAdminForRoute } from "@/lib/auth/admin";
-import { createFixedWindowRateLimiter, MemoryRateLimitStore, rateLimitHeaders } from "@/lib/rate-limit";
+import { createFixedWindowRateLimiter, rateLimitHeaders } from "@/lib/rate-limit";
 import { buildXAuthorizationUrl, createXCodeChallenge, createXCodeVerifier, createXOAuthState, getOptionalXOAuthConfig } from "@/lib/x/oauth";
 import { persistOAuthState } from "@/lib/x/oauth-state";
 import { xOAuthStartQuerySchema } from "@/lib/x/validation";
@@ -13,7 +13,6 @@ export const dynamic = "force-dynamic";
 
 const oauthStartLimiter = createFixedWindowRateLimiter({
   limit: 5,
-  store: new MemoryRateLimitStore(),
   windowMs: 60_000,
 });
 

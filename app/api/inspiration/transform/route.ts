@@ -5,13 +5,12 @@ import { NextResponse, type NextRequest } from "next/server";
 import { requireAdminForRoute } from "@/lib/auth/admin";
 import { transformInspiration } from "@/lib/inspiration";
 import { inspirationTransformSchema } from "@/lib/inspiration/validation";
-import { createFixedWindowRateLimiter, MemoryRateLimitStore, rateLimitHeaders } from "@/lib/rate-limit";
+import { createFixedWindowRateLimiter, rateLimitHeaders } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
 const transformLimiter = createFixedWindowRateLimiter({
   limit: 20,
-  store: new MemoryRateLimitStore(),
   windowMs: 60 * 60 * 1_000,
 });
 

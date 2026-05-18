@@ -6,7 +6,7 @@ import { z } from "zod";
 import type { TokenSettingsActionState } from "@/components/settings/tokens";
 import { logAuditEvent } from "@/lib/audit";
 import { requireAdmin } from "@/lib/auth/admin";
-import { createFixedWindowRateLimiter, MemoryRateLimitStore } from "@/lib/rate-limit";
+import { createFixedWindowRateLimiter } from "@/lib/rate-limit";
 import {
   createPersonalSaveToken,
   revokePersonalSaveToken,
@@ -15,7 +15,6 @@ import {
 
 const tokenLimiter = createFixedWindowRateLimiter({
   limit: 10,
-  store: new MemoryRateLimitStore(),
   windowMs: 24 * 60 * 60 * 1_000,
 });
 

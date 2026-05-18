@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { logAuditEvent } from "@/lib/audit";
 import { requireAdminForRoute } from "@/lib/auth/admin";
-import { createFixedWindowRateLimiter, MemoryRateLimitStore, rateLimitHeaders } from "@/lib/rate-limit";
+import { createFixedWindowRateLimiter, rateLimitHeaders } from "@/lib/rate-limit";
 import { createLiveXApiClient } from "@/lib/x/client";
 import { exchangeXAuthorizationCode, storeXOAuthConnection } from "@/lib/x/oauth";
 import { consumeOAuthState } from "@/lib/x/oauth-state";
@@ -14,7 +14,6 @@ export const dynamic = "force-dynamic";
 
 const oauthCallbackLimiter = createFixedWindowRateLimiter({
   limit: 10,
-  store: new MemoryRateLimitStore(),
   windowMs: 60_000,
 });
 

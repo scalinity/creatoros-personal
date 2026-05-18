@@ -7,7 +7,7 @@ import { logAuditEvent } from "@/lib/audit";
 import { redactAuditString } from "@/lib/audit/redaction";
 import { requireAdminForRoute } from "@/lib/auth/admin";
 import { buildDataExportCsv, createDataExportArchive } from "@/lib/exports";
-import { createFixedWindowRateLimiter, MemoryRateLimitStore, rateLimitHeaders } from "@/lib/rate-limit";
+import { createFixedWindowRateLimiter, rateLimitHeaders } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +18,6 @@ const exportQuerySchema = z.object({
 
 const exportLimiter = createFixedWindowRateLimiter({
   limit: 3,
-  store: new MemoryRateLimitStore(),
   windowMs: 24 * 60 * 60 * 1_000,
 });
 

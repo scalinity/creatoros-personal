@@ -6,17 +6,15 @@ import { requireAdmin } from "@/lib/auth/admin";
 import { rethrowIfRedirect } from "@/lib/server-only/action-redirect";
 import { createBlog, generateBlogDraft, generateBlogOutline, generateBlogSeo, repurposeBlogToX, suggestBlogEdits, updateBlog } from "@/lib/blogs";
 import { blogAiActionSchema, blogCreateSchema, blogUpdateSchema, formDataToBlogRecord } from "@/lib/blogs/validation";
-import { createFixedWindowRateLimiter, MemoryRateLimitStore } from "@/lib/rate-limit";
+import { createFixedWindowRateLimiter } from "@/lib/rate-limit";
 
 const blogMutationLimiter = createFixedWindowRateLimiter({
   limit: 80,
-  store: new MemoryRateLimitStore(),
   windowMs: 60 * 60 * 1_000,
 });
 
 const blogAiLimiter = createFixedWindowRateLimiter({
   limit: 20,
-  store: new MemoryRateLimitStore(),
   windowMs: 60 * 60 * 1_000,
 });
 

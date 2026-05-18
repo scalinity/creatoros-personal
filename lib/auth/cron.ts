@@ -7,12 +7,11 @@ import { type NextRequest, NextResponse } from "next/server";
 import { logAuditEvent } from "@/lib/audit";
 import type { AdminContext } from "@/lib/auth/admin";
 import { createSupabaseServiceRoleClient } from "@/lib/db/service-role";
-import { createFixedWindowRateLimiter, MemoryRateLimitStore, rateLimitHeaders, rateLimitIdFromRequest } from "@/lib/rate-limit";
+import { createFixedWindowRateLimiter, rateLimitHeaders, rateLimitIdFromRequest } from "@/lib/rate-limit";
 import type { ProfileRow } from "@/types/database";
 
 const cronAuthLimiter = createFixedWindowRateLimiter({
   limit: 30,
-  store: new MemoryRateLimitStore(),
   windowMs: 60_000,
 });
 

@@ -6,7 +6,7 @@ import { z } from "zod";
 import { redactAuditString } from "@/lib/audit/redaction";
 import { requireAdminForRoute } from "@/lib/auth/admin";
 import { deleteOwnerData } from "@/lib/exports";
-import { createFixedWindowRateLimiter, MemoryRateLimitStore, rateLimitHeaders } from "@/lib/rate-limit";
+import { createFixedWindowRateLimiter, rateLimitHeaders } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +17,6 @@ const deleteBodySchema = z.object({
 
 const deleteLimiter = createFixedWindowRateLimiter({
   limit: 1,
-  store: new MemoryRateLimitStore(),
   windowMs: 24 * 60 * 60 * 1_000,
 });
 

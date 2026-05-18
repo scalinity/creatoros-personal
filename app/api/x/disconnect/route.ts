@@ -1,7 +1,7 @@
 import { type NextRequest } from "next/server";
 
 import { requireAdminForRoute } from "@/lib/auth/admin";
-import { createFixedWindowRateLimiter, MemoryRateLimitStore, rateLimitHeaders } from "@/lib/rate-limit";
+import { createFixedWindowRateLimiter, rateLimitHeaders } from "@/lib/rate-limit";
 import { disconnectXConnection } from "@/lib/x/oauth";
 import { xDisconnectSchema } from "@/lib/x/validation";
 
@@ -11,7 +11,6 @@ export const dynamic = "force-dynamic";
 
 const disconnectLimiter = createFixedWindowRateLimiter({
   limit: 10,
-  store: new MemoryRateLimitStore(),
   windowMs: 60_000,
 });
 

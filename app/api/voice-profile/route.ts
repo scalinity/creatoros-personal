@@ -5,7 +5,7 @@ import { z } from "zod";
 
 import { loadEmbeddingStatus } from "@/lib/embeddings";
 import { requireAdminForRoute } from "@/lib/auth/admin";
-import { createFixedWindowRateLimiter, MemoryRateLimitStore, rateLimitHeaders } from "@/lib/rate-limit";
+import { createFixedWindowRateLimiter, rateLimitHeaders } from "@/lib/rate-limit";
 import { generateVoiceProfile, loadVoiceProfileStatus } from "@/lib/voice";
 
 export const dynamic = "force-dynamic";
@@ -16,13 +16,11 @@ const recomputeSchema = z.object({
 
 const readLimiter = createFixedWindowRateLimiter({
   limit: 30,
-  store: new MemoryRateLimitStore(),
   windowMs: 60_000,
 });
 
 const recomputeLimiter = createFixedWindowRateLimiter({
   limit: 5,
-  store: new MemoryRateLimitStore(),
   windowMs: 24 * 60 * 60 * 1_000,
 });
 

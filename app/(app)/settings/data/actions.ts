@@ -8,11 +8,10 @@ import { redactAuditString } from "@/lib/audit/redaction";
 import { requireAdmin } from "@/lib/auth/admin";
 import { rethrowIfRedirect } from "@/lib/server-only/action-redirect";
 import { deleteOwnerData } from "@/lib/exports";
-import { createFixedWindowRateLimiter, MemoryRateLimitStore } from "@/lib/rate-limit";
+import { createFixedWindowRateLimiter } from "@/lib/rate-limit";
 
 const dataDeleteActionLimiter = createFixedWindowRateLimiter({
   limit: 1,
-  store: new MemoryRateLimitStore(),
   windowMs: 24 * 60 * 60 * 1_000,
 });
 

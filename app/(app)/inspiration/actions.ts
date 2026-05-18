@@ -17,17 +17,15 @@ import {
   inspirationTransformSchema,
   inspirationUpdateSchema,
 } from "@/lib/inspiration/validation";
-import { createFixedWindowRateLimiter, MemoryRateLimitStore } from "@/lib/rate-limit";
+import { createFixedWindowRateLimiter } from "@/lib/rate-limit";
 
 const mutationLimiter = createFixedWindowRateLimiter({
   limit: 80,
-  store: new MemoryRateLimitStore(),
   windowMs: 60 * 60 * 1_000,
 });
 
 const transformLimiter = createFixedWindowRateLimiter({
   limit: 20,
-  store: new MemoryRateLimitStore(),
   windowMs: 60 * 60 * 1_000,
 });
 

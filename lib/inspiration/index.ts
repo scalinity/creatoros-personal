@@ -9,7 +9,7 @@ import type { AiProvider } from "@/lib/ai/types";
 import { logAuditEvent } from "@/lib/audit";
 import type { AdminContext } from "@/lib/auth/admin";
 import { createSupabaseServiceRoleClient } from "@/lib/db/service-role";
-import { MemoryRateLimitStore } from "@/lib/rate-limit";
+import { createDefaultRateLimitStore, type RateLimitStore } from "@/lib/rate-limit";
 import {
   markPersonalSaveTokenUsed,
   PERSONAL_SAVE_TOKEN_SCOPE,
@@ -34,7 +34,17 @@ import {
 
 const PHASE = "20-inspiration-library-and-extension-save-token";
 const PROMPT_ID = "inspiration-transform.v1";
-const extensionRateLimitStore = new MemoryRateLimitStore();
+// SCA-474 (C-4): use the durable Postgres-backed store in production so the
+// extension endpoint's pre-verification and verified-token rate limits survive
+// cold starts and reconcile across serverless instances. Falls back to the
+// in-process MemoryRateLimitStore under NODE_ENV=test / CREATOROS_E2E_AUTH_BYPASS=1.
+let extensionRateLimitStoreInstance: null | RateLimitStore = null;
+function extensionRateLimitStore(): RateLimitStore {
+  if (!extensionRateLimitStoreInstance) {
+    extensionRateLimitStoreInstance = createDefaultRateLimitStore();
+  }
+  return extensionRateLimitStoreInstance;
+}
 
 type Client = SupabaseClient<Database>;
 type InspirationTransformOutput = z.infer<typeof inspirationTransformOutputSchema>;
@@ -651,16 +661,16 @@ function tokenAttemptLimitKey(rawToken: null | string) {
 async function checkExtensionPreVerificationRateLimit(rawToken: null | string, options: ExtensionOptions) {
   const at = options.now?.().getTime() ?? Date.now();
   const windowMs = 60 * 60 * 1_000;
-  const tokenEntry = await extensionRateLimitStore.increment(`extension-pre-token:${tokenAttemptLimitKey(rawToken)}`, at, windowMs);
-  const ipEntry = await extensionRateLimitStore.increment(`extension-pre-ip:${requestIpLimitKey(options.request)}`, at, windowMs);
+  const tokenEntry = await extensionRateLimitStore().increment(`extension-pre-token:${tokenAttemptLimitKey(rawToken)}`, at, windowMs);
+  const ipEntry = await extensionRateLimitStore().increment(`extension-pre-ip:${requestIpLimitKey(options.request)}`, at, windowMs);
   return tokenEntry.count <= 120 && ipEntry.count <= 120;
 }
 
 async function checkExtensionVerifiedRateLimit(rawToken: string, limit: number, options: ExtensionOptions) {
   const at = options.now?.().getTime() ?? Date.now();
   const windowMs = 60 * 60 * 1_000;
-  const tokenEntry = await extensionRateLimitStore.increment(`extension-token:${tokenAttemptLimitKey(rawToken)}`, at, windowMs);
-  const ipEntry = await extensionRateLimitStore.increment(`extension-ip:${requestIpLimitKey(options.request)}`, at, windowMs);
+  const tokenEntry = await extensionRateLimitStore().increment(`extension-token:${tokenAttemptLimitKey(rawToken)}`, at, windowMs);
+  const ipEntry = await extensionRateLimitStore().increment(`extension-ip:${requestIpLimitKey(options.request)}`, at, windowMs);
   return tokenEntry.count <= limit && ipEntry.count <= limit;
 }
 

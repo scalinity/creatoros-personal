@@ -7,13 +7,12 @@ import { generateBlogDraft, generateBlogOutline, generateBlogSeo, repurposeBlogT
 import { blogAiActionSchema } from "@/lib/blogs/validation";
 import { AiStructuredOutputError } from "@/lib/ai";
 import { AiProviderTimeoutError } from "@/lib/ai/retry";
-import { createFixedWindowRateLimiter, MemoryRateLimitStore, rateLimitHeaders } from "@/lib/rate-limit";
+import { createFixedWindowRateLimiter, rateLimitHeaders } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
 const blogAiLimiter = createFixedWindowRateLimiter({
   limit: 20,
-  store: new MemoryRateLimitStore(),
   windowMs: 60 * 60 * 1_000,
 });
 

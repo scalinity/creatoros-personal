@@ -5,19 +5,17 @@ import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/admin";
 import { rethrowIfRedirect } from "@/lib/server-only/action-redirect";
 import { formDataToContentRecord } from "@/lib/content/validation";
-import { createFixedWindowRateLimiter, MemoryRateLimitStore } from "@/lib/rate-limit";
+import { createFixedWindowRateLimiter } from "@/lib/rate-limit";
 import { runAlgoAnalysis, saveAnalyzerRewriteAsIdea, saveAnalyzerRewriteAsOutput } from "@/lib/algo-analyzer";
 import { algoAnalyzerInputSchema, analyzerSaveIdeaSchema, analyzerSaveOutputSchema } from "@/lib/algo-analyzer/validation";
 
 const analyzeLimiter = createFixedWindowRateLimiter({
   limit: 20,
-  store: new MemoryRateLimitStore(),
   windowMs: 60 * 60 * 1_000,
 });
 
 const saveLimiter = createFixedWindowRateLimiter({
   limit: 120,
-  store: new MemoryRateLimitStore(),
   windowMs: 60 * 60 * 1_000,
 });
 
