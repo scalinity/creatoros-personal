@@ -396,20 +396,30 @@ export function computePublishingPayloadHash(draft: PublishingDraft, connection?
   return hashString(stableJsonStringify(buildPublishingPayloadPreview(draft, connection)));
 }
 
-function jaccardSimilarity(left: string, right: string) {
-  const leftTokens = new Set(normalizeText(left).split(" ").filter(Boolean));
-  const rightTokens = new Set(normalizeText(right).split(" ").filter(Boolean));
+// SCA-497 (W-18): tokenization-free variant for the hot path. The caller
+// normalizes + tokenizes each comparison once and reuses across the
+// duplicate AND similarity passes, so we don't tokenize the same 400
+// strings twice per draft save.
+function jaccardSimilarityFromTokenSets(leftTokens: Set<string>, rightTokens: Set<string>) {
   if (leftTokens.size === 0 || rightTokens.size === 0) return 0;
-
   const intersection = [...leftTokens].filter((token) => rightTokens.has(token)).length;
   const union = new Set([...leftTokens, ...rightTokens]).size;
   return union === 0 ? 0 : intersection / union;
 }
 
+function tokenizeNormalized(normalized: string): Set<string> {
+  return new Set(normalized.split(" ").filter(Boolean));
+}
+
 async function loadComparisonTexts(admin: AdminContext, excludeDraftId?: string): Promise<TextComparison[]> {
+  // SCA-497 (W-18): project only the columns guardrails actually read,
+  // not select("*"). Drops ~80% of the row payload per call (text +
+  // thread_items only, vs 25+ columns including metadata blobs, audit
+  // ids, payload hashes, scheduled timestamps, etc.). Two queries × 200
+  // rows × ~50 KB → two queries × 200 rows × ~5 KB.
   const { data: draftRows, error: draftsError } = await admin.supabase
     .from("publishing_drafts")
-    .select("*")
+    .select("id,text,thread_items")
     .eq("user_id", admin.userId)
     .is("deleted_at", null)
     .order("updated_at", { ascending: false })
@@ -421,7 +431,7 @@ async function loadComparisonTexts(admin: AdminContext, excludeDraftId?: string)
 
   const { data: postRows, error: postsError } = await admin.supabase
     .from("posts")
-    .select("*")
+    .select("id,text")
     .eq("user_id", admin.userId)
     .eq("is_owner_post", true)
     .is("deleted_at", null)
@@ -479,11 +489,25 @@ async function runDraftGuardrails(admin: AdminContext, draft: PublishingDraft, e
   const text = textForDraft(draft);
   const normalized = normalizeText(text);
   const normalizedHash = hashString(normalized);
-  const duplicateMatches = comparisons
-    .filter((comparison) => normalizeText(comparison.text) === normalized)
-    .map((comparison) => ({ id: comparison.id, score: 1, type: comparison.type } satisfies Record<string, Json>));
-  const similarityMatches = comparisons
-    .map((comparison) => ({ id: comparison.id, score: Number(jaccardSimilarity(text, comparison.text).toFixed(3)), type: comparison.type } satisfies Record<string, Json>))
+  // SCA-497 (W-18): normalize + tokenize each comparison ONCE and reuse
+  // across the duplicate-match pass and the similarity-score pass. Prior
+  // implementation called normalizeText(comparison.text) twice and re-
+  // tokenized inside jaccardSimilarity for every comparison — ~10 MB of
+  // string churn for a 400-row corpus on every save.
+  const draftTokens = tokenizeNormalized(normalized);
+  const prepared = comparisons.map((comparison) => {
+    const compNormalized = normalizeText(comparison.text);
+    return {
+      comparison,
+      normalized: compNormalized,
+      tokens: tokenizeNormalized(compNormalized),
+    };
+  });
+  const duplicateMatches = prepared
+    .filter((entry) => entry.normalized === normalized)
+    .map((entry) => ({ id: entry.comparison.id, score: 1, type: entry.comparison.type } satisfies Record<string, Json>));
+  const similarityMatches = prepared
+    .map((entry) => ({ id: entry.comparison.id, score: Number(jaccardSimilarityFromTokenSets(draftTokens, entry.tokens).toFixed(3)), type: entry.comparison.type } satisfies Record<string, Json>))
     .filter((match) => typeof match.score === "number" && match.score >= DUPLICATE_SIMILARITY_THRESHOLD)
     .sort((left, right) => Number(right.score) - Number(left.score))
     .slice(0, 5);
