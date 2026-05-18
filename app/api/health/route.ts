@@ -1,14 +1,13 @@
-import { randomUUID } from "node:crypto";
-
-import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 import { requireAdminForRoute } from "@/lib/auth/admin";
+import { envelope, errorEnvelope, getRequestId } from "@/lib/http/envelope";
 import { getFoundationDiagnostics } from "@/lib/server-only/diagnostics";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
+  const requestId = getRequestId(request);
   const guard = await requireAdminForRoute(request);
 
   if (!guard.ok) {
@@ -24,19 +23,14 @@ export async function GET(request: NextRequest) {
   // structured `env_invalid` code, while the body still includes the full
   // diagnostics blob in `data` for the operator's diagnostics view.
   if (status === 200) {
-    return NextResponse.json(
-      { data: diagnostics, error: null, ok: true, request_id: randomUUID() },
-      { status },
-    );
+    return envelope(requestId, diagnostics, undefined, status);
   }
 
-  return NextResponse.json(
-    {
-      data: diagnostics,
-      error: { code: "env_invalid", message: "One or more required environment variables are missing or invalid." },
-      ok: false,
-      request_id: randomUUID(),
-    },
-    { status },
+  return errorEnvelope(
+    requestId,
+    diagnostics,
+    "env_invalid",
+    "One or more required environment variables are missing or invalid.",
+    status,
   );
 }

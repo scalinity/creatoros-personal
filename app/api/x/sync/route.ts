@@ -5,7 +5,7 @@ import { createFixedWindowRateLimiter, rateLimitHeaders } from "@/lib/rate-limit
 import { runXReadSync } from "@/lib/x/sync";
 import { xReadSyncSchema } from "@/lib/x/validation";
 
-import { envelope, errorEnvelope, errorResponse, readJsonBody } from "../_utils";
+import { envelope, errorEnvelope, errorResponse, getRequestId, readJsonBody } from "../_utils";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +15,7 @@ const syncLimiter = createFixedWindowRateLimiter({
 });
 
 export async function POST(request: NextRequest) {
+  const requestId = getRequestId(request);
   const guard = await requireAdminForRoute(request);
 
   if (!guard.ok) {
@@ -25,13 +26,13 @@ export async function POST(request: NextRequest) {
   const headers = rateLimitHeaders(decision);
 
   if (!decision.allowed) {
-    return errorResponse("rate_limited", "Too many X sync requests.", 429, headers);
+    return errorResponse(requestId, "rate_limited", "Too many X sync requests.", 429, headers);
   }
 
   const parsed = xReadSyncSchema.safeParse(await readJsonBody(request));
 
   if (!parsed.success) {
-    return errorResponse("validation_error", "X sync payload failed validation.", 400, headers);
+    return errorResponse(requestId, "validation_error", "X sync payload failed validation.", 400, headers);
   }
 
   try {
@@ -48,14 +49,14 @@ export async function POST(request: NextRequest) {
     if (result.status === "failed") {
       const code = result.error?.toLowerCase().includes("scope") ? "missing_scope" : result.rateLimitResetAt ? "rate_limited" : "x_api_error";
       const status = code === "missing_scope" ? 409 : code === "rate_limited" ? 429 : 502;
-      return errorEnvelope({ sync_job: result }, code, "X sync failed; inspect sync job status.", status, headers);
+      return errorEnvelope(requestId, { sync_job: result }, code, "X sync failed; inspect sync job status.", status, headers);
     }
 
-    return envelope({ sync_job: result }, headers);
+    return envelope(requestId, { sync_job: result }, headers);
   } catch (error) {
     console.error("X sync route failed", {
       reason: error instanceof Error ? error.message : "unknown",
     });
-    return errorResponse("internal_error", "X sync could not be started.", 500, headers);
+    return errorResponse(requestId, "internal_error", "X sync could not be started.", 500, headers);
   }
 }

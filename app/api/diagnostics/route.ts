@@ -1,8 +1,7 @@
-import { randomUUID } from "node:crypto";
-
-import { NextResponse, type NextRequest } from "next/server";
+import { type NextRequest } from "next/server";
 
 import { requireAdminForRoute } from "@/lib/auth/admin";
+import { envelope, errorResponse, getRequestId } from "@/lib/http/envelope";
 import { createFixedWindowRateLimiter, rateLimitHeaders } from "@/lib/rate-limit";
 import { getOperationalDiagnosticsForAdmin } from "@/lib/server-only/diagnostics";
 
@@ -13,22 +12,8 @@ const diagnosticsLimiter = createFixedWindowRateLimiter({
   windowMs: 60_000,
 });
 
-function rateLimitedResponse(headers: Record<string, string>) {
-  return NextResponse.json(
-    {
-      data: null,
-      error: {
-        code: "rate_limited",
-        message: "Too many diagnostics requests.",
-      },
-      ok: false,
-      request_id: randomUUID(),
-    },
-    { headers, status: 429 },
-  );
-}
-
 export async function GET(request: NextRequest) {
+  const requestId = getRequestId(request);
   const guard = await requireAdminForRoute(request);
 
   if (!guard.ok) {
@@ -39,16 +24,8 @@ export async function GET(request: NextRequest) {
   const headers = rateLimitHeaders(decision);
 
   if (!decision.allowed) {
-    return rateLimitedResponse(headers);
+    return errorResponse(requestId, "rate_limited", "Too many diagnostics requests.", 429, headers);
   }
 
-  return NextResponse.json(
-    {
-      data: await getOperationalDiagnosticsForAdmin(guard.admin),
-      error: null,
-      ok: true,
-      request_id: randomUUID(),
-    },
-    { headers },
-  );
+  return envelope(requestId, await getOperationalDiagnosticsForAdmin(guard.admin), headers);
 }

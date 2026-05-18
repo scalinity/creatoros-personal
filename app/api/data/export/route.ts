@@ -1,5 +1,3 @@
-import { randomUUID } from "node:crypto";
-
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 
@@ -7,6 +5,7 @@ import { logAuditEvent } from "@/lib/audit";
 import { redactAuditString } from "@/lib/audit";
 import { requireAdminForRoute } from "@/lib/auth/admin";
 import { buildDataExportCsv, createDataExportArchive } from "@/lib/exports";
+import { envelope, errorResponse, getRequestId } from "@/lib/http/envelope";
 import { createFixedWindowRateLimiter, rateLimitHeaders } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
@@ -20,18 +19,6 @@ const exportLimiter = createFixedWindowRateLimiter({
   limit: 3,
   windowMs: 24 * 60 * 60 * 1_000,
 });
-
-function errorResponse(code: string, message: string, status: number, headers?: Record<string, string>) {
-  return NextResponse.json(
-    {
-      data: null,
-      error: { code, message },
-      ok: false,
-      request_id: randomUUID(),
-    },
-    { headers, status },
-  );
-}
 
 function exportHeaders(headers: Record<string, string>, format: "csv" | "json") {
   const extension = format === "csv" ? "csv" : "json";
@@ -49,6 +36,7 @@ function exportHeaders(headers: Record<string, string>, format: "csv" | "json") 
 }
 
 export async function GET(request: NextRequest) {
+  const requestId = getRequestId(request);
   const guard = await requireAdminForRoute(request);
 
   if (!guard.ok) {
@@ -58,14 +46,14 @@ export async function GET(request: NextRequest) {
   const query = exportQuerySchema.safeParse(Object.fromEntries(request.nextUrl.searchParams));
 
   if (!query.success) {
-    return errorResponse("validation_error", "Data export query failed validation.", 400);
+    return errorResponse(requestId, "validation_error", "Data export query failed validation.", 400);
   }
 
   const decision = await exportLimiter.check({ id: `${guard.admin.userId}:data-export` });
   const headers = rateLimitHeaders(decision);
 
   if (!decision.allowed) {
-    return errorResponse("rate_limited", "Too many data export requests.", 429, headers);
+    return errorResponse(requestId, "rate_limited", "Too many data export requests.", 429, headers);
   }
 
   try {
@@ -81,6 +69,7 @@ export async function GET(request: NextRequest) {
         format: query.data.format,
         include_logs: query.data.include_logs === "true",
         phase: archive.phase,
+        request_id: requestId,
         tables: Object.keys(archive.tables),
       },
       request,
@@ -96,15 +85,7 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    return NextResponse.json(
-      {
-        data: archive,
-        error: null,
-        ok: true,
-        request_id: randomUUID(),
-      },
-      { headers: exportHeaders(headers, "json") },
-    );
+    return envelope(requestId, archive, exportHeaders(headers, "json"));
   } catch (error) {
     const message = redactAuditString(error instanceof Error ? error.message : "unknown export failure").slice(0, 500);
     await logAuditEvent({
@@ -115,6 +96,7 @@ export async function GET(request: NextRequest) {
         format: query.data.format,
         include_logs: query.data.include_logs === "true",
         phase: "23-hardening-export-delete-observability",
+        request_id: requestId,
       },
       request,
       success: false,
@@ -123,6 +105,6 @@ export async function GET(request: NextRequest) {
     });
 
     console.error("Data export failed", { reason: message });
-    return errorResponse("internal_error", "Data export could not be generated.", 500, headers);
+    return errorResponse(requestId, "internal_error", "Data export could not be generated.", 500, headers);
   }
 }

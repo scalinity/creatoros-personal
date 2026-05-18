@@ -5,7 +5,7 @@ import { cancelPublishingJob } from "@/lib/publishing";
 import { publishingCancelSchema } from "@/lib/publishing/validation";
 import { createFixedWindowRateLimiter, rateLimitHeaders } from "@/lib/rate-limit";
 
-import { envelope, errorResponse, publishingErrorResponse, readJsonBody } from "../../../_utils";
+import { envelope, errorResponse, getRequestId, publishingErrorResponse, readJsonBody } from "../../../_utils";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +15,7 @@ const cancelLimiter = createFixedWindowRateLimiter({
 });
 
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const requestId = getRequestId(request);
   const guard = await requireAdminForRoute(request);
 
   if (!guard.ok) return guard.response;
@@ -23,7 +24,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   const headers = rateLimitHeaders(decision);
 
   if (!decision.allowed) {
-    return errorResponse("rate_limited", "Too many publishing cancel requests.", 429, headers);
+    return errorResponse(requestId, "rate_limited", "Too many publishing cancel requests.", 429, headers);
   }
 
   const { id } = await context.params;
@@ -34,17 +35,17 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   });
 
   if (!parsed.success) {
-    return errorResponse("validation_error", "Publishing cancel payload failed validation.", 400, headers);
+    return errorResponse(requestId, "validation_error", "Publishing cancel payload failed validation.", 400, headers);
   }
 
   try {
     const job = await cancelPublishingJob(guard.admin, parsed.data);
-    return envelope({ job }, headers);
+    return envelope(requestId, { job }, headers);
   } catch (error) {
     console.error("Publishing cancel API failed", {
       jobId: id,
       reason: error instanceof Error ? error.message : "unknown",
     });
-    return publishingErrorResponse(error, "Publishing job could not be canceled.", headers);
+    return publishingErrorResponse(requestId, error, "Publishing job could not be canceled.", headers);
   }
 }

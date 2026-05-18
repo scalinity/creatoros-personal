@@ -5,7 +5,7 @@ import { PublishingNotFoundError, runXPublishingJob, XPublishingGuardError } fro
 import { createFixedWindowRateLimiter, rateLimitHeaders } from "@/lib/rate-limit";
 import { xPublishSchema } from "@/lib/x/validation";
 
-import { envelope, errorResponse, readJsonBody } from "../_utils";
+import { envelope, errorResponse, getRequestId, readJsonBody } from "../_utils";
 
 const publishLimiter = createFixedWindowRateLimiter({
   limit: 10,
@@ -30,17 +30,17 @@ const X_PUBLISH_GUARD_CODE_TO_MESSAGE: Record<string, string> = {
   x_connection_unavailable: "X publish connection is unavailable.",
 };
 
-function xPublishErrorResponse(error: unknown, headers?: Record<string, string>) {
+function xPublishErrorResponse(requestId: string, error: unknown, headers?: Record<string, string>) {
   if (error instanceof PublishingNotFoundError) {
-    return errorResponse("not_found", "X publish draft was not found.", 404, headers);
+    return errorResponse(requestId, "not_found", "X publish draft was not found.", 404, headers);
   }
 
   if (error instanceof XPublishingGuardError) {
     const message = X_PUBLISH_GUARD_CODE_TO_MESSAGE[error.code] ?? "X publish request failed safety checks.";
-    return errorResponse(error.code, message, 409, headers);
+    return errorResponse(requestId, error.code, message, 409, headers);
   }
 
-  return errorResponse("internal_error", "X publish request could not be completed.", 500, headers);
+  return errorResponse(requestId, "internal_error", "X publish request could not be completed.", 500, headers);
 }
 
 // SCA-488 (W-9): single shared bucket across post/thread/reply/quote so a
@@ -49,6 +49,7 @@ function xPublishErrorResponse(error: unknown, headers?: Record<string, string>)
 const X_PUBLISH_LIMIT_BUCKET = "x-publish";
 
 export async function handleXPublishRoute(request: NextRequest, expectedContentTypes: string[], rateLimitKey: string) {
+  const requestId = getRequestId(request);
   const guard = await requireAdminForRoute(request);
 
   if (!guard.ok) return guard.response;
@@ -57,13 +58,13 @@ export async function handleXPublishRoute(request: NextRequest, expectedContentT
   const headers = rateLimitHeaders(decision);
 
   if (!decision.allowed) {
-    return errorResponse("rate_limited", "Too many X publish requests.", 429, headers);
+    return errorResponse(requestId, "rate_limited", "Too many X publish requests.", 429, headers);
   }
 
   const parsed = xPublishSchema.safeParse(await readJsonBody(request));
 
   if (!parsed.success) {
-    return errorResponse("validation_error", "X publish payload failed validation.", 400, headers);
+    return errorResponse(requestId, "validation_error", "X publish payload failed validation.", 400, headers);
   }
 
   try {
@@ -81,12 +82,12 @@ export async function handleXPublishRoute(request: NextRequest, expectedContentT
       },
     );
 
-    return envelope({ publish_job: result }, headers);
+    return envelope(requestId, { publish_job: result }, headers);
   } catch (error) {
     console.error("X publish route failed", {
       reason: error instanceof Error ? error.message : "unknown",
       route: rateLimitKey,
     });
-    return xPublishErrorResponse(error, headers);
+    return xPublishErrorResponse(requestId, error, headers);
   }
 }

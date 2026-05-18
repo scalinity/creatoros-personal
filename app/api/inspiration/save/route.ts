@@ -1,8 +1,7 @@
-import { randomUUID } from "node:crypto";
-
 import { NextResponse, type NextRequest } from "next/server";
 
 import { requireAdminForRoute } from "@/lib/auth/admin";
+import { envelope, errorResponse, getRequestId, readJsonBody } from "@/lib/http/envelope";
 import { createInspiration, saveInspirationWithExtensionToken } from "@/lib/inspiration";
 import { inspirationSaveSchema } from "@/lib/inspiration/validation";
 import { createFixedWindowRateLimiter, rateLimitHeaders } from "@/lib/rate-limit";
@@ -13,30 +12,6 @@ const inAppSaveLimiter = createFixedWindowRateLimiter({
   limit: 60,
   windowMs: 60 * 1_000,
 });
-
-function envelope(data: unknown, headers?: Record<string, string>, status = 200) {
-  return NextResponse.json({ data, error: null, ok: true, request_id: randomUUID() }, { headers, status });
-}
-
-function errorResponse(code: string, message: string, status: number, headers?: Record<string, string>) {
-  return NextResponse.json(
-    {
-      data: null,
-      error: { code, message },
-      ok: false,
-      request_id: randomUUID(),
-    },
-    { headers, status },
-  );
-}
-
-async function readJsonBody(request: NextRequest) {
-  try {
-    return await request.json();
-  } catch {
-    return null;
-  }
-}
 
 function bearerToken(request: NextRequest) {
   const header = request.headers.get("authorization") ?? "";
@@ -90,23 +65,24 @@ export async function OPTIONS(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const requestId = getRequestId(request);
   const body = await readJsonBody(request);
   const token = bearerToken(request);
   const cors = corsHeaders(request);
   const extensionOrigin = chromeExtensionOrigin(request);
 
   if (extensionOrigin && !isAllowedExtensionOrigin(extensionOrigin)) {
-    return errorResponse("access_denied", "Chrome extension origin is not allowed.", 403, cors);
+    return errorResponse(requestId, "access_denied", "Chrome extension origin is not allowed.", 403, cors);
   }
 
   // M-13: Bearer (extension) requests must come from an allowlisted
   // chrome-extension:// origin. Without this, a stolen personal save token
   // could be replayed from any web origin (or a curl call with a forged Origin
-  // header) — the prior implementation only used CORS allowlisting which is a
+  // header) the prior implementation only used CORS allowlisting which is a
   // browser-side check, not a server-side gate.
   const requestOrigin = request.headers.get("origin");
   if (token && requestOrigin && !extensionOrigin) {
-    return errorResponse("access_denied", "Personal save tokens may only be used from an allowlisted Chrome extension origin.", 403, cors);
+    return errorResponse(requestId, "access_denied", "Personal save tokens may only be used from an allowlisted Chrome extension origin.", 403, cors);
   }
 
   if (token) {
@@ -114,10 +90,11 @@ export async function POST(request: NextRequest) {
       const result = await saveInspirationWithExtensionToken(token, body, { request });
       if (!result.ok) {
         const mapped = extensionError(result.error);
-        return errorResponse(mapped.code, mapped.message, mapped.status, cors);
+        return errorResponse(requestId, mapped.code, mapped.message, mapped.status, cors);
       }
 
       return envelope(
+        requestId,
         {
           duplicate: result.data.duplicate,
           inspiration_id: result.data.inspiration.id,
@@ -129,12 +106,12 @@ export async function POST(request: NextRequest) {
       console.error("Extension inspiration save route failed", {
         reason: error instanceof Error ? error.message : "unknown",
       });
-      return errorResponse("internal_error", "Extension save could not be completed.", 500, cors);
+      return errorResponse(requestId, "internal_error", "Extension save could not be completed.", 500, cors);
     }
   }
 
   if (extensionOrigin) {
-    return errorResponse("unauthenticated", "Extension saves require a personal save token.", 401, cors);
+    return errorResponse(requestId, "unauthenticated", "Extension saves require a personal save token.", 401, cors);
   }
 
   const guard = await requireAdminForRoute(request);
@@ -144,17 +121,18 @@ export async function POST(request: NextRequest) {
   const headers = { ...cors, ...rateLimitHeaders(decision) };
 
   if (!decision.allowed) {
-    return errorResponse("rate_limited", "Too many inspiration save requests.", 429, headers);
+    return errorResponse(requestId, "rate_limited", "Too many inspiration save requests.", 429, headers);
   }
 
   const parsed = inspirationSaveSchema.safeParse(body);
   if (!parsed.success) {
-    return errorResponse("validation_error", "Inspiration save payload failed validation.", 400, headers);
+    return errorResponse(requestId, "validation_error", "Inspiration save payload failed validation.", 400, headers);
   }
 
   try {
     const result = await createInspiration(guard.admin, parsed.data, { source: "in_app" });
     return envelope(
+      requestId,
       {
         duplicate: result.duplicate,
         inspiration_id: result.inspiration.id,
@@ -166,6 +144,6 @@ export async function POST(request: NextRequest) {
     console.error("Inspiration save API failed", {
       reason: error instanceof Error ? error.message : "unknown",
     });
-    return errorResponse("internal_error", "Inspiration could not be saved.", 500, headers);
+    return errorResponse(requestId, "internal_error", "Inspiration could not be saved.", 500, headers);
   }
 }

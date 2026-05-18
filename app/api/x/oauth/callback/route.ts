@@ -8,7 +8,7 @@ import { exchangeXAuthorizationCode, storeXOAuthConnection } from "@/lib/x/oauth
 import { consumeOAuthState } from "@/lib/x/oauth-state";
 import { xOAuthCallbackQuerySchema } from "@/lib/x/validation";
 
-import { errorResponse } from "../../_utils";
+import { errorResponse, getRequestId } from "../../_utils";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +42,7 @@ function redirectWithNotice(request: NextRequest, returnTo: string, notice: stri
 }
 
 export async function GET(request: NextRequest) {
+  const requestId = getRequestId(request);
   const guard = await requireAdminForRoute(request);
 
   if (!guard.ok) {
@@ -52,7 +53,7 @@ export async function GET(request: NextRequest) {
   const headers = rateLimitHeaders(decision);
 
   if (!decision.allowed) {
-    return errorResponse("rate_limited", "Too many X OAuth callback requests.", 429, headers);
+    return errorResponse(requestId, "rate_limited", "Too many X OAuth callback requests.", 429, headers);
   }
 
   const parsed = xOAuthCallbackQuerySchema.safeParse(Object.fromEntries(request.nextUrl.searchParams));
@@ -65,6 +66,7 @@ export async function GET(request: NextRequest) {
       eventType: "x_connect_failed",
       metadata: {
         phase: "16-x-oauth-and-read-sync",
+        request_id: requestId,
         state_cookie_present: Boolean(cookieState),
       },
       request,
@@ -90,7 +92,7 @@ export async function GET(request: NextRequest) {
       actorEmail: guard.admin.email,
       error: "state_consume_failed",
       eventType: "x_connect_failed",
-      metadata: { phase: "16-x-oauth-and-read-sync" },
+      metadata: { phase: "16-x-oauth-and-read-sync", request_id: requestId },
       request,
       success: false,
       targetType: "x_connection",
@@ -104,7 +106,7 @@ export async function GET(request: NextRequest) {
       actorEmail: guard.admin.email,
       error: "state_not_found_or_replay",
       eventType: "x_connect_failed",
-      metadata: { phase: "16-x-oauth-and-read-sync" },
+      metadata: { phase: "16-x-oauth-and-read-sync", request_id: requestId },
       request,
       success: false,
       targetType: "x_connection",
@@ -133,6 +135,7 @@ export async function GET(request: NextRequest) {
         metadata: {
           capabilities: connection.capabilities,
           phase: "17-x-write-publishing-adapter",
+          request_id: requestId,
           scopes: connection.scopes,
         },
         request,
@@ -153,6 +156,7 @@ export async function GET(request: NextRequest) {
       eventType: "x_connect_failed",
       metadata: {
         phase: "16-x-oauth-and-read-sync",
+        request_id: requestId,
       },
       request,
       success: false,

@@ -6,7 +6,7 @@ import { createFixedWindowRateLimiter, rateLimitHeaders } from "@/lib/rate-limit
 import { buildXAuthorizationUrl, createXCodeChallenge, createXCodeVerifier, createXOAuthState, getOptionalXOAuthConfig } from "@/lib/x/oauth";
 import { xScopeEscalationSchema } from "@/lib/x/validation";
 
-import { errorResponse, readJsonBody } from "../_utils";
+import { errorResponse, getRequestId, readJsonBody } from "../_utils";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +24,7 @@ const cookieOptions = {
 };
 
 export async function POST(request: NextRequest) {
+  const requestId = getRequestId(request);
   const guard = await requireAdminForRoute(request);
 
   if (!guard.ok) return guard.response;
@@ -32,17 +33,17 @@ export async function POST(request: NextRequest) {
   const headers = rateLimitHeaders(decision);
 
   if (!decision.allowed) {
-    return errorResponse("rate_limited", "Too many X scope escalation requests.", 429, headers);
+    return errorResponse(requestId, "rate_limited", "Too many X scope escalation requests.", 429, headers);
   }
 
   const parsed = xScopeEscalationSchema.safeParse(await readJsonBody(request));
 
   if (!parsed.success) {
-    return errorResponse("validation_error", "X scope escalation payload failed validation.", 400, headers);
+    return errorResponse(requestId, "validation_error", "X scope escalation payload failed validation.", 400, headers);
   }
 
   if (!getOptionalXOAuthConfig()) {
-    return errorResponse("provider_unavailable", "X OAuth configuration is incomplete.", 503, headers);
+    return errorResponse(requestId, "provider_unavailable", "X OAuth configuration is incomplete.", 503, headers);
   }
 
   const state = createXOAuthState();
@@ -62,6 +63,7 @@ export async function POST(request: NextRequest) {
     metadata: {
       phase: "17-x-write-publishing-adapter",
       reason: parsed.data.reason,
+      request_id: requestId,
       requested_scopes: parsed.data.requestedScopes,
       scopes,
     },

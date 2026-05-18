@@ -1,11 +1,10 @@
-import { randomUUID } from "node:crypto";
-
-import { NextResponse, type NextRequest } from "next/server";
+import { type NextRequest } from "next/server";
 import { z } from "zod";
 
 import { redactAuditString } from "@/lib/audit";
 import { requireAdminForRoute } from "@/lib/auth/admin";
 import { deleteOwnerData } from "@/lib/exports";
+import { envelope, errorResponse, getRequestId, readJsonBody } from "@/lib/http/envelope";
 import { createFixedWindowRateLimiter, rateLimitHeaders } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
@@ -20,27 +19,8 @@ const deleteLimiter = createFixedWindowRateLimiter({
   windowMs: 24 * 60 * 60 * 1_000,
 });
 
-function errorResponse(code: string, message: string, status: number, headers?: Record<string, string>) {
-  return NextResponse.json(
-    {
-      data: null,
-      error: { code, message },
-      ok: false,
-      request_id: randomUUID(),
-    },
-    { headers, status },
-  );
-}
-
-async function readJsonBody(request: NextRequest) {
-  try {
-    return await request.json();
-  } catch {
-    return null;
-  }
-}
-
 export async function DELETE(request: NextRequest) {
+  const requestId = getRequestId(request);
   const guard = await requireAdminForRoute(request);
 
   if (!guard.ok) {
@@ -51,6 +31,7 @@ export async function DELETE(request: NextRequest) {
 
   if (!body.success) {
     return errorResponse(
+      requestId,
       "validation_error",
       "Exact confirmation is required. No data was deleted.",
       400,
@@ -61,7 +42,7 @@ export async function DELETE(request: NextRequest) {
   const headers = rateLimitHeaders(decision);
 
   if (!decision.allowed) {
-    return errorResponse("rate_limited", "Too many data delete requests.", 429, headers);
+    return errorResponse(requestId, "rate_limited", "Too many data delete requests.", 429, headers);
   }
 
   try {
@@ -70,23 +51,19 @@ export async function DELETE(request: NextRequest) {
       deleteAuthUser: body.data.delete_auth_user,
     }, { request });
 
-    return NextResponse.json(
+    return envelope(
+      requestId,
       {
-        data: {
-          ...result,
-          live: true,
-          message: "Owner data deletion completed. Token material was cleared before row deletion.",
-          status: "deleted",
-        },
-        error: null,
-        ok: true,
-        request_id: randomUUID(),
+        ...result,
+        live: true,
+        message: "Owner data deletion completed. Token material was cleared before row deletion.",
+        status: "deleted",
       },
-      { headers },
+      headers,
     );
   } catch (error) {
     const message = redactAuditString(error instanceof Error ? error.message : "unknown data delete failure").slice(0, 500);
     console.error("Data delete failed", { reason: message });
-    return errorResponse("internal_error", "Data deletion could not be completed.", 500, headers);
+    return errorResponse(requestId, "internal_error", "Data deletion could not be completed.", 500, headers);
   }
 }

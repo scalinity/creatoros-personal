@@ -1,31 +1,14 @@
-import { randomUUID } from "node:crypto";
+// SCA-486 (W-7): thin re-export of the canonical envelope helpers. Every
+// envelope/errorResponse/readJsonBody used to live inline here; the
+// canonical implementation now lives in lib/http/envelope.ts so all
+// /api/** routes share one response shape and request_id is threaded
+// end-to-end (SCA-484 W-5).
 
-import { NextResponse, type NextRequest } from "next/server";
-
-export function envelope(data: unknown, headers?: Record<string, string>, status = 200) {
-  return NextResponse.json({ data, error: null, ok: true, request_id: randomUUID() }, { headers, status });
-}
-
-export function errorEnvelope(data: unknown, code: string, message: string, status: number, headers?: Record<string, string>) {
-  return NextResponse.json(
-    {
-      data,
-      error: { code, message },
-      ok: false,
-      request_id: randomUUID(),
-    },
-    { headers, status },
-  );
-}
-
-export function errorResponse(code: string, message: string, status: number, headers?: Record<string, string>) {
-  return errorEnvelope(null, code, message, status, headers);
-}
-
-export async function readJsonBody(request: NextRequest) {
-  try {
-    return await request.json();
-  } catch {
-    return null;
-  }
-}
+export {
+  envelope,
+  errorEnvelope,
+  errorResponse,
+  getRequestId,
+  readJsonBody,
+  REQUEST_ID_HEADER,
+} from "@/lib/http/envelope";

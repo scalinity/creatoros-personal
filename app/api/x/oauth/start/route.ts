@@ -7,7 +7,7 @@ import { buildXAuthorizationUrl, createXCodeChallenge, createXCodeVerifier, crea
 import { persistOAuthState } from "@/lib/x/oauth-state";
 import { xOAuthStartQuerySchema } from "@/lib/x/validation";
 
-import { errorResponse } from "../../_utils";
+import { errorResponse, getRequestId } from "../../_utils";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +28,7 @@ const stateCookieOptions = {
 };
 
 export async function GET(request: NextRequest) {
+  const requestId = getRequestId(request);
   const guard = await requireAdminForRoute(request);
 
   if (!guard.ok) {
@@ -38,17 +39,17 @@ export async function GET(request: NextRequest) {
   const headers = rateLimitHeaders(decision);
 
   if (!decision.allowed) {
-    return errorResponse("rate_limited", "Too many X OAuth start requests.", 429, headers);
+    return errorResponse(requestId, "rate_limited", "Too many X OAuth start requests.", 429, headers);
   }
 
   const parsed = xOAuthStartQuerySchema.safeParse(Object.fromEntries(request.nextUrl.searchParams));
 
   if (!parsed.success) {
-    return errorResponse("validation_error", "X OAuth start query failed validation.", 400, headers);
+    return errorResponse(requestId, "validation_error", "X OAuth start query failed validation.", 400, headers);
   }
 
   if (!getOptionalXOAuthConfig()) {
-    return errorResponse("provider_unavailable", "X OAuth configuration is incomplete.", 503, headers);
+    return errorResponse(requestId, "provider_unavailable", "X OAuth configuration is incomplete.", 503, headers);
   }
 
   const state = createXOAuthState();
@@ -72,7 +73,7 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error("Failed to persist X OAuth state", { reason: error instanceof Error ? error.message : "unknown" });
-    return errorResponse("internal_error", "Could not begin X OAuth flow.", 500, headers);
+    return errorResponse(requestId, "internal_error", "Could not begin X OAuth flow.", 500, headers);
   }
 
   await logAuditEvent({
@@ -81,6 +82,7 @@ export async function GET(request: NextRequest) {
     metadata: {
       mode: parsed.data.mode,
       phase: parsed.data.mode === "publishing" ? "17-x-write-publishing-adapter" : "16-x-oauth-and-read-sync",
+      request_id: requestId,
       requested_scopes: scopes,
       return_to: parsed.data.return_to,
     },

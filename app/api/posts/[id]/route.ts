@@ -1,8 +1,7 @@
-import { randomUUID } from "node:crypto";
-
-import { NextResponse, type NextRequest } from "next/server";
+import { type NextRequest } from "next/server";
 
 import { requireAdminForRoute } from "@/lib/auth/admin";
+import { envelope, errorResponse, getRequestId, readJsonBody } from "@/lib/http/envelope";
 import { updatePostMetrics } from "@/lib/posts";
 import { postMetricUpdateFormSchema } from "@/lib/posts/validation";
 import { createFixedWindowRateLimiter, rateLimitHeaders } from "@/lib/rate-limit";
@@ -14,27 +13,8 @@ const updateLimiter = createFixedWindowRateLimiter({
   windowMs: 60 * 1_000,
 });
 
-function errorResponse(code: string, message: string, status: number, headers?: Record<string, string>) {
-  return NextResponse.json(
-    {
-      data: null,
-      error: { code, message },
-      ok: false,
-      request_id: randomUUID(),
-    },
-    { headers, status },
-  );
-}
-
-async function readJsonBody(request: NextRequest) {
-  try {
-    return await request.json();
-  } catch {
-    return null;
-  }
-}
-
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const requestId = getRequestId(request);
   const guard = await requireAdminForRoute(request);
 
   if (!guard.ok) {
@@ -45,7 +25,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   const headers = rateLimitHeaders(decision);
 
   if (!decision.allowed) {
-    return errorResponse("rate_limited", "Too many post update requests.", 429, headers);
+    return errorResponse(requestId, "rate_limited", "Too many post update requests.", 429, headers);
   }
 
   const { id } = await context.params;
@@ -56,22 +36,13 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   });
 
   if (!parsed.success) {
-    return errorResponse("validation_error", "Post metrics payload failed validation.", 400, headers);
+    return errorResponse(requestId, "validation_error", "Post metrics payload failed validation.", 400, headers);
   }
 
   try {
     const post = await updatePostMetrics(guard.admin, parsed.data);
-
-    return NextResponse.json(
-      {
-        data: { post },
-        error: null,
-        ok: true,
-        request_id: randomUUID(),
-      },
-      { headers },
-    );
+    return envelope(requestId, { post }, headers);
   } catch (error) {
-    return errorResponse(error instanceof Error && error.message.startsWith("Post not found") ? "not_found" : "internal_error", "Post metrics could not be updated.", error instanceof Error && error.message.startsWith("Post not found") ? 404 : 500, headers);
+    return errorResponse(requestId, error instanceof Error && error.message.startsWith("Post not found") ? "not_found" : "internal_error", "Post metrics could not be updated.", error instanceof Error && error.message.startsWith("Post not found") ? 404 : 500, headers);
   }
 }

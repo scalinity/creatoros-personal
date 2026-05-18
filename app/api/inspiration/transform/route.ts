@@ -1,8 +1,7 @@
-import { randomUUID } from "node:crypto";
-
-import { NextResponse, type NextRequest } from "next/server";
+import { type NextRequest } from "next/server";
 
 import { requireAdminForRoute } from "@/lib/auth/admin";
+import { envelope, errorResponse, getRequestId, readJsonBody } from "@/lib/http/envelope";
 import { transformInspiration } from "@/lib/inspiration";
 import { inspirationTransformSchema } from "@/lib/inspiration/validation";
 import { createFixedWindowRateLimiter, rateLimitHeaders } from "@/lib/rate-limit";
@@ -14,31 +13,8 @@ const transformLimiter = createFixedWindowRateLimiter({
   windowMs: 60 * 60 * 1_000,
 });
 
-function envelope(data: unknown, headers?: Record<string, string>) {
-  return NextResponse.json({ data, error: null, ok: true, request_id: randomUUID() }, { headers });
-}
-
-function errorResponse(code: string, message: string, status: number, headers?: Record<string, string>) {
-  return NextResponse.json(
-    {
-      data: null,
-      error: { code, message },
-      ok: false,
-      request_id: randomUUID(),
-    },
-    { headers, status },
-  );
-}
-
-async function readJsonBody(request: NextRequest) {
-  try {
-    return await request.json();
-  } catch {
-    return null;
-  }
-}
-
 export async function POST(request: NextRequest) {
+  const requestId = getRequestId(request);
   const guard = await requireAdminForRoute(request);
   if (!guard.ok) return guard.response;
 
@@ -46,17 +22,18 @@ export async function POST(request: NextRequest) {
   const headers = rateLimitHeaders(decision);
 
   if (!decision.allowed) {
-    return errorResponse("rate_limited", "Too many inspiration transform requests.", 429, headers);
+    return errorResponse(requestId, "rate_limited", "Too many inspiration transform requests.", 429, headers);
   }
 
   const parsed = inspirationTransformSchema.safeParse(await readJsonBody(request));
   if (!parsed.success) {
-    return errorResponse("validation_error", "Inspiration transform payload failed validation.", 400, headers);
+    return errorResponse(requestId, "validation_error", "Inspiration transform payload failed validation.", 400, headers);
   }
 
   try {
     const result = await transformInspiration(guard.admin, parsed.data);
     return envelope(
+      requestId,
       {
         inspiration_id: result.inspiration.id,
         plagiarism_risk: result.transform.plagiarismRisk,
@@ -70,6 +47,6 @@ export async function POST(request: NextRequest) {
       mode: parsed.data.mode,
       reason: error instanceof Error ? error.message : "unknown",
     });
-    return errorResponse("internal_error", "Inspiration transform could not be completed safely.", 500, headers);
+    return errorResponse(requestId, "internal_error", "Inspiration transform could not be completed safely.", 500, headers);
   }
 }

@@ -65,9 +65,21 @@ function requestMetadata(request?: AuditRequest | null) {
 export async function logAuditEvent(input: AuditEventInput) {
   try {
     const { ipHash, userAgent } = requestMetadata(input.request);
+    // SCA-484 (W-5): honour an upstream request_id passed via metadata
+    // (route reads it once at entry via getRequestId(request) and threads
+    // it into both envelope and logAuditEvent). Only fall back to minting
+    // a fresh UUID when the caller did not supply one.
+    const inboundMetadata =
+      input.metadata && typeof input.metadata === "object" && !Array.isArray(input.metadata)
+        ? (input.metadata as Record<string, unknown>)
+        : {};
+    const inboundRequestId =
+      typeof inboundMetadata.request_id === "string" && inboundMetadata.request_id.length > 0
+        ? inboundMetadata.request_id
+        : null;
     const metadata = redactAuditMetadata({
-      ...(input.metadata && typeof input.metadata === "object" && !Array.isArray(input.metadata) ? input.metadata : {}),
-      request_id: randomUUID(),
+      ...inboundMetadata,
+      request_id: inboundRequestId ?? randomUUID(),
       request_path: input.request?.url ? new URL(input.request.url).pathname : undefined,
     });
 

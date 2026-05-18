@@ -5,7 +5,7 @@ import { approvePublishingDraft } from "@/lib/publishing";
 import { publishingDraftApprovalSchema } from "@/lib/publishing/validation";
 import { createFixedWindowRateLimiter, rateLimitHeaders } from "@/lib/rate-limit";
 
-import { envelope, errorResponse, publishingErrorResponse, readJsonBody } from "../../../_utils";
+import { envelope, errorResponse, getRequestId, publishingErrorResponse, readJsonBody } from "../../../_utils";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +15,7 @@ const approvalLimiter = createFixedWindowRateLimiter({
 });
 
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const requestId = getRequestId(request);
   const guard = await requireAdminForRoute(request);
 
   if (!guard.ok) return guard.response;
@@ -23,7 +24,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   const headers = rateLimitHeaders(decision);
 
   if (!decision.allowed) {
-    return errorResponse("rate_limited", "Too many publishing approval requests.", 429, headers);
+    return errorResponse(requestId, "rate_limited", "Too many publishing approval requests.", 429, headers);
   }
 
   const { id } = await context.params;
@@ -34,17 +35,17 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   });
 
   if (!parsed.success) {
-    return errorResponse("validation_error", "Publishing approval payload failed validation.", 400, headers);
+    return errorResponse(requestId, "validation_error", "Publishing approval payload failed validation.", 400, headers);
   }
 
   try {
     const draft = await approvePublishingDraft(guard.admin, parsed.data);
-    return envelope({ draft }, headers);
+    return envelope(requestId, { draft }, headers);
   } catch (error) {
     console.error("Publishing draft approval API failed", {
       draftId: id,
       reason: error instanceof Error ? error.message : "unknown",
     });
-    return publishingErrorResponse(error, "Publishing draft could not be approved.", headers);
+    return publishingErrorResponse(requestId, error, "Publishing draft could not be approved.", headers);
   }
 }
