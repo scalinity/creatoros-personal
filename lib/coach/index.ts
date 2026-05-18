@@ -347,22 +347,55 @@ async function loadOperatingEvidence(admin: AdminContext) {
   return groups.flat();
 }
 
-// SCA-519 (S-13): project only the columns we actually filter on (status,
-// is_active) instead of `select("*")`. Substantially cuts payload bytes
-// across the 8 parallel calls in loadSourceCounts. The 500-row cap is still
-// silent — W-19 addresses that more architecturally with count-only probes;
-// this commit is the cheap immediate win.
-async function countOwnerRows(admin: AdminContext, table: "blog_posts" | "campaigns" | "content_coach_reports" | "content_ideas" | "experiments" | "publishing_drafts" | "voice_profiles") {
-  const { data, error } = await admin.supabase
+// SCA-498 (W-19): every count is a head + count='exact' query — no row
+// payload over the wire. Prior implementation pulled rows (capped at 500
+// → 2000) and counted in JS, which for an owner with thousands of posts /
+// ideas / drafts shipped several MB just to populate eight scalar counts
+// twice on /coach entry. Now each call is a small protocol-level COUNT.
+async function countRows(
+  admin: AdminContext,
+  table: "blog_posts" | "content_coach_reports" | "content_ideas" | "publishing_drafts",
+) {
+  const { count, error } = await admin.supabase
     .from(table)
-    .select("status,is_active")
+    .select("*", { count: "exact", head: true })
     .eq("user_id", admin.userId)
-    .is("deleted_at", null)
-    .limit(2_000);
-
+    .is("deleted_at", null);
   if (error) throw new Error(`Failed to count ${table} for coach: ${error.message}`);
+  return count ?? 0;
+}
 
-  return (data ?? []) as Array<{ is_active?: boolean; status?: string }>;
+async function countActiveCampaigns(admin: AdminContext) {
+  const { count, error } = await admin.supabase
+    .from("campaigns")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", admin.userId)
+    .eq("status", "active")
+    .is("deleted_at", null);
+  if (error) throw new Error(`Failed to count active campaigns for coach: ${error.message}`);
+  return count ?? 0;
+}
+
+async function countActiveExperiments(admin: AdminContext) {
+  const { count, error } = await admin.supabase
+    .from("experiments")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", admin.userId)
+    .eq("status", "active")
+    .is("deleted_at", null);
+  if (error) throw new Error(`Failed to count active experiments for coach: ${error.message}`);
+  return count ?? 0;
+}
+
+async function countActiveVoiceProfiles(admin: AdminContext) {
+  const { count, error } = await admin.supabase
+    .from("voice_profiles")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", admin.userId)
+    .eq("is_active", true)
+    .is("deleted_at", null);
+  if (error) throw new Error(`Failed to count active voice profiles for coach: ${error.message}`);
+  return count ?? 0;
 }
 
 async function countOwnerPosts(admin: AdminContext) {
@@ -380,26 +413,35 @@ async function countOwnerPosts(admin: AdminContext) {
 }
 
 async function loadSourceCounts(admin: AdminContext): Promise<CoachSourceCounts> {
-  const [ownerPosts, ideas, blogs, campaigns, experiments, drafts, voices, reports] = await Promise.all([
+  const [
+    ownerPosts,
+    ideas,
+    blogs,
+    activeCampaigns,
+    activeExperiments,
+    drafts,
+    activeVoiceProfiles,
+    coachReports,
+  ] = await Promise.all([
     countOwnerPosts(admin),
-    countOwnerRows(admin, "content_ideas"),
-    countOwnerRows(admin, "blog_posts"),
-    countOwnerRows(admin, "campaigns"),
-    countOwnerRows(admin, "experiments"),
-    countOwnerRows(admin, "publishing_drafts"),
-    countOwnerRows(admin, "voice_profiles"),
-    countOwnerRows(admin, "content_coach_reports"),
+    countRows(admin, "content_ideas"),
+    countRows(admin, "blog_posts"),
+    countActiveCampaigns(admin),
+    countActiveExperiments(admin),
+    countRows(admin, "publishing_drafts"),
+    countActiveVoiceProfiles(admin),
+    countRows(admin, "content_coach_reports"),
   ]);
 
   return {
-    activeCampaigns: campaigns.filter((row) => row.status === "active").length,
-    activeExperiments: experiments.filter((row) => row.status === "active").length,
-    activeVoiceProfiles: voices.filter((row) => row.is_active).length,
-    blogs: blogs.length,
-    coachReports: reports.length,
-    ideas: ideas.length,
+    activeCampaigns,
+    activeExperiments,
+    activeVoiceProfiles,
+    blogs,
+    coachReports,
+    ideas,
     ownerPosts,
-    publishingDrafts: drafts.length,
+    publishingDrafts: drafts,
   };
 }
 
