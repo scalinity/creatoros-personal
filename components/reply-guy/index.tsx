@@ -254,7 +254,7 @@ function ReplyDraftList({ drafts, handoffAction, markCopiedAction, markUsedActio
 
 function ReplyInspector({ selectedAccount, selectedPost }: { selectedAccount: null | TargetAccount; selectedPost: null | TargetPost }) {
   return (
-    <aside className="network-inspector">
+    <section aria-label="Reply targets" className="network-inspector">
       <Card>
         <Card.Header>
           <RuleHeader folio="§ 06" label="Approval Rail" sub="guardrails" />
@@ -266,7 +266,7 @@ function ReplyInspector({ selectedAccount, selectedPost }: { selectedAccount: nu
           <p className="network-muted">Owner approval still happens in Publishing. Replies are generated as drafts, then reviewed in the publishing state machine before any X write.</p>
         </Card.Body>
       </Card>
-    </aside>
+    </section>
   );
 }
 

@@ -244,7 +244,7 @@ export function AlgoAnalyzerView({ analyzeAction, filters, report, reports, save
             />
           )}
         </div>
-        <aside aria-labelledby="analyzer-recent-title" className="ai-workflow-inspector">
+        <section aria-labelledby="analyzer-recent-title" className="ai-workflow-inspector">
           <RuleHeader folio="§ 04" id="analyzer-recent-title" label="Recent reports" sub={`${reports.length} saved`} />
           <RecentReports reports={reports} selectedId={report?.id} />
           {report?.threadExpansion.length ? (
@@ -261,7 +261,7 @@ export function AlgoAnalyzerView({ analyzeAction, filters, report, reports, save
               </Card.Body>
             </Card>
           ) : null}
-        </aside>
+        </section>
       </section>
     </main>
   );

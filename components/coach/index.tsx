@@ -234,7 +234,7 @@ function EvidenceItem({ item }: { item: CoachEvidenceCitation }) {
 
 function EvidenceInspector({ report }: { report: CoachReport | null }) {
   return (
-    <aside className="coach-inspector" aria-label="Evidence inspector">
+    <section className="coach-inspector" aria-label="Evidence inspector">
       <Card>
         <Card.Header>
           <RuleHeader folio="§" label="Evidence inspector" sub="cited records" />
@@ -256,7 +256,7 @@ function EvidenceInspector({ report }: { report: CoachReport | null }) {
           )}
         </Card.Body>
       </Card>
-    </aside>
+    </section>
   );
 }
 

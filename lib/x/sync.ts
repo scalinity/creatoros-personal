@@ -6,6 +6,7 @@ import { logAuditEvent, logSafeError } from "@/lib/audit";
 import type { AdminContext } from "@/lib/auth/admin";
 import { nowIso } from "@/lib/db/json";
 import { createSupabaseServiceRoleClient } from "@/lib/db/service-role";
+import { calculateEngagementScore } from "@/lib/scoring";
 import type { Database, Json, PostRow } from "@/types/database";
 
 import { createLiveXApiClient, createMockXApiClient, type XApiClient, XApiError, type XAuthenticatedUser, type XSyncPost } from "./client";
@@ -124,15 +125,32 @@ function scoreMetadata(post: XSyncPost): Record<string, Json> {
   };
 }
 
+// SCA-516 (S-10): delegate to scoring/calculateEngagementScore so the same
+// post produces the same engagement number whether you reach it via the
+// X sync path (posts.engagement_rate column) or via the scoring path
+// (calculated on read from raw metric counts). The prior unweighted
+// formula here diverged from scoring's weighted formula, so the same
+// row had two different "engagement" numbers depending on which surface
+// you queried from. Engagement is `null` when there are no impressions
+// (the metric is undefined in that case, not zero) — calculateEngagementScore
+// returns 0 for that case so we map it to null to preserve the
+// "no data yet" semantics the dashboard relies on.
 function engagementRate(post: XSyncPost) {
-  const impressions = metric(post.metrics.impressionCount);
-
-  if (impressions <= 0) {
+  if (metric(post.metrics.impressionCount) <= 0) {
     return null;
   }
-
-  const engagement = metric(post.metrics.likeCount) + metric(post.metrics.replyCount) + metric(post.metrics.repostCount) + metric(post.metrics.quoteCount) + metric(post.metrics.bookmarkCount);
-  return Math.round((engagement / impressions) * 10_000) / 100;
+  return calculateEngagementScore({
+    bookmarkCount: post.metrics.bookmarkCount,
+    impressionCount: post.metrics.impressionCount,
+    likeCount: post.metrics.likeCount,
+    mediaViewCount: post.metrics.mediaViewCount,
+    profileClickCount: post.metrics.profileClickCount,
+    quoteCount: post.metrics.quoteCount,
+    replyCount: post.metrics.replyCount,
+    repostCount: post.metrics.repostCount,
+    urlLinkClickCount: post.metrics.urlLinkClickCount,
+    videoViewCount: post.metrics.videoViewCount,
+  });
 }
 
 function xPostUrl(username: string, id: string) {

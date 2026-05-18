@@ -251,7 +251,7 @@ function PostInspector({ action, post }: { action?: FormAction; post: PostHistor
   const score = Math.round(post.heuristicScore ?? 0);
 
   return (
-    <aside aria-labelledby="post-history-detail-title" className="post-history-inspector">
+    <section aria-labelledby="post-history-detail-title" className="post-history-inspector">
       <RuleHeader folio="§ 04" id="post-history-detail-title" label="Detail inspector" sub={post.platformPostId ?? post.id} />
       <ScoreGauge label="Heuristic score" value={score} />
       <Card variant="inset">
@@ -284,7 +284,7 @@ function PostInspector({ action, post }: { action?: FormAction; post: PostHistor
         </div>
         <SubmitButton size="sm">Recalculate scores</SubmitButton>
       </form>
-    </aside>
+    </section>
   );
 }
 

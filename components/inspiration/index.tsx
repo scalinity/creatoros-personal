@@ -217,18 +217,18 @@ function TransformList({ item }: { item: InspirationRecord }) {
 function InspirationInspector({ deleteAction, item, transformAction, updateAction }: { deleteAction?: FormAction; item: InspirationRecord | null; transformAction?: FormAction; updateAction?: FormAction }) {
   if (!item) {
     return (
-      <aside className="inspiration-inspector">
+      <section aria-label="Inspiration details" className="inspiration-inspector">
         <Card>
           <Card.Body>
             <EmptyState message="Select a saved source to edit metadata, transform its abstract pattern, and inspect originality warnings." title="No source selected" />
           </Card.Body>
         </Card>
-      </aside>
+      </section>
     );
   }
 
   return (
-    <aside className="inspiration-inspector">
+    <section aria-label="Inspiration details" className="inspiration-inspector">
       <Card>
         <Card.Header>
           <RuleHeader folio="§" label="Selection" sub="source boundary" />
@@ -261,7 +261,7 @@ function InspirationInspector({ deleteAction, item, transformAction, updateActio
           <TransformList item={item} />
         </Card.Body>
       </Card>
-    </aside>
+    </section>
   );
 }
 

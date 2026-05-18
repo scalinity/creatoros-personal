@@ -135,7 +135,7 @@ function VelocityTable({ rows }: { rows: VelocityPostSummary[] }) {
 
 function ExplanationPanel({ report }: { report: AnalyticsReport }) {
   return (
-    <aside className="analytics-inspector">
+    <section aria-label="Analytics explanation" className="analytics-inspector">
       {report.performance.averageHeuristicScore === null ? (
         <EmptyState message="Import scored posts or edit metrics to calculate an average heuristic score." title="Average heuristic unknown" />
       ) : (
@@ -184,7 +184,7 @@ function ExplanationPanel({ report }: { report: AnalyticsReport }) {
           <KeyValueRow label="Longest gap" mono value={report.cadence.longestGapDays === null ? "unknown" : `${report.cadence.longestGapDays}d`} />
         </Card.Body>
       </Card>
-    </aside>
+    </section>
   );
 }
 

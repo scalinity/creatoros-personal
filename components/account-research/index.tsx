@@ -223,7 +223,7 @@ function SelectedReport({ report, saveIdeaAction }: { report: AccountResearchRep
 
 function ResearchInspector({ report }: { report: AccountResearchReport | null }) {
   return (
-    <aside className="network-inspector">
+    <section aria-label="Account research details" className="network-inspector">
       <Card>
         <Card.Header>
           <RuleHeader folio="§ 06" label="Boundary" sub="account research" />
@@ -235,7 +235,7 @@ function ResearchInspector({ report }: { report: AccountResearchReport | null })
           <p className="network-muted">Ethical patterns are abstracted into original ideas. Replies still require explicit owner approval through Publishing.</p>
         </Card.Body>
       </Card>
-    </aside>
+    </section>
   );
 }
 

@@ -187,7 +187,7 @@ export function BlogWorkspaceView({ blogs, filters, selectedBlog }: BlogWorkspac
           <BlogFilters filters={filters} />
           <BlogList blogs={blogs} selectedBlog={selectedBlog} />
         </div>
-        <aside className="blog-inspector">
+        <section aria-label="Blog details" className="blog-inspector">
           <Card>
             <Card.Header>
               <RuleHeader folio="§" label="Selection" sub="metadata" />
@@ -206,7 +206,7 @@ export function BlogWorkspaceView({ blogs, filters, selectedBlog }: BlogWorkspac
               )}
             </Card.Body>
           </Card>
-        </aside>
+        </section>
       </section>
     </main>
   );
@@ -457,11 +457,11 @@ export function BlogDetailView({
           <AiPanel aiEditorAction={aiEditorAction} blog={blog} generateDraftAction={generateDraftAction} generateOutlineAction={generateOutlineAction} generateSeoAction={generateSeoAction} repurposeAction={repurposeAction} />
           <PublishingHandoffPanel action={createDraftAction} blog={blog} />
         </div>
-        <aside className="blog-detail-inspector">
+        <section aria-label="Blog inspector" className="blog-detail-inspector">
           <BlogMetadata blog={blog} />
           <VersionTimeline versions={detail.versions} />
           <ExportPanel actionBase={exportActionBase} exports={detail.exports} />
-        </aside>
+        </section>
       </section>
     </main>
   );

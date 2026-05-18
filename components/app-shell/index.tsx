@@ -520,21 +520,30 @@ export function CommandPaletteShell({ className, commands, onClose, open, ...pro
           label="Command Palette"
           sub="pending implementation"
         />
-        <div className="command-palette-list" role="list">
+        <ul className="command-palette-list">
           {groups.map((group) => (
-            <section className="command-palette-group" key={group}>
+            <li className="command-palette-group" key={group}>
               <h2 className="command-palette-group-label smallcaps">{group}</h2>
-              {commands
-                .filter((command) => command.group === group)
-                .map((command) => (
-                  <a className="command-palette-row" href={command.href} key={command.id} onClick={onClose} role="listitem">
-                    <span className="command-palette-row-label">{command.label}</span>
-                    <Badge variant="outline">pending</Badge>
-                  </a>
-                ))}
-            </section>
+              <ul>
+                {commands
+                  .filter((command) => command.group === group)
+                  .map((command) => (
+                    // SCA-531 (S-25): use <Link> inside <li> so the <a>
+                    // retains its native link role and we get client-side
+                    // navigation. The prior `<a href role="listitem">` both
+                    // overrode link semantics with listitem AND caused a
+                    // full page load.
+                    <li key={command.id}>
+                      <Link className="command-palette-row" href={command.href} onClick={onClose}>
+                        <span className="command-palette-row-label">{command.label}</span>
+                        <Badge variant="outline">pending</Badge>
+                      </Link>
+                    </li>
+                  ))}
+              </ul>
+            </li>
           ))}
-        </div>
+        </ul>
       </section>
     </div>
   );

@@ -371,7 +371,7 @@ export function GrowthCampaignsView({
           </section>
           <ReviewForms monthlyAction={runMonthlyReviewAction} weeklyAction={runWeeklyReviewAction} />
         </div>
-        <aside className="network-inspector" aria-label="Selected campaign and reviews">
+        <section className="network-inspector" aria-label="Selected campaign and reviews">
           <Card variant="inset">
             <Card.Header>
               <h2 className="network-card-title smallcaps">Selected campaign</h2>
@@ -393,7 +393,7 @@ export function GrowthCampaignsView({
           </Card>
           <GrowthReviewSection review={workspace.latestWeeklyReview} title="Weekly review" />
           <GrowthReviewSection review={workspace.latestMonthlyReview} title="Monthly review" />
-        </aside>
+        </section>
       </section>
     </main>
   );
@@ -565,11 +565,11 @@ export function GrowthExperimentsView({ createExperimentAction, notice, recordEx
           </Card>
           <ProfileAuditForm action={runProfileAuditAction} />
         </div>
-        <aside className="network-inspector" aria-label="Selected experiment and profile audit">
+        <section className="network-inspector" aria-label="Selected experiment and profile audit">
           <SelectedExperiment experiment={workspace.selectedExperiment} />
           <ResultForm action={recordExperimentResultAction} experiment={workspace.selectedExperiment} />
           <ProfileAuditCard audit={workspace.latestProfileAudit} />
-        </aside>
+        </section>
       </section>
     </main>
   );

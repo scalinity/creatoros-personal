@@ -297,10 +297,10 @@ export function BrainDumpWorkspaceView({ brainDump, dumps, notice, saveOutputAct
             />
           )}
         </div>
-        <aside aria-labelledby="brain-dump-history-title" className="ai-workflow-inspector">
+        <section aria-labelledby="brain-dump-history-title" className="ai-workflow-inspector">
           <RuleHeader folio="§ 06" id="brain-dump-history-title" label="Dump history" sub={`${dumps.length} saved`} />
           <RecentDumps dumps={dumps} selectedId={brainDump?.id} />
-        </aside>
+        </section>
       </section>
     </main>
   );

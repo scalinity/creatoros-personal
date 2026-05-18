@@ -669,7 +669,16 @@ export async function generateContentPlaybook(admin: AdminContext, options: Coac
   const structured = validateAiStructuredOutput(response.structured, historyPlaybookOutputSchema) satisfies HistoryPlaybookOutput;
   const persistedEvidence = sanitizeCitations(structured.evidence, context);
   const recommendations = [...structured.playbooks, ...structured.repurposing_suggestions];
-  const confidenceLabels = persistedEvidence.length > 0 ? (["fact", "inference"] as ConfidenceLabel[]) : (["speculation"] as ConfidenceLabel[]);
+  // SCA-517 (S-11): evidence-presence does not make every claim a `fact`.
+  // The playbook structured-output schema does not currently surface
+  // per-claim confidence labels (only per-evidence-item labels via
+  // `structured.evidence[].confidence`), so the report-level confidence
+  // falls through to `inference` when evidence is present and
+  // `speculation` when it is not. This matches the AI_PROMPTS.md
+  // taxonomy: `fact` is reserved for hard data points (counts, IDs,
+  // timestamps from the owner's own data), not analytic conclusions
+  // about WHY something performed.
+  const confidenceLabels = normalizedConfidenceLabels([], persistedEvidence.length > 0);
 
   const report = await persistCoachReport(admin, {
     answer: recommendations.length > 0 ? recommendations[0] ?? null : null,

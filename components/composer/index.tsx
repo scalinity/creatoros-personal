@@ -222,15 +222,15 @@ function EditIdeaForm({ action, idea }: { action?: FormAction; idea: ComposerIde
 function SourceInspector({ archiveAction, createDraftAction, idea, updateAction }: { archiveAction?: FormAction; createDraftAction?: FormAction; idea?: ComposerIdea | null; updateAction?: FormAction }) {
   if (!idea) {
     return (
-      <aside aria-labelledby="composer-source-title" className="composer-inspector">
+      <section aria-labelledby="composer-source-title" className="composer-inspector">
         <RuleHeader folio="§ 04" id="composer-source-title" label="Source inspector" sub="nothing selected" />
         <EmptyState message="Select an idea to inspect source tracking, tags, and local workspace state." title="No source selected" />
-      </aside>
+      </section>
     );
   }
 
   return (
-    <aside aria-labelledby="composer-source-title" className="composer-inspector">
+    <section aria-labelledby="composer-source-title" className="composer-inspector">
       <RuleHeader folio="§ 04" id="composer-source-title" label="Source inspector" sub={idea.title ?? idea.id} />
       <Card variant="inset">
         <Card.Body>
@@ -267,7 +267,7 @@ function SourceInspector({ archiveAction, createDraftAction, idea, updateAction 
           </form>
         </Card.Body>
       </Card>
-    </aside>
+    </section>
   );
 }
 

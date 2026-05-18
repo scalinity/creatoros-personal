@@ -249,10 +249,10 @@ export function ApprovalRail({
 }) {
   if (!draft) {
     return (
-      <aside aria-labelledby="publishing-approval-title" className="approval-rail">
+      <section aria-labelledby="publishing-approval-title" className="approval-rail">
         <RuleHeader folio="§ 03" id="publishing-approval-title" label="Approval rail" sub="nothing selected" />
         <EmptyState message="Select a draft to inspect payload hash, dry-run status, duplicate checks, schedule, and failures." title="No draft selected" />
-      </aside>
+      </section>
     );
   }
 
@@ -263,7 +263,7 @@ export function ApprovalRail({
   const draftJobs = jobs.filter((job) => job.draftId === draft.id);
 
   return (
-    <aside aria-labelledby="publishing-approval-title" className="approval-rail">
+    <section aria-labelledby="publishing-approval-title" className="approval-rail">
       <RuleHeader folio="§ 03" id="publishing-approval-title" label="Approval rail" sub={draft.status} />
       <Card>
         <Card.Body>
@@ -349,7 +349,7 @@ export function ApprovalRail({
       </Card>
       <LatestJob jobs={draftJobs} />
       {draftFailures.length > 0 ? draftFailures.map((failure) => <PublishFailureCard failure={failure} key={failure.id} retryAction={retryAction} />) : null}
-    </aside>
+    </section>
   );
 }
 
