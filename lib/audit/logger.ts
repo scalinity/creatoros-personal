@@ -2,12 +2,12 @@ import "server-only";
 
 import { createHash, createHmac, randomUUID } from "node:crypto";
 
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-
 import { normalizeEmail } from "@/lib/auth/allowlist";
-import { getSupabaseServiceRoleConfig } from "@/lib/auth/config";
-import { getE2eSupabaseClient, shouldUseE2eServiceRoleClient } from "@/lib/testing/e2e-fixtures";
-import type { Database } from "@/types/database";
+// SCA-507 (S-1): share the cached service-role client with the rest of the
+// repo instead of duplicating the singleton + factory inline. The deleted
+// local getServiceRoleClient had its own E2E bypass + cache that drifted
+// from lib/db/service-role.ts.
+import { createSupabaseServiceRoleClient } from "@/lib/db/service-role";
 
 import { redactAuditMetadata, redactAuditString } from "./redaction";
 
@@ -27,30 +27,6 @@ export type AuditEventInput = {
   targetType?: null | string;
   userId?: null | string;
 };
-
-let serviceRoleClient: null | SupabaseClient<Database> = null;
-
-function getServiceRoleClient() {
-  if (shouldUseE2eServiceRoleClient()) {
-    return getE2eSupabaseClient();
-  }
-
-  if (serviceRoleClient) {
-    return serviceRoleClient;
-  }
-
-  const { serviceRoleKey, url } = getSupabaseServiceRoleConfig();
-
-  serviceRoleClient = createClient<Database>(url, serviceRoleKey, {
-    auth: {
-      autoRefreshToken: false,
-      detectSessionInUrl: false,
-      persistSession: false,
-    },
-  });
-
-  return serviceRoleClient;
-}
 
 function hashIpAddress(ipAddress: null | string) {
   if (!ipAddress) {
@@ -95,7 +71,7 @@ export async function logAuditEvent(input: AuditEventInput) {
       request_path: input.request?.url ? new URL(input.request.url).pathname : undefined,
     });
 
-    const { error } = await getServiceRoleClient().from("audit_logs").insert({
+    const { error } = await createSupabaseServiceRoleClient().from("audit_logs").insert({
       actor_email: normalizeEmail(input.actorEmail),
       error: input.error ? redactAuditString(input.error).slice(0, 500) : null,
       event_type: input.eventType,

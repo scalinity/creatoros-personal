@@ -319,6 +319,13 @@ export class XOAuthRefreshError extends Error {
   }
 }
 
+// SCA-501 (W-22): max attempts before declaring the connection degraded.
+// One initial attempt + two retries on transient classification (5xx/network/
+// timeout/bare-401). invalid_grant short-circuits — no point retrying when
+// the refresh token itself is no longer valid.
+const X_OAUTH_REFRESH_MAX_ATTEMPTS = 3;
+const X_OAUTH_REFRESH_RETRY_DELAY_MS = 250;
+
 export async function refreshXOAuthToken(refreshToken: string, options: { fetchImpl?: typeof fetch; source?: NodeJS.ProcessEnv } = {}) {
   const config = getXOAuthConfig(options.source ?? process.env);
   const body = new URLSearchParams({
@@ -326,21 +333,57 @@ export async function refreshXOAuthToken(refreshToken: string, options: { fetchI
     grant_type: "refresh_token",
     refresh_token: refreshToken,
   });
-  let response: Response;
-  try {
-    response = await fetchWithOauthTimeout(options.fetchImpl ?? fetch, X_TOKEN_ENDPOINT, {
-      body,
-      headers: {
-        Authorization: basicAuthHeader(config),
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      method: "POST",
-    });
-  } catch (error) {
-    if (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")) {
-      throw new XOAuthRefreshError("X OAuth refresh timed out.", "transient");
+
+  async function attemptRefresh(): Promise<Response> {
+    try {
+      return await fetchWithOauthTimeout(options.fetchImpl ?? fetch, X_TOKEN_ENDPOINT, {
+        body,
+        headers: {
+          Authorization: basicAuthHeader(config),
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        method: "POST",
+      });
+    } catch (error) {
+      if (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")) {
+        throw new XOAuthRefreshError("X OAuth refresh timed out.", "transient");
+      }
+      throw new XOAuthRefreshError(error instanceof Error ? error.message : "x_oauth_refresh_network", "transient");
     }
-    throw new XOAuthRefreshError(error instanceof Error ? error.message : "x_oauth_refresh_network", "transient");
+  }
+
+  // SCA-501 (W-22): retry transient classifications (network / 5xx / bare 401)
+  // before persisting `degraded`. The classification already distinguished
+  // invalid_grant from transient — now we actually act on it. A single 5xx
+  // blip during a cron sync no longer forces a connection state transition.
+  let response: Response | null = null;
+  let lastTransientError: null | XOAuthRefreshError = null;
+  for (let attempt = 0; attempt < X_OAUTH_REFRESH_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      response = await attemptRefresh();
+      if (response.ok) break;
+      // Non-2xx: check whether to retry. Clone the body before consuming.
+      const clone = response.clone();
+      let bodyJson: unknown = null;
+      try { bodyJson = await clone.json(); } catch { /* classify by status alone */ }
+      const errorCode = bodyJson && typeof bodyJson === "object" && !Array.isArray(bodyJson)
+        ? String((bodyJson as Record<string, unknown>).error ?? "")
+        : "";
+      const isInvalidGrant = response.status >= 400 && response.status < 500
+        && (errorCode === "invalid_grant" || errorCode === "invalid_client" || errorCode === "invalid_request");
+      if (isInvalidGrant || attempt >= X_OAUTH_REFRESH_MAX_ATTEMPTS - 1) break;
+      // transient: small backoff before retry. Don't loop forever — bounded by attempts.
+      await new Promise((resolve) => setTimeout(resolve, X_OAUTH_REFRESH_RETRY_DELAY_MS * (attempt + 1)));
+    } catch (error) {
+      if (!(error instanceof XOAuthRefreshError) || error.kind !== "transient") throw error;
+      lastTransientError = error;
+      if (attempt >= X_OAUTH_REFRESH_MAX_ATTEMPTS - 1) throw error;
+      await new Promise((resolve) => setTimeout(resolve, X_OAUTH_REFRESH_RETRY_DELAY_MS * (attempt + 1)));
+    }
+  }
+
+  if (!response) {
+    throw lastTransientError ?? new XOAuthRefreshError("X OAuth refresh exhausted retries.", "transient");
   }
 
   if (!response.ok) {
