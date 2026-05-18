@@ -3,6 +3,7 @@ import "server-only";
 import type { z } from "zod";
 
 import { logAuditEvent } from "@/lib/audit";
+import { validateAiStructuredOutput } from "@/lib/ai/json";
 import { runStructuredPrompt } from "@/lib/ai/run";
 import { voiceProfileOutputSchema, type AiProvider } from "@/lib/ai";
 import type { AdminContext } from "@/lib/auth/admin";
@@ -380,20 +381,7 @@ async function reactivateProfiles(admin: AdminContext, profileIds: string[]) {
   }
 }
 
-async function activateVoiceProfile(admin: AdminContext, profileId: string) {
-  const { error } = await admin.supabase
-    .from("voice_profiles")
-    .update({ is_active: true })
-    .eq("user_id", admin.userId)
-    .eq("id", profileId)
-    .is("deleted_at", null);
-
-  if (error) {
-    throw new Error(`Failed to activate replacement voice profile: ${error.message}`);
-  }
-}
-
-async function insertVoiceProfile(admin: AdminContext, sources: VoiceSourceBundle, output: VoiceProfileOutput, response: { model: string; provider: string }) {
+async function insertVoiceProfile(admin: AdminContext, sources: VoiceSourceBundle, output: VoiceProfileOutput, response: { model: string; provider: string }, options: { isActive: boolean } = { isActive: false }) {
   const { data, error } = await admin.supabase
     .from("voice_profiles")
     .insert({
@@ -403,7 +391,7 @@ async function insertVoiceProfile(admin: AdminContext, sources: VoiceSourceBundl
       examples: output.examples as unknown as Json,
       formatting_habits: output.formatting_habits as unknown as Json,
       hook_patterns: output.hook_patterns as Json,
-      is_active: false,
+      is_active: options.isActive,
       metadata: {
         length_distribution: output.length_distribution,
         model: response.model,
@@ -445,13 +433,17 @@ export async function generateVoiceProfile(admin: AdminContext, options: VoicePr
     promptId: PROMPT_ID,
     provider: options.provider,
   });
-  const output = sanitizeVoiceProfileOutput(sources, voiceProfileOutputSchema.parse(response.structured));
+  const output = sanitizeVoiceProfileOutput(sources, validateAiStructuredOutput(response.structured, voiceProfileOutputSchema));
 
-  const profile = await insertVoiceProfile(admin, sources, output, response);
+  // Activation order matters: deactivate prior profiles first, then insert the
+  // replacement with is_active=true so there is never a moment with zero or two
+  // active profiles. If insertion fails we restore the previous active set; we
+  // also never leak an orphaned inactive row from a failed activation step.
   const previousActiveProfileIds = await deactivateCurrentProfiles(admin);
 
+  let profile;
   try {
-    await activateVoiceProfile(admin, profile.id);
+    profile = await insertVoiceProfile(admin, sources, output, response, { isActive: true });
   } catch (error) {
     await reactivateProfiles(admin, previousActiveProfileIds);
     throw error;

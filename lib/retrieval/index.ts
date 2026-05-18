@@ -126,7 +126,23 @@ function matchesEntityType(row: EmbeddingRow, entityTypes?: EmbeddableEntityType
 function embeddingModelForRows(rows: EmbeddingRow[]) {
   const configuredModel = getAiRuntimeConfig().embeddingModel;
   if (rows.some((row) => row.embedding_model === configuredModel)) return configuredModel;
-  return rows[0]?.embedding_model ?? configuredModel;
+  // L-27: prefer the most-frequent stored model rather than the first-row's
+  // arbitrary value. When a refresh has not yet migrated old rows, this still
+  // returns a usable model; the dimension filter further down rejects rows
+  // whose vector length does not match.
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    counts.set(row.embedding_model, (counts.get(row.embedding_model) ?? 0) + 1);
+  }
+  let majority: null | string = null;
+  let bestCount = 0;
+  for (const [model, count] of counts) {
+    if (count > bestCount) {
+      majority = model;
+      bestCount = count;
+    }
+  }
+  return majority ?? rows[0]?.embedding_model ?? configuredModel;
 }
 
 function isCompatibleEmbeddingRow(row: EmbeddingRow, model: string, dimension: number) {

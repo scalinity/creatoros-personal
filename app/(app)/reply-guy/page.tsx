@@ -1,3 +1,5 @@
+import type { Metadata } from "next";
+
 import { ReplyGuyWorkspaceView } from "@/components/reply-guy";
 import { requireAdmin } from "@/lib/auth/admin";
 import { loadReplyGuyWorkspace } from "@/lib/reply-guy";
@@ -12,6 +14,10 @@ import {
   markReplyUsedAction,
   pasteTargetPostsAction,
 } from "./actions";
+
+export const metadata: Metadata = {
+  title: "Reply Guy · CreatorOS Personal",
+};
 
 export const dynamic = "force-dynamic";
 

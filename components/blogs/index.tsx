@@ -1,7 +1,8 @@
 import Link from "next/link";
+import type { Route } from "next";
 import type { ComponentProps } from "react";
 
-import { Badge, Button, Card, EmptyState, Input, KeyValueRow, MetricBlock, RuleHeader, Select, Table, Textarea, cn } from "@/components/design-system";
+import { Badge, Card, EmptyState, Input, KeyValueRow, LinkButton, MetricBlock, RuleHeader, Select, SubmitButton, Table, Textarea, cn } from "@/components/design-system";
 import type { BlogDetail, BlogRecord, BlogWorkspace } from "@/lib/blogs";
 
 export type FormAction = ComponentProps<"form">["action"];
@@ -108,12 +109,8 @@ function BlogFilters({ filters }: { filters: BlogFilters }) {
       <Select defaultValue={filters.status ?? ""} label="Status" name="status" options={filterStatusOptions} />
       <Input defaultValue={filters.tag ?? ""} label="Tag" name="tag" placeholder="systems" />
       <div className="blog-filter-actions">
-        <Button size="sm" type="submit" variant="secondary">
-          Apply
-        </Button>
-        <Link className="blog-reset" href="/blogs">
-          Reset
-        </Link>
+        <SubmitButton size="sm" variant="secondary">Apply</SubmitButton>
+        <Link className="blog-reset" href="/blogs">Reset</Link>
       </div>
     </form>
   );
@@ -122,7 +119,7 @@ function BlogFilters({ filters }: { filters: BlogFilters }) {
 function BlogRow({ blog, selected }: { blog: BlogRecord; selected?: boolean }) {
   return (
     <article className={cn("blog-row", selected && "blog-row-selected")}>
-      <Link className="blog-row-link" href={`/blogs/${blog.id}`}>
+      <Link aria-current={selected ? "page" : undefined} className="blog-row-link" href={`/blogs/${blog.id}` as Route}>
         <span className="blog-row-main">
           <span className="blog-row-title">{blog.title}</span>
           <span className="blog-row-meta mono">/{blog.slug ?? "unslugged"}</span>
@@ -143,11 +140,22 @@ function BlogRow({ blog, selected }: { blog: BlogRecord; selected?: boolean }) {
 
 function BlogList({ blogs, selectedBlog }: Pick<BlogWorkspace, "blogs" | "selectedBlog">) {
   if (blogs.length === 0) {
-    return <EmptyState action={<Link className="btn btn-secondary btn-sm" href="/blogs/new"><span className="btn-label">Draft blog</span></Link>} message="Create a blank blog or link an existing idea, post, brain dump, or generated output." title="No blogs in this view" />;
+    return (
+      <EmptyState
+        action={
+          <LinkButton href="/blogs/new" size="sm" variant="secondary">
+            Draft blog
+          </LinkButton>
+        }
+        message="Create a blank blog or link an existing idea, post, brain dump, or generated output."
+        title="No blogs in this view"
+      />
+    );
   }
 
   return (
-    <section className="blog-list" aria-label="Blog archive">
+    <section aria-labelledby="blog-archive-title" className="blog-list">
+      <RuleHeader className="visually-hidden" folio="§" id="blog-archive-title" label="Blog archive" />
       {blogs.map((blog) => (
         <BlogRow blog={blog} key={blog.id} selected={blog.id === selectedBlog?.id} />
       ))}
@@ -157,11 +165,18 @@ function BlogList({ blogs, selectedBlog }: Pick<BlogWorkspace, "blogs" | "select
 
 export function BlogWorkspaceView({ blogs, filters, selectedBlog }: BlogWorkspaceViewProps) {
   return (
-    <main className="blog-page" aria-labelledby="blogs-title">
-      <h1 className="workflow-title" id="blogs-title">Blogs</h1>
-      <RuleHeader actions={<Link className="btn btn-primary btn-sm" href="/blogs/new"><span className="btn-label">New blog</span></Link>} folio="§ 14" label="Blogs" sub="long-form archive" />
+    <main aria-labelledby="blogs-title" className="blog-page">
+      <RuleHeader
+        actions={<LinkButton href="/blogs/new" size="sm" variant="primary">New blog</LinkButton>}
+        as="h1"
+        folio="§ 14"
+        id="blogs-title"
+        label="Blogs"
+        sub="long-form archive"
+      />
       <Notice notice={filters.notice} />
-      <section className="blog-metrics" aria-label="Blog summary">
+      <section aria-labelledby="blog-summary-title" className="blog-metrics">
+        <RuleHeader className="visually-hidden" folio="§" id="blog-summary-title" label="Blog summary" />
         <MetricBlock label="Visible blogs" value={blogs.length} />
         <MetricBlock label="Ready/exported" value={blogs.filter((blog) => ["ready", "exported"].includes(blog.status)).length} />
         <MetricBlock label="Total words" value={blogs.reduce((sum, blog) => sum + blog.wordCount, 0)} />
@@ -199,9 +214,15 @@ export function BlogWorkspaceView({ blogs, filters, selectedBlog }: BlogWorkspac
 
 export function NewBlogView({ createAction, notice }: NewBlogViewProps) {
   return (
-    <main className="blog-page" aria-labelledby="new-blog-title">
-      <h1 className="workflow-title" id="new-blog-title">New blog</h1>
-      <RuleHeader actions={<Link className="btn btn-secondary btn-sm" href="/blogs"><span className="btn-label">Back to blogs</span></Link>} folio="§ 14.1" label="New blog" sub="blank or sourced" />
+    <main aria-labelledby="new-blog-title" className="blog-page">
+      <RuleHeader
+        actions={<LinkButton href="/blogs" size="sm" variant="secondary">Back to blogs</LinkButton>}
+        as="h1"
+        folio="§ 14.1"
+        id="new-blog-title"
+        label="New blog"
+        sub="blank or sourced"
+      />
       <Notice notice={notice} />
       <section className="blog-workbench blog-workbench-single">
         <Card>
@@ -220,7 +241,7 @@ export function NewBlogView({ createAction, notice }: NewBlogViewProps) {
                 <Input label="Tags" name="tags" placeholder="systems, writing" />
                 <Input label="Categories" name="categories" placeholder="craft" />
               </div>
-              <Button type="submit">Create blog</Button>
+              <SubmitButton>Create blog</SubmitButton>
             </form>
           </Card.Body>
         </Card>
@@ -297,9 +318,9 @@ function ExportPanel({ actionBase, exports }: { actionBase: string; exports: Blo
           ].map(([format, label]) => (
             <form action={actionBase} key={format} method="post">
               <input name="format" type="hidden" value={format} />
-              <Button size="sm" type="submit" variant="secondary">
+              <SubmitButton size="sm" variant="secondary">
                 {label}
-              </Button>
+              </SubmitButton>
             </form>
           ))}
         </div>
@@ -358,9 +379,9 @@ function PublishingHandoffPanel({ action, blog }: { action?: FormAction; blog: B
           <input name="source_type" type="hidden" value="blog_post" />
           <input name="source_id" type="hidden" value={blog.id} />
           <input name="content_type" type="hidden" value="blog_to_x_thread" />
-          <Button size="sm" type="submit" variant="secondary">
+          <SubmitButton size="sm" variant="secondary">
             Create publishing draft
-          </Button>
+          </SubmitButton>
         </form>
       </Card.Body>
     </Card>
@@ -373,9 +394,9 @@ function AiActionForm({ action, blogId, label, mode }: { action?: FormAction; bl
       <input name="blog_id" type="hidden" value={blogId} />
       <input name="mode" type="hidden" value={mode} />
       <Input label={`${label} notes`} name="owner_notes" placeholder="Optional direction" />
-      <Button size="sm" type="submit" variant="secondary">
+      <SubmitButton size="sm" variant="secondary">
         {label}
-      </Button>
+      </SubmitButton>
     </form>
   );
 }
@@ -395,11 +416,18 @@ export function BlogDetailView({
   const { blog } = detail;
 
   return (
-    <main className="blog-page" aria-labelledby="blog-detail-title">
-      <h1 className="workflow-title" id="blog-detail-title">{blog.title}</h1>
-      <RuleHeader actions={<Link className="btn btn-secondary btn-sm" href="/blogs"><span className="btn-label">Back to blogs</span></Link>} folio="§ 14.2" label="Blog editor" sub={blog.status} />
+    <main aria-labelledby="blog-detail-title" className="blog-page">
+      <RuleHeader
+        actions={<LinkButton href="/blogs" size="sm" variant="secondary">Back to blogs</LinkButton>}
+        as="h1"
+        folio="§ 14.2"
+        id="blog-detail-title"
+        label={blog.title}
+        sub={blog.status}
+      />
       <Notice notice={notice} />
-      <section className="blog-detail-metrics" aria-label="Blog metrics">
+      <section aria-labelledby="blog-detail-metrics-title" className="blog-detail-metrics">
+        <RuleHeader className="visually-hidden" folio="§" id="blog-detail-metrics-title" label="Blog metrics" />
         <MetricBlock label="Words" value={blog.wordCount} />
         <MetricBlock label="Read" value={`${blog.readingTimeMinutes} min`} />
         <MetricBlock label="Versions" value={detail.versions.length} />
@@ -424,7 +452,7 @@ export function BlogDetailView({
             <Textarea defaultValue={blog.canonicalSummary ?? ""} label="Canonical summary" name="canonical_summary" rows={3} />
             <Textarea className="blog-markdown-field" defaultValue={blog.markdown} label="Markdown" name="markdown" required rows={22} />
             <Input label="Change reason" name="change_reason" placeholder="What changed in this version?" />
-            <Button type="submit">Save blog</Button>
+            <SubmitButton>Save blog</SubmitButton>
           </form>
           <AiPanel aiEditorAction={aiEditorAction} blog={blog} generateDraftAction={generateDraftAction} generateOutlineAction={generateOutlineAction} generateSeoAction={generateSeoAction} repurposeAction={repurposeAction} />
           <PublishingHandoffPanel action={createDraftAction} blog={blog} />

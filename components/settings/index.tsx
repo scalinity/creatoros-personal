@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
 
-import { Badge, Button, Card, KeyValueRow, RuleHeader, Table, cn } from "@/components/design-system";
+import { Badge, Card, KeyValueRow, RuleHeader, Table, cn } from "@/components/design-system";
 import type { DiagnosticGroup, DiagnosticGroupId, DiagnosticStatus, OperationalDiagnostics } from "@/lib/server-only/diagnostics";
 
 type BadgeVariant = "danger" | "neutral" | "outline" | "success" | "warning";
@@ -37,7 +38,7 @@ const settingsLinks = [
   { href: "/settings/data", label: "Data" },
   { href: "/settings/tokens", label: "Tokens" },
   { href: "/settings/diagnostics", label: "Diagnostics" },
-];
+] as const;
 
 export function statusBadgeVariant(status: DiagnosticStatus): BadgeVariant {
   if (status === "ready") return "success";
@@ -50,18 +51,19 @@ function SettingsNav() {
   return (
     <nav aria-label="Settings sections" className="settings-nav">
       {settingsLinks.map((link) => (
-        <a className="settings-nav-link smallcaps" href={link.href} key={link.href}>
+        <Link className="settings-nav-link smallcaps" href={link.href} key={link.href}>
           {link.label}
-        </a>
+        </Link>
       ))}
     </nav>
   );
 }
 
-function actionClassName(tone: SettingsAction["tone"] = "secondary", disabled?: boolean) {
-  const variant = tone === "destructive" ? "destructive" : tone === "primary" ? "primary" : tone === "tertiary" ? "tertiary" : "secondary";
-
-  return cn("btn", `btn-${variant}`, "btn-sm", disabled && "settings-action-disabled");
+function settingsActionVariant(tone: SettingsAction["tone"] = "secondary") {
+  if (tone === "destructive") return "destructive" as const;
+  if (tone === "primary") return "primary" as const;
+  if (tone === "tertiary") return "tertiary" as const;
+  return "secondary" as const;
 }
 
 function SettingsActions({ actions = [] }: { actions?: SettingsAction[] }) {
@@ -69,20 +71,30 @@ function SettingsActions({ actions = [] }: { actions?: SettingsAction[] }) {
 
   return (
     <div className="settings-actions">
-      {actions.map((action) => (
-        <div className="settings-action" key={String(action.label)}>
-          {action.href && !action.disabled ? (
-            <a className={actionClassName(action.tone)} href={action.href}>
-              <span className="btn-label">{action.label}</span>
-            </a>
-          ) : (
-            <Button disabled={action.disabled} size="sm" variant={action.tone === "destructive" ? "destructive" : "secondary"}>
-              {action.label}
-            </Button>
-          )}
-          {action.note ? <span className="settings-action-note">{action.note}</span> : null}
-        </div>
-      ))}
+      {actions.map((action) => {
+        const variant = settingsActionVariant(action.tone);
+        const className = cn("btn", `btn-${variant}`, "btn-sm", action.disabled && "settings-action-disabled");
+
+        return (
+          <div className="settings-action" key={String(action.label)}>
+            {action.href && !action.disabled ? (
+              <a className={className} href={action.href}>
+                <span className="btn-label">{action.label}</span>
+              </a>
+            ) : (
+              <button
+                aria-disabled={action.disabled || undefined}
+                className={className}
+                disabled={action.disabled}
+                type="button"
+              >
+                <span className="btn-label">{action.label}</span>
+              </button>
+            )}
+            {action.note ? <span className="settings-action-note">{action.note}</span> : null}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -140,13 +152,18 @@ export function SettingsSectionPage({
 
   return (
     <main aria-labelledby="settings-page-title" className="settings-page">
-      <RuleHeader actions={<Badge variant={statusBadgeVariant(diagnostics.overall)}>{diagnostics.overall}</Badge>} folio={folio} label={title} sub="settings" />
-      <section className="settings-hero" aria-label="Settings status">
+      <RuleHeader
+        actions={<Badge variant={statusBadgeVariant(diagnostics.overall)}>{diagnostics.overall}</Badge>}
+        as="h1"
+        folio={folio}
+        id="settings-page-title"
+        label={title}
+        sub="settings"
+      />
+      <section aria-labelledby="settings-status-title" className="settings-hero">
+        <RuleHeader className="visually-hidden" folio="§" id="settings-status-title" label="Settings status" />
         <div>
           <p className="route-kicker smallcaps">private system console</p>
-          <h1 className="route-title" id="settings-page-title">
-            {title}
-          </h1>
           <p className="route-description">{description}</p>
         </div>
         <Card className="settings-summary" variant="inset">

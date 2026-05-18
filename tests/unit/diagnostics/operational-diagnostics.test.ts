@@ -25,7 +25,7 @@ const validEnv = {
   X_DEFAULT_SCOPES: "tweet.read users.read offline.access",
   X_PUBLISHING_SCOPES: "tweet.write media.write",
   ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef",
-  CRON_SECRET: "cron-secret-placeholder",
+  CRON_SECRET: "cron-secret-placeholder-1234",
   PERSONAL_SAVE_TOKEN_PEPPER: "save-token-pepper-placeholder",
 };
 

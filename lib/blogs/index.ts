@@ -3,6 +3,7 @@ import "server-only";
 import { createHash } from "node:crypto";
 
 import { blogDraftOutputSchema, blogEditorOutputSchema, blogOutlineOutputSchema, blogRepurposingOutputSchema, seoMetadataOutputSchema, type AiProvider } from "@/lib/ai";
+import { validateAiStructuredOutput } from "@/lib/ai/json";
 import { runStructuredPrompt } from "@/lib/ai/run";
 import { logAuditEvent } from "@/lib/audit";
 import type { AdminContext } from "@/lib/auth/admin";
@@ -798,7 +799,7 @@ export async function generateBlogOutline(admin: AdminContext, options: BlogAiRu
     promptId: BLOG_OUTLINE_PROMPT_ID,
     provider: options.provider,
   });
-  const output = blogOutlineOutputSchema.parse(response.structured);
+  const output = validateAiStructuredOutput(response.structured, blogOutlineOutputSchema);
   const updated = await updateBlog(
     admin,
     {
@@ -836,7 +837,7 @@ export async function generateBlogDraft(admin: AdminContext, options: BlogAiRunO
     promptId: BLOG_DRAFT_PROMPT_ID,
     provider: options.provider,
   });
-  const output = blogDraftOutputSchema.parse(response.structured);
+  const output = validateAiStructuredOutput(response.structured, blogDraftOutputSchema);
   const updated = await updateBlog(
     admin,
     {
@@ -886,7 +887,7 @@ export async function suggestBlogEdits(admin: AdminContext, options: BlogAiRunOp
     promptId: BLOG_EDITOR_PROMPT_ID,
     provider: options.provider,
   });
-  const output = blogEditorOutputSchema.parse(response.structured);
+  const output = validateAiStructuredOutput(response.structured, blogEditorOutputSchema);
   const updated = await updateBlog(
     admin,
     {
@@ -923,7 +924,7 @@ export async function generateBlogSeo(admin: AdminContext, options: BlogAiRunOpt
     promptId: SEO_PROMPT_ID,
     provider: options.provider,
   });
-  const output = seoMetadataOutputSchema.parse(response.structured);
+  const output = validateAiStructuredOutput(response.structured, seoMetadataOutputSchema);
   const updated = await updateBlog(
     admin,
     {
@@ -965,7 +966,7 @@ export async function repurposeBlogToX(admin: AdminContext, options: BlogAiRunOp
     promptId: BLOG_TO_X_PROMPT_ID,
     provider: options.provider,
   });
-  const output = blogRepurposingOutputSchema.parse(response.structured);
+  const output = validateAiStructuredOutput(response.structured, blogRepurposingOutputSchema);
   const { data: job, error: jobError } = await admin.supabase
     .from("blog_repurposing_jobs")
     .insert({

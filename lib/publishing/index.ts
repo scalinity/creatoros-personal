@@ -35,6 +35,34 @@ import type {
 } from "./validation";
 import { publishingSourceTypes } from "./validation";
 
+// =============================================================================
+// M-14: lib/publishing/index.ts is the publishing domain entry point. The file
+// is large (~2400 lines) because it bundles several cooperating concerns:
+//
+//   1. Domain types and `rowTo*` adapters (around lines 60-260).
+//   2. Validation / approval-payload hashing (computePublishingPayloadHash and
+//      friends, around lines 750-900).
+//   3. The state-machine guard helpers (assertApprovalPayload, etc.) and the
+//      XPublishingGuardError class around lines 980-1240.
+//   4. Idempotency-key generation (liveIdempotencyKey, dryRunIdempotencyKey).
+//   5. Dry-run job construction (runDryRunPublishingJob, around 1140-1200).
+//   6. The live X publish path (runXPublishingJob + helpers, ~1820-1990).
+//   7. Retry / cancel / archive operations (~1990-2080).
+//   8. The scheduled-cron executor (runScheduledPublishingExecutor, ~2150).
+//   9. Workspace + calendar loaders for the UI (~2210+).
+//
+// A future split should extract them into:
+//   * lib/publishing/state-machine.ts  (sections 2 + 3)
+//   * lib/publishing/idempotency.ts    (section 4)
+//   * lib/publishing/adapter.ts        (sections 5 + 6 + 7)
+//   * lib/publishing/executor.ts       (section 8)
+//   * lib/publishing/workspace.ts      (section 9)
+//
+// That refactor is deliberately deferred per the FINAL_CODEBASE_REVIEW M-14
+// note ("pure refactor, no behavior change") — done here as section markers
+// instead so the file is at least navigable without inflating diff risk.
+// =============================================================================
+
 const PHASE = "15-publishing-state-machine-dry-run-calendar";
 const PHASE_17 = "17-x-write-publishing-adapter";
 const DRY_RUN_FAILURE_MARKER = "[dry-run-fail]";
@@ -1092,7 +1120,11 @@ function dryRunShouldFail(draft: PublishingDraft) {
 }
 
 function dryRunIdempotencyKey(draft: PublishingDraft, payloadHash: string, jobType: "dry_run" | "retry") {
-  return `${jobType}:${draft.id}:${payloadHash}:${hashString(textForDraft(draft)).slice(0, 12)}`;
+  // Append a per-attempt UUID so repeated dry runs of the same approved payload
+  // do not collide with the unique idempotency_key constraint on
+  // publishing_jobs. The deterministic prefix preserves observability across
+  // retries without trapping the second invocation in a duplicate-key error.
+  return `${jobType}:${draft.id}:${payloadHash}:${hashString(textForDraft(draft)).slice(0, 12)}:${randomUUID()}`;
 }
 
 async function insertPublishingFailure(admin: AdminContext, job: PublishingJobRow, draft: PublishingDraft, message: string) {
@@ -1117,12 +1149,10 @@ async function insertPublishingFailure(admin: AdminContext, job: PublishingJobRo
     throw new Error(`Failed to record publishing failure: ${error?.message ?? "missing row"}`);
   }
 
-  await admin.supabase
-    .from("publishing_drafts")
-    .update({ status: "failed" })
-    .eq("id", draft.id)
-    .eq("user_id", admin.userId)
-    .is("deleted_at", null);
+  // A failing dry run is intentionally non-destructive: the draft stays in
+  // `approved` so the owner can fix the issue and rerun without re-approving.
+  // Only live publish failures flip the draft to `failed` (handled via
+  // `markDraftAndSchedule` in `runXPublishingJob`).
 
   await logAuditEvent({
     actorEmail: admin.email,
@@ -1216,6 +1246,10 @@ type XPublishingJobOptions = {
   jobType?: "publish" | "retry";
   mode?: XPublishingMode;
   now?: () => Date;
+  // C-1: when retrying a failed job, the caller MUST pass the prior failed job's id
+  // so the idempotency key is deterministic and two concurrent retries collide on the
+  // publishing_jobs unique index instead of each issuing a real X publish.
+  priorFailedJobId?: null | string;
   request?: { headers: Headers; url?: string } | null;
   scheduledPostId?: null | string;
   serviceClient?: ReturnType<typeof createSupabaseServiceRoleClient>;
@@ -1230,7 +1264,9 @@ type XPublishFailureDetails = {
   retryable: boolean;
 };
 
-class XPublishingGuardError extends Error {
+// Exported so app/api/publishing/_utils.ts can classify errors structurally
+// instead of substring-matching on `error.message` (L-2).
+export class XPublishingGuardError extends Error {
   constructor(
     readonly code: string,
     message: string,
@@ -1268,11 +1304,15 @@ function publishableItems(draft: PublishingDraft) {
   return [draft.text].filter((item) => item.trim().length > 0);
 }
 
+// Aligns with the schema-side confirmation pattern in
+// lib/publishing/validation.ts and lib/x/validation.ts: the value must START
+// WITH "confirm" or "approve" followed by a word boundary, after trim+lowercase.
+const liveConfirmationPattern = /^(?:confirm|approve)\b/;
 function assertLivePublishConfirmation(input: PublishingDraftDryRunServiceInput, options: XPublishingJobOptions) {
   if (options.scheduledPostId || options.jobType === "retry") return;
 
   const confirmation = input.confirmation?.trim().toLowerCase() ?? "";
-  if (!confirmation.includes("confirm")) {
+  if (!liveConfirmationPattern.test(confirmation)) {
     throw new XPublishingGuardError("confirmation_required", "Explicit owner confirmation is required before live X publishing.");
   }
 }
@@ -1281,17 +1321,49 @@ function xPostUrl(username: null | string, platformPostId: string) {
   return username ? `https://x.com/${username}/status/${platformPostId}` : `https://x.com/i/web/status/${platformPostId}`;
 }
 
-function liveIdempotencyKey(draft: PublishingDraft, payloadHash: string, jobType: "publish" | "retry", scheduledPostId?: null | string) {
-  const base = `${jobType}:${draft.id}:${payloadHash}:${hashString(textForDraft(draft)).slice(0, 12)}:${scheduledPostId ?? "immediate"}`;
-  return jobType === "retry" || scheduledPostId ? `${base}:${randomUUID()}` : base;
+function liveIdempotencyKey(
+  draft: PublishingDraft,
+  payloadHash: string,
+  jobType: "publish" | "retry",
+  options: { priorFailedJobId?: null | string; scheduledPostId?: null | string } = {},
+) {
+  // C-1: deterministic for the cases where two callers must collide on the
+  // publishing_jobs unique index.
+  const base = `${jobType}:${draft.id}:${payloadHash}:${hashString(textForDraft(draft)).slice(0, 12)}:${options.scheduledPostId ?? "immediate"}`;
+
+  if (jobType === "retry") {
+    // Two concurrent retries of the same prior_failed_job_id MUST collide.
+    // If a caller forgot to pass priorFailedJobId, fail closed by hashing the
+    // current second window instead of randomising; that still provides some
+    // collision pressure but mostly forces callers to wire the id through.
+    const retryScope = options.priorFailedJobId ?? `unbound-job-${Math.floor(Date.now() / 1_000)}`;
+    return `${base}:retry-of:${retryScope}`;
+  }
+
+  if (options.scheduledPostId) {
+    // Scheduled re-runs after deferral need a fresh key (the prior cron tick's
+    // job is still in publishing_jobs with its own unique key). Concurrency is
+    // already prevented by scheduled_posts.lock_token, so a UUID here is safe;
+    // the partial unique index on published_posts(publishing_draft_id) provides
+    // defense-in-depth if anything slips through.
+    return `${base}:run-${randomUUID()}`;
+  }
+
+  return base;
 }
 
 function xRequestPayloadForDraft(draft: PublishingDraft, connection: null | SanitizedXConnection, mediaIds: string[] = []) {
   const items = publishableItems(draft);
+  // For thread previews we cannot know the previous post id ahead of publish,
+  // so the audit/preview payload uses the literal `in_reply_to_tweet_id` field
+  // name with the placeholder `<previous_thread_post>`. At publish time the
+  // adapter (createPostPayload) substitutes the actual id of the just-created
+  // prior thread item. Using the same field name as the X API call keeps the
+  // preview shape consistent with what is actually sent.
   const payloads = isThreadPublishingType(draft.contentType)
     ? items.map((text, index) => ({
         media: index === 0 && mediaIds.length > 0 ? { media_ids: mediaIds } : undefined,
-        reply: index === 0 ? null : { mode: "previous_thread_post" },
+        reply: index === 0 ? null : { in_reply_to_tweet_id: "<previous_thread_post>" },
         text,
       }))
     : [
@@ -1470,9 +1542,12 @@ async function createLivePublishingJob(admin: AdminContext, draft: PublishingDra
     .from("publishing_jobs")
     .insert({
       attempt_count: 1,
-      idempotency_key: liveIdempotencyKey(draft, payloadHash, jobType, options.scheduledPostId),
+      idempotency_key: liveIdempotencyKey(draft, payloadHash, jobType, {
+        priorFailedJobId: options.priorFailedJobId ?? null,
+        scheduledPostId: options.scheduledPostId ?? null,
+      }),
       job_type: jobType,
-      metadata: metadataWithPhase({ phase: PHASE_17, payload_hash: payloadHash, scheduled_post_id: options.scheduledPostId ?? null }),
+      metadata: metadataWithPhase({ phase: PHASE_17, payload_hash: payloadHash, prior_failed_job_id: options.priorFailedJobId ?? null, scheduled_post_id: options.scheduledPostId ?? null }),
       publishing_draft_id: draft.id,
       scheduled_for: draft.scheduledAt,
       started_at: startedAt,
@@ -1487,8 +1562,7 @@ async function createLivePublishingJob(admin: AdminContext, draft: PublishingDra
   if (error || !data) {
     throw new Error(`Failed to create X publishing job: ${error?.message ?? "missing row"}`);
   }
-
-  await admin.supabase.from("publishing_drafts").update({ status: "publishing" }).eq("id", draft.id).eq("user_id", admin.userId);
+  // Note: draft.status was already CAS'd to 'publishing' in runXPublishingJob.
 
   await logAuditEvent({
     actorEmail: admin.email,
@@ -1779,6 +1853,13 @@ async function insertXPublishingFailure(admin: AdminContext, job: PublishingJobR
 export async function runXPublishingJob(admin: AdminContext, input: PublishingDraftDryRunServiceInput, options: XPublishingJobOptions = {}): Promise<XPublishingJobResult> {
   const mode = options.mode ?? "dry_run";
 
+  // M-2: validate route content-type fit for BOTH modes so a thread draft
+  // cannot exercise the /api/x/publish/post route in dry-run either.
+  const earlyDraft = await loadDraft(admin, input.id);
+  if (options.expectedContentTypes && !options.expectedContentTypes.includes(earlyDraft.contentType)) {
+    throw new Error(`Publishing draft type ${earlyDraft.contentType} does not match this X publish route.`);
+  }
+
   if (mode === "dry_run") {
     const result = await runDryRunPublishingJob(admin, input, { jobType: options.jobType === "retry" ? "retry" : "dry_run" });
     return {
@@ -1790,16 +1871,35 @@ export async function runXPublishingJob(admin: AdminContext, input: PublishingDr
     };
   }
 
-  const draft = await loadDraft(admin, input.id);
-
-  if (options.expectedContentTypes && !options.expectedContentTypes.includes(draft.contentType)) {
-    throw new Error(`Publishing draft type ${draft.contentType} does not match this X publish route.`);
-  }
+  const draft = earlyDraft;
 
   assertLivePublishConfirmation(input, options);
   const payloadHash = draft.approvalPayloadHash;
   if (draft.approvalStatus !== "approved" || !payloadHash || !draft.approvedAt) {
     throw new XPublishingGuardError("approval_required", "Publishing draft must be approved before live X publishing.");
+  }
+
+  // C-1: claim the draft atomically before any external work. Two concurrent
+  // retries (or a retry that races with a deferred-scheduled rerun) collide
+  // here so only one proceeds to publish. Combined with the deterministic
+  // retry idempotency key and the partial unique index on
+  // published_posts(publishing_draft_id), duplicates are blocked at three
+  // independent layers.
+  const allowedFromStates = options.jobType === "retry" ? ["failed"] : ["approved", "scheduled", "failed"];
+  const { data: claimed, error: claimError } = await admin.supabase
+    .from("publishing_drafts")
+    .update({ status: "publishing" })
+    .eq("id", draft.id)
+    .eq("user_id", admin.userId)
+    .in("status", allowedFromStates)
+    .select("id")
+    .maybeSingle();
+
+  if (claimError) {
+    throw new Error(`Failed to claim publishing draft: ${claimError.message}`);
+  }
+  if (!claimed) {
+    throw new XPublishingGuardError("status_conflict", "Publishing draft is not in a publishable state. Refresh and try again.");
   }
 
   const connection = await loadXPublishingConnection(admin, options);
@@ -1943,6 +2043,14 @@ export async function retryPublishingJob(admin: AdminContext, input: PublishingJ
     throw new Error("Only failed publishing jobs can be retried.");
   }
 
+  // H-2: also assert the draft is in a retryable state. Without this, a draft
+  // that was already re-published by a racing call could be re-published a
+  // second time even though the failed job row is unchanged.
+  const draft = await loadDraft(admin, job.publishing_draft_id);
+  if (job.job_type !== "dry_run" && draft.status !== "failed") {
+    throw new Error(`Publishing draft is no longer retryable (status=${draft.status}). Re-approve to publish again.`);
+  }
+
   const { data: failure, error: failureError } = await admin.supabase
     .from("publishing_failures")
     .select("*")
@@ -1976,7 +2084,13 @@ export async function retryPublishingJob(admin: AdminContext, input: PublishingJ
     return runDryRunPublishingJob(admin, { confirmation: null, id: job.publishing_draft_id, payloadHash: null }, { jobType: "retry" });
   }
 
-  return runXPublishingJob(admin, { confirmation: null, id: job.publishing_draft_id, payloadHash: null }, { jobType: "retry", mode: "live" });
+  // C-1: pass the prior failed job id so the idempotency key is deterministic
+  // and a second concurrent retry click collides on the unique index.
+  return runXPublishingJob(
+    admin,
+    { confirmation: null, id: job.publishing_draft_id, payloadHash: null },
+    { jobType: "retry", mode: "live", priorFailedJobId: job.id },
+  );
 }
 
 export async function cancelPublishingJob(admin: AdminContext, input: PublishingCancelInput) {
@@ -2063,6 +2177,23 @@ export type ScheduledPublishingExecutorResult = {
 
 export async function runScheduledPublishingExecutor(admin: AdminContext, options: XPublishingJobOptions & { limit?: number } = {}): Promise<ScheduledPublishingExecutorResult> {
   const checkedAt = publishNowIso(options);
+
+  // M-1: envelope audit at the start so cron invocations are traceable even
+  // when there are zero due rows.
+  const batchId = randomUUID();
+  await logAuditEvent({
+    actorEmail: admin.email,
+    eventType: "publishing_executor_started",
+    metadata: { batch_id: batchId, checked_at: checkedAt, phase: PHASE_17 },
+    request: options.request ?? undefined,
+    success: true,
+    targetType: "publishing_executor",
+    userId: admin.userId,
+  });
+
+  let envelopeError: null | string = null;
+  let totalCandidates = 0;
+
   const { data, error } = await admin.supabase
     .from("scheduled_posts")
     .select("*")
@@ -2074,8 +2205,21 @@ export async function runScheduledPublishingExecutor(admin: AdminContext, option
     .limit(options.limit ?? 10);
 
   if (error) {
+    envelopeError = error.message;
+    await logAuditEvent({
+      actorEmail: admin.email,
+      error: envelopeError,
+      eventType: "publishing_executor_failed",
+      metadata: { batch_id: batchId, phase: PHASE_17, stage: "load_due" },
+      request: options.request ?? undefined,
+      success: false,
+      targetType: "publishing_executor",
+      userId: admin.userId,
+    });
     throw new Error(`Failed to load due scheduled posts: ${error.message}`);
   }
+
+  totalCandidates = (data ?? []).length;
 
   let failed = 0;
   let skipped = 0;
@@ -2135,6 +2279,28 @@ export async function runScheduledPublishingExecutor(admin: AdminContext, option
         .eq("user_id", admin.userId);
     }
   }
+
+  // M-1: envelope audit at the end so cron success/failure rate is visible at
+  // the batch level, not just per-draft.
+  await logAuditEvent({
+    actorEmail: admin.email,
+    error: envelopeError,
+    eventType: "publishing_executor_succeeded",
+    metadata: {
+      batch_id: batchId,
+      candidates: totalCandidates,
+      checked_at: checkedAt,
+      failed,
+      phase: PHASE_17,
+      processed: succeeded + failed,
+      skipped,
+      succeeded,
+    },
+    request: options.request ?? undefined,
+    success: true,
+    targetType: "publishing_executor",
+    userId: admin.userId,
+  });
 
   return {
     checkedAt,

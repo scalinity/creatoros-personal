@@ -1,3 +1,5 @@
+import type { Metadata } from "next";
+
 import { GrowthCampaignsView } from "@/components/growth";
 import { requireAdmin } from "@/lib/auth/admin";
 import { loadGrowthWorkspace } from "@/lib/growth";
@@ -10,6 +12,10 @@ import {
   runMonthlyGrowthReviewAction,
   runWeeklyGrowthReviewAction,
 } from "./actions";
+
+export const metadata: Metadata = {
+  title: "Campaigns · CreatorOS Personal",
+};
 
 export const dynamic = "force-dynamic";
 

@@ -1,3 +1,5 @@
+import "server-only";
+
 import { z } from "zod";
 
 const urlSchema = z.string().trim().url();

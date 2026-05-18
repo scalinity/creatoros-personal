@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 
 import { requireAdmin } from "@/lib/auth/admin";
+import { rethrowIfRedirect } from "@/lib/server-only/action-redirect";
 import { runAccountResearch, saveAccountResearchIdea } from "@/lib/account-research";
 import { accountResearchIdeaSaveSchema, accountResearchInputSchema, formDataToAccountResearchRecord } from "@/lib/account-research/validation";
 import { createFixedWindowRateLimiter, MemoryRateLimitStore } from "@/lib/rate-limit";
@@ -42,6 +43,7 @@ export async function runAccountResearchAction(formData: FormData) {
     const result = await runAccountResearch(admin, parsed.data);
     reportId = result.report.id;
   } catch (error) {
+    rethrowIfRedirect(error);
     console.error("Failed to run account research", { reason: error instanceof Error ? error.message : "unknown" });
     redirectToResearch({ notice: "research_failed" });
   }
@@ -60,6 +62,7 @@ export async function saveAccountResearchIdeaAction(formData: FormData) {
   try {
     await saveAccountResearchIdea(admin, parsed.data);
   } catch (error) {
+    rethrowIfRedirect(error);
     console.error("Failed to save account research idea", { reason: error instanceof Error ? error.message : "unknown" });
     redirectToResearch({ notice: "idea_failed", selected: parsed.data.reportId });
   }

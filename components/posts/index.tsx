@@ -1,8 +1,9 @@
 import type { ComponentProps, ReactNode } from "react";
 
+import Link from "next/link";
+
 import {
   Badge,
-  Button,
   Card,
   EmptyState,
   Input,
@@ -11,68 +12,15 @@ import {
   RuleHeader,
   ScoreGauge,
   Select,
+  SubmitButton,
   Table,
   Textarea,
   cn,
 } from "@/components/design-system";
+import type { PostHistoryAggregates, PostHistoryFilters, PostHistoryPost, PostHistorySort } from "@/lib/posts/types";
 import type { AggregateGroup, PerformanceBucket } from "@/lib/scoring";
 
-export type PostHistorySort = "engagement" | "heuristic" | "impressions" | "likes" | "newest" | "oldest" | "virality";
-
-export type PostHistoryFilters = {
-  format?: string;
-  from?: string;
-  hook_type?: string;
-  link?: string;
-  media?: string;
-  owner?: string;
-  performance?: PerformanceBucket | "";
-  q?: string;
-  sort?: PostHistorySort;
-  source?: string;
-  to?: string;
-  tone?: string;
-  topic?: string;
-};
-
-export type PostHistoryPost = {
-  authorDisplayName?: null | string;
-  authorUsername?: null | string;
-  bookmarkCount: number;
-  contentPillar?: null | string;
-  createdAt: string;
-  createdAtPlatform?: null | string;
-  engagementScore?: null | number;
-  format?: null | string;
-  hasLink: boolean;
-  hasMedia: boolean;
-  heuristicScore?: null | number;
-  hookType?: null | string;
-  id: string;
-  impressionCount: number;
-  isOwnerPost: boolean;
-  lengthBucket?: null | string;
-  likeCount: number;
-  performanceBucket?: null | PerformanceBucket;
-  platform?: string;
-  platformPostId?: null | string;
-  quoteCount: number;
-  replyCount: number;
-  repostCount: number;
-  source: string;
-  text: string;
-  tone?: null | string;
-  topic?: null | string;
-  url?: null | string;
-  viralityScore?: null | number;
-};
-
-export type PostHistoryAggregates = {
-  dayOfWeek: AggregateGroup[];
-  format: AggregateGroup[];
-  hour: AggregateGroup[];
-  topic: AggregateGroup[];
-};
+export type { PostHistoryAggregates, PostHistoryFilters, PostHistoryPost, PostHistorySort };
 
 type FormAction = ComponentProps<"form">["action"];
 
@@ -146,7 +94,7 @@ function MetricInput({ defaultValue, label, name }: { defaultValue: number; labe
 function PostRow({ href, post, selected }: { href: string; post: PostHistoryPost; selected?: boolean }) {
   return (
     <article className={cn("post-row", selected && "post-row-selected")}>
-      <a className="post-row-link" href={href}>
+      <Link aria-current={selected ? "page" : undefined} className="post-row-link" href={{ pathname: href }}>
         <div className="post-row-head">
           <span className="post-author mono">@{post.authorUsername ?? "owner"}</span>
           <span className="post-time mono">{formatDate(post.createdAtPlatform ?? post.createdAt)}</span>
@@ -160,7 +108,7 @@ function PostRow({ href, post, selected }: { href: string; post: PostHistoryPost
           <span className="post-metric mono">views {formatNumber(post.impressionCount)}</span>
           <span className="post-engagement mono">{formatScore(post.heuristicScore)}</span>
         </div>
-      </a>
+      </Link>
     </article>
   );
 }
@@ -197,12 +145,12 @@ function PostFilters({ filters }: { filters: PostHistoryFilters }) {
       />
       <Select defaultValue={filters.sort ?? "newest"} label="Sort" name="sort" options={sortOptions} />
       <div className="post-history-filter-actions">
-        <Button size="sm" type="submit" variant="secondary">
+        <SubmitButton size="sm" variant="secondary">
           Apply
-        </Button>
-        <a className="post-history-reset" href="/post-history">
+        </SubmitButton>
+        <Link className="post-history-reset" href="/post-history">
           Reset
-        </a>
+        </Link>
       </div>
     </form>
   );
@@ -211,7 +159,7 @@ function PostFilters({ filters }: { filters: PostHistoryFilters }) {
 function ManualPostForm({ action }: { action?: FormAction }) {
   return (
     <form action={action} className="post-history-form">
-      <RuleHeader folio="§ 01" label="Add manual post" sub="owner-entered metrics" />
+      <RuleHeader folio="§ 01" id="post-history-manual-title" label="Add manual post" sub="owner-entered metrics" />
       <Textarea label="Post text" name="text" required />
       <div className="post-history-form-grid">
         <Input label="Platform post id" name="platform_post_id" />
@@ -249,9 +197,7 @@ function ManualPostForm({ action }: { action?: FormAction }) {
           <span className="checkbox-label">Contains link</span>
         </label>
       </div>
-      <Button size="sm" type="submit">
-        Save post
-      </Button>
+      <SubmitButton size="sm">Save post</SubmitButton>
     </form>
   );
 }
@@ -259,7 +205,7 @@ function ManualPostForm({ action }: { action?: FormAction }) {
 function ImportPostsForm({ action }: { action?: FormAction }) {
   return (
     <form action={action} className="post-history-form">
-      <RuleHeader folio="§ 02" label="Import CSV / JSON" sub="manual fallback" />
+      <RuleHeader folio="§ 02" id="post-history-import-title" label="Import CSV / JSON" sub="manual fallback" />
       <Select
         defaultValue="csv"
         label="Mode"
@@ -267,9 +213,7 @@ function ImportPostsForm({ action }: { action?: FormAction }) {
         options={[{ label: "CSV", value: "csv" }, { label: "JSON", value: "json" }]}
       />
       <Textarea label="Payload" mono name="payload" placeholder="Paste CSV headers or JSON array" required />
-      <Button size="sm" type="submit" variant="secondary">
-        Import posts
-      </Button>
+      <SubmitButton size="sm" variant="secondary">Import posts</SubmitButton>
     </form>
   );
 }
@@ -307,8 +251,8 @@ function PostInspector({ action, post }: { action?: FormAction; post: PostHistor
   const score = Math.round(post.heuristicScore ?? 0);
 
   return (
-    <aside className="post-history-inspector">
-      <RuleHeader folio="§ 04" label="Detail inspector" sub={post.platformPostId ?? post.id} />
+    <aside aria-labelledby="post-history-detail-title" className="post-history-inspector">
+      <RuleHeader folio="§ 04" id="post-history-detail-title" label="Detail inspector" sub={post.platformPostId ?? post.id} />
       <ScoreGauge label="Heuristic score" value={score} />
       <Card variant="inset">
         <Card.Header>
@@ -324,7 +268,7 @@ function PostInspector({ action, post }: { action?: FormAction; post: PostHistor
         </Card.Body>
       </Card>
       <form action={action} className="post-history-form post-history-edit-form">
-        <RuleHeader folio="§ 05" label="Edit metrics" sub="snapshot created on save" />
+        <RuleHeader folio="§ 05" id="post-history-edit-title" label="Edit metrics" sub="snapshot created on save" />
         <input name="id" type="hidden" value={post.id} />
         <div className="post-history-form-grid">
           <MetricInput defaultValue={post.impressionCount} label="Impressions" name="impression_count" />
@@ -338,9 +282,7 @@ function PostInspector({ action, post }: { action?: FormAction; post: PostHistor
           <Input defaultValue={post.hookType ?? ""} label="Hook" name="hook_type" />
           <Input defaultValue={post.tone ?? ""} label="Tone" name="tone" />
         </div>
-        <Button size="sm" type="submit">
-          Recalculate scores
-        </Button>
+        <SubmitButton size="sm">Recalculate scores</SubmitButton>
       </form>
     </aside>
   );
@@ -368,15 +310,22 @@ export function PostHistoryView({
   const noticeCopy = noticeText(notice);
 
   return (
-    <div className="post-history-page">
+    <main aria-labelledby="post-history-title" className="post-history-page">
       <RuleHeader
         actions={<Badge variant="outline">X API not required</Badge>}
+        as="h1"
         folio="§ 09"
+        id="post-history-title"
         label="Post history"
         sub="manual imports and deterministic scoring"
       />
-      {noticeCopy ? <div className="post-history-notice">{noticeCopy}</div> : null}
-      <section className="post-history-metrics" aria-label="Post history summary">
+      {noticeCopy ? (
+        <div aria-live="polite" className="post-history-notice" role="status">
+          {noticeCopy}
+        </div>
+      ) : null}
+      <section aria-labelledby="post-history-summary-title" className="post-history-metrics">
+        <RuleHeader className="visually-hidden" folio="§" id="post-history-summary-title" label="Post history summary" />
         <MetricBlock label="Visible posts" value={formatNumber(posts.length)} />
         <MetricBlock label="Total impressions" value={formatNumber(posts.reduce((sum, post) => sum + post.impressionCount, 0))} />
         <MetricBlock label="Avg heuristic" value={formatScore(posts.reduce((sum, post) => sum + (post.heuristicScore ?? 0), 0) / Math.max(1, posts.length))} />
@@ -401,20 +350,26 @@ export function PostHistoryView({
               </Card.Body>
             </Card>
           </div>
-          <section className="post-history-list" aria-label="Posts">
+          <section aria-labelledby="post-history-list-title" className="post-history-list">
+            <RuleHeader className="visually-hidden" folio="§" id="post-history-list-title" label="Posts" />
             {posts.length > 0 ? (
               posts.map((post) => (
-                <PostRow href={`/post-history?selected=${post.id}`} key={post.id} post={post} selected={post.id === selectedId} />
+                <PostRow
+                  href={`/post-history?selected=${post.id}`}
+                  key={post.id}
+                  post={post}
+                  selected={post.id === selectedId}
+                />
               ))
             ) : (
               <EmptyState
-                title="No imported posts yet"
                 message="Add a post manually or paste CSV/JSON export data to build the local performance archive."
+                title="No imported posts yet"
               />
             )}
           </section>
-          <section className="post-history-aggregates" aria-label="Aggregates">
-            <RuleHeader folio="§ 03" label="Aggregates" sub="current filters" />
+          <section aria-labelledby="post-history-aggregates-title" className="post-history-aggregates">
+            <RuleHeader folio="§ 03" id="post-history-aggregates-title" label="Aggregates" sub="current filters" />
             <div className="post-history-aggregate-grid">
               <AggregateTable groups={aggregates.topic} title="Topic" />
               <AggregateTable groups={aggregates.format} title="Format" />
@@ -425,7 +380,7 @@ export function PostHistoryView({
         </div>
         {selectedPost ? <PostInspector action={updateAction} post={selectedPost} /> : null}
       </section>
-    </div>
+    </main>
   );
 }
 

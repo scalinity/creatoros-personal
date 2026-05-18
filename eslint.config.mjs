@@ -9,6 +9,9 @@ const eslintConfig = [
       ".next/**",
       "coverage/**",
       "docs/**",
+      // The Electron main-process shell uses CommonJS (`require`) by design.
+      // The TypeScript no-require-imports rule does not apply there.
+      "electron/**",
       "node_modules/**",
       "playwright-report/**",
       "test-results/**",

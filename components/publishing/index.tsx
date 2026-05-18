@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { ComponentProps, ReactNode } from "react";
 
-import { AssumptionFlag, Badge, Button, Card, EmptyState, Input, KeyValueRow, MetricBlock, RuleHeader, Select, Textarea, cn } from "@/components/design-system";
+import { AssumptionFlag, Badge, Card, EmptyState, Input, KeyValueRow, LinkButton, MetricBlock, RuleHeader, Select, SubmitButton, Textarea, cn } from "@/components/design-system";
 import { buildPublishingPayloadPreview, computePublishingPayloadHash, type PublishingCalendar, type PublishingCalendarDay, type PublishingDraft, type PublishingFailure, type PublishingJob, type PublishingWorkspace } from "@/lib/publishing";
 import type { SanitizedXConnection } from "@/lib/x/oauth";
 
@@ -113,7 +113,7 @@ function InlineForm({ action, children, className }: { action?: FormAction; chil
 function CreateDraftForm({ action }: { action?: FormAction }) {
   return (
     <form action={action} className="publishing-create-form">
-      <RuleHeader folio="§ 01" label="Create draft" sub="manual dry-run pipeline" />
+      <RuleHeader folio="§ 01" id="publishing-create-title" label="Create draft" sub="manual dry-run pipeline" />
       <Select defaultValue="single_post" label="Type" name="content_type" options={contentTypeOptions} />
       <Textarea label="Text" name="text" placeholder="Write the exact payload. Threads can use blank lines between posts." required rows={6} />
       <div className="publishing-form-grid">
@@ -122,9 +122,7 @@ function CreateDraftForm({ action }: { action?: FormAction }) {
         <Input label="Experiment id" mono name="experiment_id" />
       </div>
       <input name="thread_items" type="hidden" value="[]" />
-      <Button size="sm" type="submit" variant="secondary">
-        Create publishing draft
-      </Button>
+      <SubmitButton size="sm" variant="secondary">Create publishing draft</SubmitButton>
     </form>
   );
 }
@@ -132,7 +130,7 @@ function CreateDraftForm({ action }: { action?: FormAction }) {
 export function PublishingQueueRow({ draft, selected }: { draft: PublishingDraft; selected?: boolean }) {
   return (
     <article className={cn("publishing-queue-row", selected && "publishing-queue-row-selected")}>
-      <Link className="publishing-row-link" href={`/publishing?selected=${draft.id}`}>
+      <Link aria-current={selected ? "page" : undefined} className="publishing-row-link" href={{ pathname: "/publishing", query: { selected: draft.id } }}>
         <span className="publishing-row-main">
           <span className="publishing-row-title">{contentPreview(draft)}</span>
           <span className="publishing-row-id mono">{draft.id}</span>
@@ -157,8 +155,8 @@ function PublishingQueue({ drafts, selectedDraftId }: { drafts: PublishingDraft[
   }
 
   return (
-    <section className="publishing-queue" aria-label="Publishing queue">
-      <RuleHeader folio="§ 02" label="Publishing queue" sub={`${drafts.length} drafts`} />
+    <section aria-labelledby="publishing-queue-title" className="publishing-queue">
+      <RuleHeader folio="§ 02" id="publishing-queue-title" label="Publishing queue" sub={`${drafts.length} drafts`} />
       <div className="publishing-queue-list">
         {drafts.map((draft) => (
           <PublishingQueueRow draft={draft} key={draft.id} selected={draft.id === selectedDraftId} />
@@ -171,7 +169,7 @@ function PublishingQueue({ drafts, selectedDraftId }: { drafts: PublishingDraft[
 function DraftEditor({ action, draft }: { action?: FormAction; draft: PublishingDraft }) {
   return (
     <form action={action} className="publishing-edit-form">
-      <RuleHeader folio="§ 04" label="Edit payload" sub="approval invalidates" />
+      <RuleHeader folio="§ 04" id="publishing-edit-title" label="Edit payload" sub="approval invalidates" />
       <input name="id" type="hidden" value={draft.id} />
       <Select defaultValue={draft.contentType} label="Type" name="content_type" options={contentTypeOptions} />
       <Textarea defaultValue={draft.text || draft.threadItems.join("\n\n")} label="Text" name="text" rows={7} />
@@ -181,9 +179,7 @@ function DraftEditor({ action, draft }: { action?: FormAction; draft: Publishing
         <Input defaultValue={draft.quotePostId ?? ""} label="Quote target" name="quote_post_id" />
         <Input defaultValue={draft.timezone} label="Timezone" name="timezone" />
       </div>
-      <Button size="sm" type="submit" variant="secondary">
-        Save payload
-      </Button>
+      <SubmitButton size="sm" variant="secondary">Save payload</SubmitButton>
     </form>
   );
 }
@@ -203,9 +199,7 @@ export function PublishFailureCard({ failure, retryAction }: { failure: Publishi
       <InlineForm action={retryAction}>
         <input name="id" type="hidden" value={failure.jobId} />
         <input name="confirmation" type="hidden" value="confirm retry" />
-        <Button disabled={!failure.retryable} size="sm" type="submit" variant="secondary">
-          Retry
-        </Button>
+        <SubmitButton disabled={!failure.retryable} size="sm" variant="secondary">Retry</SubmitButton>
       </InlineForm>
     </article>
   );
@@ -255,8 +249,8 @@ export function ApprovalRail({
 }) {
   if (!draft) {
     return (
-      <aside className="approval-rail">
-        <RuleHeader folio="§ 03" label="Approval rail" sub="nothing selected" />
+      <aside aria-labelledby="publishing-approval-title" className="approval-rail">
+        <RuleHeader folio="§ 03" id="publishing-approval-title" label="Approval rail" sub="nothing selected" />
         <EmptyState message="Select a draft to inspect payload hash, dry-run status, duplicate checks, schedule, and failures." title="No draft selected" />
       </aside>
     );
@@ -269,8 +263,8 @@ export function ApprovalRail({
   const draftJobs = jobs.filter((job) => job.draftId === draft.id);
 
   return (
-    <aside className="approval-rail">
-      <RuleHeader folio="§ 03" label="Approval rail" sub={draft.status} />
+    <aside aria-labelledby="publishing-approval-title" className="approval-rail">
+      <RuleHeader folio="§ 03" id="publishing-approval-title" label="Approval rail" sub={draft.status} />
       <Card>
         <Card.Body>
           <KeyValueRow label="Draft id" mono value={draft.id} />
@@ -299,41 +293,47 @@ export function ApprovalRail({
           <input name="id" type="hidden" value={draft.id} />
           <input name="payload_hash" type="hidden" value={payloadHash} />
           <input name="confirmation" type="hidden" value="approve exact payload" />
-          <Button disabled={["canceled", "archived", "published"].includes(draft.status)} size="sm" type="submit">
+          <SubmitButton disabled={["canceled", "archived", "published"].includes(draft.status)} size="sm">
             Approve exact payload
-          </Button>
+          </SubmitButton>
         </InlineForm>
         <InlineForm action={dryRunAction}>
           <input name="id" type="hidden" value={draft.id} />
           <input name="payload_hash" type="hidden" value={draft.approvalPayloadHash ?? payloadHash} />
           <input name="confirmation" type="hidden" value="confirm dry run" />
-          <Button disabled={!approvalIsCurrent} size="sm" type="submit" variant="secondary">
+          <SubmitButton disabled={!approvalIsCurrent} size="sm" variant="secondary">
             Dry run
-          </Button>
+          </SubmitButton>
         </InlineForm>
         <InlineForm action={publishAction}>
           <input name="id" type="hidden" value={draft.id} />
           <input name="payload_hash" type="hidden" value={draft.approvalPayloadHash ?? payloadHash} />
           <input name="confirmation" type="hidden" value="confirm live publish" />
           <input name="dry_run" type="hidden" value="false" />
-          <Button disabled={!approvalIsCurrent || xConnection?.capabilities.can_write_posts !== true} size="sm" type="submit">
+          <SubmitButton disabled={!approvalIsCurrent || xConnection?.capabilities.can_write_posts !== true} size="sm">
             Publish to X
-          </Button>
+          </SubmitButton>
         </InlineForm>
         <InlineForm action={scheduleAction} className="publishing-schedule-form">
           <input name="id" type="hidden" value={draft.id} />
-          <Input label="Schedule ISO" name="scheduled_for" placeholder="2099-04-28T16:30:00.000Z" />
+          <Input
+            label="Schedule at"
+            name="scheduled_for"
+            placeholder="2099-04-28T16:30"
+            type="datetime-local"
+            helper="Local timezone is captured below; the server normalises to ISO before scheduling."
+          />
           <Input defaultValue={draft.timezone} label="Timezone" name="timezone" />
-          <Button disabled={draft.status !== "approved" || !approvalIsCurrent} size="sm" type="submit" variant="secondary">
+          <SubmitButton disabled={draft.status !== "approved" || !approvalIsCurrent} size="sm" variant="secondary">
             Schedule approved
-          </Button>
+          </SubmitButton>
         </InlineForm>
         <InlineForm action={cancelAction}>
           <input name="id" type="hidden" value={draft.id} />
           <input name="reason" type="hidden" value="owner canceled from approval rail" />
-          <Button disabled={["canceled", "published", "archived"].includes(draft.status)} size="sm" type="submit" variant="destructive">
+          <SubmitButton disabled={["canceled", "published", "archived"].includes(draft.status)} size="sm" variant="destructive">
             Cancel
-          </Button>
+          </SubmitButton>
         </InlineForm>
       </div>
       <DraftEditor action={editAction} draft={draft} />
@@ -370,11 +370,18 @@ export function PublishingWorkspaceView({
   const selectedDraft = workspace.drafts.find((draft) => draft.id === selectedDraftId) ?? workspace.drafts[0] ?? null;
 
   return (
-    <main className="publishing-page" aria-labelledby="publishing-title">
-      <h1 className="workflow-title" id="publishing-title">Publishing</h1>
-      <RuleHeader actions={<Badge variant={xConnection?.capabilities.can_write_posts ? "success" : "outline"}>{xConnection?.capabilities.can_write_posts ? "X write enabled" : "dry run available"}</Badge>} folio="§ 17" label="Publishing queue" sub="approval, schedule, jobs" />
+    <main aria-labelledby="publishing-title" className="publishing-page">
+      <RuleHeader
+        actions={<Badge variant={xConnection?.capabilities.can_write_posts ? "success" : "outline"}>{xConnection?.capabilities.can_write_posts ? "X write enabled" : "dry run available"}</Badge>}
+        as="h1"
+        folio="§ 17"
+        id="publishing-title"
+        label="Publishing queue"
+        sub="approval, schedule, jobs"
+      />
       <Notice notice={notice} />
-      <section className="publishing-metrics" aria-label="Publishing summary">
+      <section aria-labelledby="publishing-summary-title" className="publishing-metrics">
+        <RuleHeader className="visually-hidden" folio="§" id="publishing-summary-title" label="Publishing summary" />
         <MetricBlock label="Needs approval" value={workspace.metrics.needsApproval} />
         <MetricBlock label="Approved" value={workspace.metrics.approved} />
         <MetricBlock label="Scheduled" value={workspace.metrics.scheduled} />
@@ -437,23 +444,34 @@ export function CalendarDayCell({ day }: { day: PublishingCalendarDay }) {
 
 export function PublishingCalendarView({ calendar }: PublishingCalendarViewProps) {
   return (
-    <main className="calendar-page" aria-labelledby="calendar-title">
-      <h1 className="workflow-title" id="calendar-title">Calendar</h1>
-      <RuleHeader actions={<Link className="btn btn-secondary btn-sm" href="/publishing"><span className="btn-label">Open queue</span></Link>} folio="§ 15.1" label="Content calendar" sub={calendar.timezone} />
-      <section className="publishing-metrics" aria-label="Calendar summary">
+    <main aria-labelledby="calendar-title" className="calendar-page">
+      <RuleHeader
+        actions={<LinkButton href="/publishing" size="sm" variant="secondary">Open queue</LinkButton>}
+        as="h1"
+        folio="§ 15.1"
+        id="calendar-title"
+        label="Content calendar"
+        sub={calendar.timezone}
+      />
+      <section aria-labelledby="calendar-summary-title" className="publishing-metrics">
+        <RuleHeader className="visually-hidden" folio="§" id="calendar-summary-title" label="Calendar summary" />
         <MetricBlock label="Scheduled" value={calendar.totals.scheduled} />
         <MetricBlock label="Failed" tone={calendar.totals.failed > 0 ? "down" : "neutral"} value={calendar.totals.failed} />
         <MetricBlock label="Warning days" tone={calendar.totals.warningDays > 0 ? "down" : "neutral"} value={calendar.totals.warningDays} />
         <MetricBlock label="Timezone" value={calendar.timezone} />
       </section>
       {calendar.days.length > 0 ? (
-        <section className="calendar-grid" aria-label="Scheduled publishing days">
+        <section aria-label="Scheduled publishing days" className="calendar-grid">
           {calendar.days.map((day) => (
             <CalendarDayCell day={day} key={day.date} />
           ))}
         </section>
       ) : (
-        <EmptyState action={<Link className="btn btn-secondary btn-sm" href="/publishing"><span className="btn-label">Review queue</span></Link>} message="Approved scheduled drafts will appear here with dry-run status and cadence warnings." title="No scheduled publishing items" />
+        <EmptyState
+          action={<LinkButton href="/publishing" size="sm" variant="secondary">Review queue</LinkButton>}
+          message="Approved scheduled drafts will appear here with dry-run status and cadence warnings."
+          title="No scheduled publishing items"
+        />
       )}
     </main>
   );

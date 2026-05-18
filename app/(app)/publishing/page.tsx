@@ -1,3 +1,5 @@
+import type { Metadata } from "next";
+
 import { PublishingWorkspaceView } from "@/components/publishing";
 import { requireAdmin } from "@/lib/auth/admin";
 import { loadPublishingWorkspace } from "@/lib/publishing";
@@ -13,6 +15,10 @@ import {
   schedulePublishingDraftAction,
   updatePublishingDraftAction,
 } from "./actions";
+
+export const metadata: Metadata = {
+  title: "Publishing · CreatorOS Personal",
+};
 
 export const dynamic = "force-dynamic";
 

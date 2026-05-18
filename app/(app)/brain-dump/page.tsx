@@ -1,8 +1,14 @@
+import type { Metadata } from "next";
+
 import { BrainDumpWorkspaceView } from "@/components/brain-dump";
 import { requireAdmin } from "@/lib/auth/admin";
 import { loadBrainDumpWorkspace } from "@/lib/brain-dumps";
 
 import { saveBrainDumpOutputAction, transformBrainDumpAction } from "./actions";
+
+export const metadata: Metadata = {
+  title: "Brain dump · CreatorOS Personal",
+};
 
 export const dynamic = "force-dynamic";
 

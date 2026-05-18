@@ -218,7 +218,13 @@ export function classifyPerformanceBucket(score: null | number | undefined): Per
 }
 
 function aggregateBy(posts: PostScoreInput[], keyForPost: (post: PostScoreInput) => string): AggregateGroup[] {
-  const groups = new Map<string, AggregateGroup & { totalEngagementScore: number; totalHeuristicScore: number; totalViralityScore: number }>();
+  type AggregateAccumulator = AggregateGroup & {
+    bestHeuristicScore: number;
+    totalEngagementScore: number;
+    totalHeuristicScore: number;
+    totalViralityScore: number;
+  };
+  const groups = new Map<string, AggregateAccumulator>();
 
   for (const post of posts) {
     const key = keyForPost(post);
@@ -226,6 +232,7 @@ function aggregateBy(posts: PostScoreInput[], keyForPost: (post: PostScoreInput)
       averageEngagementScore: 0,
       averageHeuristicScore: 0,
       averageViralityScore: 0,
+      bestHeuristicScore: Number.NEGATIVE_INFINITY,
       count: 0,
       key,
       label: key,
@@ -247,7 +254,10 @@ function aggregateBy(posts: PostScoreInput[], keyForPost: (post: PostScoreInput)
     current.totalImpressions += metric(post.impressionCount);
     current.totalEngagements += rawEngagement(post);
 
-    if (post.id && (!current.topPostId || heuristicScore >= current.averageHeuristicScore)) {
+    // Track the actual best post per group rather than comparing each candidate
+    // to the running mean (which biases toward later iterations).
+    if (post.id && heuristicScore > current.bestHeuristicScore) {
+      current.bestHeuristicScore = heuristicScore;
       current.topPostId = post.id;
     }
 

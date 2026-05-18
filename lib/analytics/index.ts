@@ -915,9 +915,14 @@ export function buildDashboardSummary(input: DashboardSummaryInput): DashboardSu
           ]
         : []),
       {
+        // L-23: Phase 19 (coach + retrieval) shipped; this static dashboard
+        // recommendation is intentionally minimal — the coach itself produces
+        // evidence-citing playbooks via /coach. Keeping a non-stale neutral
+        // pointer so the dashboard recommendation list always has at least
+        // one entry.
         confidence: "speculation",
-        label: "Open coach next",
-        reason: "Phase 19 will replace this placeholder with evidence-citing coach recommendations.",
+        label: "Open coach for evidence-citing recommendations",
+        reason: "Use the AI coach to generate playbooks tied to your stored posts, blogs, and growth context.",
       },
     ],
     status: {

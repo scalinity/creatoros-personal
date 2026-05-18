@@ -36,8 +36,19 @@ describe("AI structured JSON parsing", () => {
   });
 
   it("throws a syntax-tagged error when JSON repair cannot recover the payload", () => {
-    expect(() => parseStructuredJson('{"title":"Draft","confidence":"fact","scores":[1,', payloadSchema)).toThrow(
+    // M-12: brace-balancing recovers truncated arrays/objects, so the input
+    // here is non-JSON instead of just truncated. The earlier truncated input
+    // {"title":"Draft","confidence":"fact","scores":[1, is now repaired to
+    // {"title":"Draft","confidence":"fact","scores":[1]}, which IS valid.
+    expect(() => parseStructuredJson("not even close to json", payloadSchema)).toThrow(
       /ai_invalid_output: Provider returned invalid JSON syntax/,
     );
+  });
+
+  it("recovers truncated arrays via brace-balancing repair", () => {
+    // M-12 regression: max_tokens-truncated output should parse now that the
+    // JSON repair pipeline includes a brace-balancing pass.
+    const result = parseStructuredJson('{"title":"Draft","confidence":"fact","scores":[1,', payloadSchema);
+    expect(result).toEqual({ confidence: "fact", scores: [1], title: "Draft" });
   });
 });

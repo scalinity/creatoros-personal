@@ -52,10 +52,9 @@ function authFailureMessage(code: AdminAuthFailureCode) {
 }
 
 async function auditDeniedAccess(result: Extract<AdminAuthResult, { ok: false }>, request?: NextRequest) {
-  if (!result.userId && result.code === "unauthenticated") {
-    return;
-  }
-
+  // Audit every denial (including pre-auth probes) so anonymous scanner traffic
+  // is observable. The audit row stores hashed IP / truncated UA only — no PII
+  // is leaked. user_id stays null when the request was unauthenticated.
   await logAuditEvent({
     actorEmail: result.email,
     error: result.reason,
@@ -84,12 +83,18 @@ export async function getAdminContext(options: { auditDenied?: boolean; request?
     supabase = await createSupabaseServerClient();
   } catch (error) {
     if (error instanceof AuthConfigurationError) {
-      return {
+      const result = {
         code: "auth_unconfigured",
         ok: false,
         reason: "supabase_auth_env_missing",
         status: 503,
       } satisfies AdminAuthResult;
+
+      if (options.auditDenied) {
+        await auditDeniedAccess(result, options.request);
+      }
+
+      return result;
     }
 
     throw error;
@@ -101,12 +106,18 @@ export async function getAdminContext(options: { auditDenied?: boolean; request?
   } = await supabase.auth.getUser();
 
   if (error || !user) {
-    return {
+    const result = {
       code: "unauthenticated",
       ok: false,
       reason: error?.message ?? "session_missing",
       status: 401,
     } satisfies AdminAuthResult;
+
+    if (options.auditDenied) {
+      await auditDeniedAccess(result, options.request);
+    }
+
+    return result;
   }
 
   const authorization = authorizeAdminIdentity(user, process.env.ADMIN_EMAILS);

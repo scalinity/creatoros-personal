@@ -67,7 +67,7 @@ function CreateTokenForm({ formAction, pending }: { formAction: (formData: FormD
             <Input defaultValue="30" label="Hourly limit" min={1} max={240} name="rate_limit_per_hour" type="number" />
             <Input label="Expires at" name="expires_at" type="datetime-local" />
           </div>
-          <Button disabled={pending} size="sm" type="submit">
+          <Button disabled={pending} loading={pending} size="sm" type="submit">
             Create token
           </Button>
         </form>
@@ -99,7 +99,7 @@ function TokenRow({ formAction, pending, token }: { formAction: (formData: FormD
         <form action={formAction}>
           <input name="operation" type="hidden" value="rotate" />
           <input name="id" type="hidden" value={token.id} />
-          <Button aria-label={`Rotate token ${actionLabel}`} disabled={pending} size="sm" type="submit" variant="secondary">
+          <Button aria-label={`Rotate token ${actionLabel}`} disabled={pending} loading={pending} size="sm" type="submit" variant="secondary">
             Rotate
           </Button>
         </form>
@@ -107,7 +107,7 @@ function TokenRow({ formAction, pending, token }: { formAction: (formData: FormD
           <input name="operation" type="hidden" value="revoke" />
           <input name="id" type="hidden" value={token.id} />
           <input name="reason" type="hidden" value="revoked from settings" />
-          <Button aria-label={`Revoke token ${actionLabel}`} disabled={!active || pending} size="sm" type="submit" variant="destructive">
+          <Button aria-label={`Revoke token ${actionLabel}`} disabled={!active || pending} loading={pending} size="sm" type="submit" variant="destructive">
             Revoke
           </Button>
         </form>

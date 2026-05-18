@@ -1,8 +1,14 @@
+import type { Metadata } from "next";
+
 import { GrowthExperimentsView } from "@/components/growth";
 import { requireAdmin } from "@/lib/auth/admin";
 import { loadGrowthWorkspace } from "@/lib/growth";
 
 import { createExperimentAction, recordExperimentResultAction, runProfileAuditAction } from "./actions";
+
+export const metadata: Metadata = {
+  title: "Experiments · CreatorOS Personal",
+};
 
 export const dynamic = "force-dynamic";
 

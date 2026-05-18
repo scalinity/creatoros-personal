@@ -1,6 +1,6 @@
 import type { ComponentProps, ReactNode } from "react";
 
-import { Badge, Button, Card, EmptyState, KeyValueRow, MetricBlock, RuleHeader } from "@/components/design-system";
+import { Badge, Card, EmptyState, KeyValueRow, MetricBlock, RuleHeader, SubmitButton } from "@/components/design-system";
 import type { EmbeddingStatus } from "@/lib/embeddings";
 import type { VoiceFormattingHabits, VoiceProfileStatus } from "@/lib/voice";
 
@@ -96,7 +96,8 @@ export function VoiceProfilePanel({ embeddingStatus, notice, recomputeAction, re
           {message}
         </div>
       ) : null}
-      <div className="composer-metrics voice-profile-metrics" aria-label="Voice and embedding status">
+      <div aria-labelledby="voice-status-title" className="composer-metrics voice-profile-metrics">
+        <RuleHeader className="visually-hidden" folio="§" id="voice-status-title" label="Voice and embedding status" />
         <MetricBlock label="Owner posts" value={status.sourceCounts.ownerPosts} />
         <MetricBlock label="Owner blogs" value={status.sourceCounts.ownerBlogs} />
         <MetricBlock label="Embeddings" value={embeddingStatus.indexedCount} />
@@ -104,15 +105,11 @@ export function VoiceProfilePanel({ embeddingStatus, notice, recomputeAction, re
       </div>
       <div className="settings-actions voice-profile-actions">
         <form action={recomputeAction} className="settings-action">
-          <Button size="sm" type="submit">
-            Recompute voice profile
-          </Button>
+          <SubmitButton size="sm">Recompute voice profile</SubmitButton>
           <span className="settings-action-note">Uses owner posts and owner blogs only.</span>
         </form>
         <form action={refreshEmbeddingsAction} className="settings-action">
-          <Button size="sm" type="submit" variant="secondary">
-            Refresh embeddings
-          </Button>
+          <SubmitButton size="sm" variant="secondary">Refresh embeddings</SubmitButton>
           <span className="settings-action-note">Falls back to keyword retrieval when no embedding provider is available.</span>
         </form>
       </div>

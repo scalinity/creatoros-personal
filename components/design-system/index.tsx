@@ -80,6 +80,7 @@ export type InputProps = Omit<InputHTMLAttributes<HTMLInputElement>, "size"> & F
 
 export function Input({ className, error, helper, id, label, mono = false, name, ...props }: InputProps) {
   const inputId = fieldId("input", id, name, label);
+  const helperId = error || helper ? `${inputId}-helper` : undefined;
 
   return (
     <div className={cn("field", error && "field-error", className)}>
@@ -88,9 +89,16 @@ export function Input({ className, error, helper, id, label, mono = false, name,
           {label}
         </label>
       ) : null}
-      <input className={cn("field-input", mono && "mono")} id={inputId} name={name} {...props} />
+      <input
+        aria-describedby={helperId}
+        aria-invalid={error ? true : undefined}
+        className={cn("field-input", mono && "mono")}
+        id={inputId}
+        name={name}
+        {...props}
+      />
       {error || helper ? (
-        <div className={cn("field-helper", error && "field-helper-error")}>{error || helper}</div>
+        <div className={cn("field-helper", error && "field-helper-error")} id={helperId}>{error || helper}</div>
       ) : null}
     </div>
   );
@@ -100,6 +108,7 @@ export type TextareaProps = TextareaHTMLAttributes<HTMLTextAreaElement> & FieldT
 
 export function Textarea({ className, error, helper, id, label, mono = false, name, ...props }: TextareaProps) {
   const inputId = fieldId("textarea", id, name, label);
+  const helperId = error || helper ? `${inputId}-helper` : undefined;
 
   return (
     <div className={cn("field", error && "field-error", className)}>
@@ -108,9 +117,16 @@ export function Textarea({ className, error, helper, id, label, mono = false, na
           {label}
         </label>
       ) : null}
-      <textarea className={cn("field-input field-textarea", mono && "mono")} id={inputId} name={name} {...props} />
+      <textarea
+        aria-describedby={helperId}
+        aria-invalid={error ? true : undefined}
+        className={cn("field-input field-textarea", mono && "mono")}
+        id={inputId}
+        name={name}
+        {...props}
+      />
       {error || helper ? (
-        <div className={cn("field-helper", error && "field-helper-error")}>{error || helper}</div>
+        <div className={cn("field-helper", error && "field-helper-error")} id={helperId}>{error || helper}</div>
       ) : null}
     </div>
   );
@@ -128,6 +144,7 @@ export type SelectProps = SelectHTMLAttributes<HTMLSelectElement> &
 
 export function Select({ className, error, helper, id, label, mono = false, name, options, ...props }: SelectProps) {
   const inputId = fieldId("select", id, name, label);
+  const helperId = error || helper ? `${inputId}-helper` : undefined;
 
   return (
     <div className={cn("field", error && "field-error", className)}>
@@ -137,7 +154,14 @@ export function Select({ className, error, helper, id, label, mono = false, name
         </label>
       ) : null}
       <span className="select-wrap">
-        <select className={cn("field-input select", mono && "mono")} id={inputId} name={name} {...props}>
+        <select
+          aria-describedby={helperId}
+          aria-invalid={error ? true : undefined}
+          className={cn("field-input select", mono && "mono")}
+          id={inputId}
+          name={name}
+          {...props}
+        >
           {options.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
@@ -149,7 +173,7 @@ export function Select({ className, error, helper, id, label, mono = false, name
         </span>
       </span>
       {error || helper ? (
-        <div className={cn("field-helper", error && "field-helper-error")}>{error || helper}</div>
+        <div className={cn("field-helper", error && "field-helper-error")} id={helperId}>{error || helper}</div>
       ) : null}
     </div>
   );
@@ -165,10 +189,14 @@ export function Switch({ checked, className, id, label, name, ...props }: Switch
   return (
     <label className={cn("switch-row", className)} htmlFor={inputId}>
       <input
+        // L-20: native checkbox styled as a switch. Set role="switch" and
+        // aria-checked so AT announces it as a switch, not a checkbox.
+        aria-checked={Boolean(checked)}
         checked={checked}
         className="switch-native"
         id={inputId}
         name={name}
+        role="switch"
         type="checkbox"
         {...props}
       />
@@ -196,12 +224,18 @@ export function Badge({ children, className, variant = "neutral", ...props }: Ba
 
 export type RuleHeaderProps = HTMLAttributes<HTMLElement> & {
   actions?: ReactNode;
+  // When `as` is set, the rule-header label is rendered as that heading element
+  // (e.g. `as="h1"` for a route's primary header). Without it, the label is a
+  // plain span — useful for nested section headers that are not the page title.
+  as?: "h1" | "h2" | "h3";
   folio?: ReactNode;
   label: ReactNode;
   sub?: ReactNode;
 };
 
-export function RuleHeader({ actions, className, folio, label, sub, ...props }: RuleHeaderProps) {
+export function RuleHeader({ actions, as, className, folio, id, label, sub, ...props }: RuleHeaderProps) {
+  const HeadingTag = as ?? null;
+
   return (
     <header className={cn("rule-header", className)} {...props}>
       <div className="rule-header-row">
@@ -210,7 +244,11 @@ export function RuleHeader({ actions, className, folio, label, sub, ...props }: 
           <span aria-hidden="true" className="rule-header-sep">
             —
           </span>
-          <span className="rule-header-label smallcaps">{label}</span>
+          {HeadingTag ? (
+            <HeadingTag className="rule-header-label smallcaps" id={id}>{label}</HeadingTag>
+          ) : (
+            <span className="rule-header-label smallcaps" id={id}>{label}</span>
+          )}
           {sub ? <span className="rule-header-sub">{sub}</span> : null}
         </div>
         {actions ? <div className="rule-header-actions">{actions}</div> : null}
@@ -462,3 +500,25 @@ export function RewriteCard({ actions, className, label = "Rewrite", rationale, 
     </article>
   );
 }
+
+export { LinkButton, type LinkButtonProps } from "./link-button";
+export { SubmitButton, type SubmitButtonProps } from "./submit-button";
+
+// H-7: spec-required primitives that previously had no shared implementation.
+// Components that need them should import from "@/components/design-system"
+// rather than rolling their own `<input type="checkbox">` / `<dialog>` etc.
+export { Checkbox, ConfidenceLabel, Dialog, LoadingSkeleton, Pagination, Sheet, Tabs, Toaster, ToastDismissButton, Tooltip } from "./primitives";
+export type {
+  CheckboxProps,
+  ConfidenceKind,
+  DialogProps,
+  LoadingSkeletonProps,
+  PaginationProps,
+  SheetProps,
+  TabsProps,
+  TabItem,
+  Toast,
+  ToastVariant,
+  ToasterProps,
+  TooltipProps,
+} from "./primitives";

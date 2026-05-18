@@ -1,6 +1,7 @@
 import type { ComponentProps, ReactNode } from "react";
+import Link from "next/link";
 
-import { Badge, Button, Card, EmptyState, Input, KeyValueRow, MetricBlock, RuleHeader, Select, Textarea, cn } from "@/components/design-system";
+import { Badge, Card, EmptyState, Input, KeyValueRow, MetricBlock, RuleHeader, Select, SubmitButton, Textarea, cn } from "@/components/design-system";
 import type { ComposerFilters, ComposerIdea, ComposerOutput } from "@/lib/content";
 
 type FormAction = ComponentProps<"form">["action"];
@@ -130,12 +131,12 @@ function IdeaFilters({ filters }: { filters: ComposerFilters }) {
       <Select defaultValue={filters.status ?? ""} label="Status" name="status" options={filterStatusOptions} />
       <Input defaultValue={filters.source ?? ""} label="Source" name="source" placeholder="manual, post, inspiration" />
       <div className="composer-filter-actions">
-        <Button size="sm" type="submit" variant="secondary">
+        <SubmitButton size="sm" variant="secondary">
           Apply
-        </Button>
-        <a className="composer-reset" href="/composer">
+        </SubmitButton>
+        <Link className="composer-reset" href="/composer">
           Reset
-        </a>
+        </Link>
       </div>
     </form>
   );
@@ -144,7 +145,7 @@ function IdeaFilters({ filters }: { filters: ComposerFilters }) {
 function CreateIdeaForm({ action }: { action?: FormAction }) {
   return (
     <form action={action} className="composer-form">
-      <RuleHeader folio="§ 01" label="Create idea" sub="manual or linked source" />
+      <RuleHeader folio="§ 01" id="composer-create-title" label="Create idea" sub="manual or linked source" />
       <Input label="Title" name="title" placeholder="Optional working title" />
       <Textarea label="Idea text" name="raw_text" placeholder="Capture the raw angle, claim, hook, or source note." required />
       <div className="composer-form-grid">
@@ -156,9 +157,9 @@ function CreateIdeaForm({ action }: { action?: FormAction }) {
         <Input label="Source entity id" mono name="source_entity_id" />
       </div>
       <div className="composer-inline-controls">{checkbox("favorite", "Favorite")}</div>
-      <Button size="sm" type="submit">
+      <SubmitButton size="sm">
         Create idea
-      </Button>
+      </SubmitButton>
     </form>
   );
 }
@@ -166,7 +167,7 @@ function CreateIdeaForm({ action }: { action?: FormAction }) {
 function IdeaRow({ href, idea, selected }: { href: string; idea: ComposerIdea; selected?: boolean }) {
   return (
     <article className={cn("composer-idea-row", selected && "composer-idea-row-selected")}>
-      <a className="composer-idea-link" href={href}>
+      <Link className="composer-idea-link" href={{ pathname: href }}>
         <div className="composer-row-head">
           <span className="composer-row-title">{idea.title ?? "Untitled idea"}</span>
           <Badge variant={ideaBadgeVariant(idea.status)}>{idea.status}</Badge>
@@ -177,15 +178,15 @@ function IdeaRow({ href, idea, selected }: { href: string; idea: ComposerIdea; s
           <span>{idea.source}</span>
           {idea.favorite ? <Badge variant="accent">favorite</Badge> : null}
         </div>
-      </a>
+      </Link>
     </article>
   );
 }
 
 function IdeaList({ ideas, selectedIdea }: { ideas: ComposerIdea[]; selectedIdea?: ComposerIdea | null }) {
   return (
-    <section className="composer-list" aria-label="Idea inbox">
-      <RuleHeader folio="§ 02" label="Idea inbox" sub={`${ideas.length} visible`} />
+    <section aria-labelledby="composer-inbox-title" className="composer-list">
+      <RuleHeader folio="§ 02" id="composer-inbox-title" label="Idea inbox" sub={`${ideas.length} visible`} />
       {ideas.length > 0 ? (
         ideas.map((idea) => <IdeaRow href={`/composer?selected=${idea.id}`} idea={idea} key={idea.id} selected={idea.id === selectedIdea?.id} />)
       ) : (
@@ -211,9 +212,9 @@ function EditIdeaForm({ action, idea }: { action?: FormAction; idea: ComposerIde
         <Input defaultValue={idea.sourceEntityId ?? ""} label="Source entity id" mono name="source_entity_id" />
       </div>
       <div className="composer-inline-controls">{checkbox("favorite", "Favorite", idea.favorite)}</div>
-      <Button size="sm" type="submit">
+      <SubmitButton size="sm">
         Save idea
-      </Button>
+      </SubmitButton>
     </form>
   );
 }
@@ -221,16 +222,16 @@ function EditIdeaForm({ action, idea }: { action?: FormAction; idea: ComposerIde
 function SourceInspector({ archiveAction, createDraftAction, idea, updateAction }: { archiveAction?: FormAction; createDraftAction?: FormAction; idea?: ComposerIdea | null; updateAction?: FormAction }) {
   if (!idea) {
     return (
-      <aside className="composer-inspector">
-        <RuleHeader folio="§ 04" label="Source inspector" sub="nothing selected" />
-        <EmptyState title="No source selected" message="Select an idea to inspect source tracking, tags, and local workspace state." />
+      <aside aria-labelledby="composer-source-title" className="composer-inspector">
+        <RuleHeader folio="§ 04" id="composer-source-title" label="Source inspector" sub="nothing selected" />
+        <EmptyState message="Select an idea to inspect source tracking, tags, and local workspace state." title="No source selected" />
       </aside>
     );
   }
 
   return (
-    <aside className="composer-inspector">
-      <RuleHeader folio="§ 04" label="Source inspector" sub={idea.title ?? idea.id} />
+    <aside aria-labelledby="composer-source-title" className="composer-inspector">
+      <RuleHeader folio="§ 04" id="composer-source-title" label="Source inspector" sub={idea.title ?? idea.id} />
       <Card variant="inset">
         <Card.Body>
           <KeyValueRow label="Status" value={<Badge variant={ideaBadgeVariant(idea.status)}>{idea.status}</Badge>} />
@@ -245,9 +246,9 @@ function SourceInspector({ archiveAction, createDraftAction, idea, updateAction 
       <EditIdeaForm action={updateAction} idea={idea} />
       <form action={archiveAction} className="composer-archive-form">
         <input name="id" type="hidden" value={idea.id} />
-        <Button size="sm" type="submit" variant="destructive">
+        <SubmitButton size="sm" variant="destructive">
           Archive idea
-        </Button>
+        </SubmitButton>
       </form>
       <Card className="composer-handoff" variant="inset">
         <Card.Header>
@@ -260,9 +261,9 @@ function SourceInspector({ archiveAction, createDraftAction, idea, updateAction 
             <input name="source_type" type="hidden" value="content_idea" />
             <input name="source_id" type="hidden" value={idea.id} />
             <input name="content_type" type="hidden" value="single_post" />
-            <Button size="sm" type="submit" variant="secondary">
+            <SubmitButton size="sm" variant="secondary">
               Create publishing draft
-            </Button>
+            </SubmitButton>
           </form>
         </Card.Body>
       </Card>
@@ -273,7 +274,7 @@ function SourceInspector({ archiveAction, createDraftAction, idea, updateAction 
 function SaveOutputForm({ action, selectedIdea }: { action?: FormAction; selectedIdea?: ComposerIdea | null }) {
   return (
     <form action={action} className="composer-form">
-      <RuleHeader folio="§ 05" label="Save generated output" sub="manual persistence only" />
+      <RuleHeader folio="§ 05" id="composer-save-title" label="Save generated output" sub="manual persistence only" />
       <div className="composer-form-grid">
         <Select defaultValue="x_post" label="Type" name="type" options={generatedOutputTypeOptions} />
         <Select defaultValue={selectedIdea ? "content_idea" : ""} label="Input type" name="input_type" options={generatedInputTypeOptions} />
@@ -284,9 +285,9 @@ function SaveOutputForm({ action, selectedIdea }: { action?: FormAction; selecte
         {checkbox("saved", "Saved", true)}
         {checkbox("favorite", "Favorite")}
       </div>
-      <Button size="sm" type="submit" variant="secondary">
+      <SubmitButton size="sm" variant="secondary">
         Save output
-      </Button>
+      </SubmitButton>
     </form>
   );
 }
@@ -296,9 +297,9 @@ function OutputActionButton({ action, formAction, id, label, variant = "secondar
     <form action={formAction} className="composer-output-action">
       <input name="id" type="hidden" value={id} />
       <input name="action" type="hidden" value={action} />
-      <Button size="sm" type="submit" variant={variant}>
+      <SubmitButton size="sm" variant={variant}>
         {label}
-      </Button>
+      </SubmitButton>
     </form>
   );
 }
@@ -329,9 +330,9 @@ function OutputCard({ action, createDraftAction, output }: { action?: FormAction
         <form action={createDraftAction} className="composer-output-action">
           <input name="source_type" type="hidden" value="generated_output" />
           <input name="source_id" type="hidden" value={output.id} />
-          <Button size="sm" type="submit" variant="secondary">
+          <SubmitButton size="sm" variant="secondary">
             Create publishing draft
-          </Button>
+          </SubmitButton>
         </form>
         <OutputActionButton action="archived" formAction={action} id={output.id} label="Archive" variant="destructive" />
       </div>
@@ -341,8 +342,8 @@ function OutputCard({ action, createDraftAction, output }: { action?: FormAction
 
 function GeneratedOutputs({ action, createDraftAction, outputs }: { action?: FormAction; createDraftAction?: FormAction; outputs: ComposerOutput[] }) {
   return (
-    <section className="composer-output-section" aria-label="Generated outputs">
-      <RuleHeader folio="§ 06" label="Generated outputs" sub="stored outputs only" />
+    <section aria-labelledby="composer-outputs-title" className="composer-output-section">
+      <RuleHeader folio="§ 06" id="composer-outputs-title" label="Generated outputs" sub="stored outputs only" />
       {outputs.length > 0 ? (
         <div className="composer-output-list">
           {outputs.map((output) => (
@@ -373,10 +374,22 @@ export function ComposerWorkspaceView({
   const selectedOutputs = selectedIdea ? outputs.filter((output) => output.inputId === selectedIdea.id || output.inputId === null) : outputs;
 
   return (
-    <div className="composer-page">
-      <RuleHeader actions={<Badge variant="outline">No AI call</Badge>} folio="§ 10" label="Content composer" sub="ideas and output storage" />
-      {noticeCopy ? <div className="composer-notice">{noticeCopy}</div> : null}
-      <section className="composer-metrics" aria-label="Composer summary">
+    <main aria-labelledby="composer-title" className="composer-page">
+      <RuleHeader
+        actions={<Badge variant="outline">No AI call</Badge>}
+        as="h1"
+        folio="§ 10"
+        id="composer-title"
+        label="Content composer"
+        sub="ideas and output storage"
+      />
+      {noticeCopy ? (
+        <div aria-live="polite" className="composer-notice" role="status">
+          {noticeCopy}
+        </div>
+      ) : null}
+      <section aria-labelledby="composer-summary-title" className="composer-metrics">
+        <RuleHeader className="visually-hidden" folio="§" id="composer-summary-title" label="Summary" />
         <MetricBlock label="Visible ideas" value={ideas.length} />
         <MetricBlock label="Favorites" value={ideas.filter((idea) => idea.favorite).length} />
         <MetricBlock label="Stored outputs" value={outputs.length} />
@@ -404,6 +417,6 @@ export function ComposerWorkspaceView({
         </div>
         <SourceInspector archiveAction={archiveIdeaAction} createDraftAction={createDraftFromSourceAction} idea={selectedIdea} updateAction={updateIdeaAction} />
       </section>
-    </div>
+    </main>
   );
 }

@@ -5,6 +5,7 @@ import type { AdminContext } from "@/lib/auth/admin";
 import { createContentIdea, createGeneratedOutput } from "@/lib/content";
 import { parseTagInput } from "@/lib/content/validation";
 import { algoAnalysisOutputSchema, type AiProvider } from "@/lib/ai";
+import { validateAiStructuredOutput } from "@/lib/ai/json";
 import { runStructuredPrompt } from "@/lib/ai/run";
 import type { AlgoAnalysisReportRow, Json } from "@/types/database";
 import { loadActiveVoiceProfile, type VoiceProfile } from "@/lib/voice";
@@ -200,7 +201,7 @@ export async function runAlgoAnalysis(admin: AdminContext, input: AlgoAnalyzerIn
     promptId: PROMPT_ID,
     provider: options.provider,
   });
-  const output = algoAnalysisOutputSchema.parse(response.structured);
+  const output = validateAiStructuredOutput(response.structured, algoAnalysisOutputSchema);
   const diagnosis = {
     heuristic_disclaimer: output.heuristic_disclaimer,
     highest_leverage_improvement: output.highest_leverage_improvement,

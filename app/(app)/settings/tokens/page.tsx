@@ -1,3 +1,5 @@
+import type { Metadata } from "next";
+
 import { SettingsSectionPage } from "@/components/settings";
 import { TokenSettingsClient } from "@/components/settings/tokens";
 import { requireAdmin } from "@/lib/auth/admin";
@@ -5,6 +7,10 @@ import { getOperationalDiagnostics } from "@/lib/server-only/diagnostics";
 import { listPersonalSaveTokens } from "@/lib/tokens/personal-save-tokens";
 
 import { tokenSettingsAction } from "./actions";
+
+export const metadata: Metadata = {
+  title: "Tokens · Settings · CreatorOS Personal",
+};
 
 export const dynamic = "force-dynamic";
 

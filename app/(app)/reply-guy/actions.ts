@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 
 import { requireAdmin } from "@/lib/auth/admin";
+import { rethrowIfRedirect } from "@/lib/server-only/action-redirect";
 import {
   archiveTargetAccount,
   createReplyPublishingDraft,
@@ -59,6 +60,7 @@ export async function createTargetAccountAction(formData: FormData) {
     const account = await createTargetAccount(admin, parsed.data);
     accountId = account.id;
   } catch (error) {
+    rethrowIfRedirect(error);
     console.error("Failed to save target account", { reason: error instanceof Error ? error.message : "unknown" });
     redirectToReplyGuy({ notice: "target_failed" });
   }
@@ -77,6 +79,7 @@ export async function archiveTargetAccountAction(formData: FormData) {
   try {
     await archiveTargetAccount(admin, parsed.data);
   } catch (error) {
+    rethrowIfRedirect(error);
     console.error("Failed to archive target account", { reason: error instanceof Error ? error.message : "unknown" });
     redirectToReplyGuy({ notice: "target_archive_failed", selected: parsed.data.id });
   }
@@ -99,6 +102,7 @@ export async function importTargetPostAction(formData: FormData) {
     postId = post.id;
     selectedAccountId = post.targetAccountId;
   } catch (error) {
+    rethrowIfRedirect(error);
     console.error("Failed to import target post", { reason: error instanceof Error ? error.message : "unknown" });
     redirectToReplyGuy({ notice: "post_failed", selected: parsed.data.targetAccountId });
   }
@@ -119,6 +123,7 @@ export async function pasteTargetPostsAction(formData: FormData) {
     const posts = await importParsedTargetPosts(admin, { posts: parsed.data.posts, targetAccountId: parsed.data.targetAccountId });
     postId = posts[0]?.id;
   } catch (error) {
+    rethrowIfRedirect(error);
     console.error("Failed to import pasted target posts", { reason: error instanceof Error ? error.message : "unknown" });
     redirectToReplyGuy({ notice: "post_failed", selected: parsed.data.targetAccountId });
   }
@@ -139,6 +144,7 @@ export async function generateReplyDraftsAction(formData: FormData) {
     const result = await generateReplyDrafts(admin, parsed.data);
     draftId = result.drafts[0]?.id;
   } catch (error) {
+    rethrowIfRedirect(error);
     console.error("Failed to generate reply drafts", { reason: error instanceof Error ? error.message : "unknown" });
     redirectToReplyGuy({ notice: "reply_failed", post: parsed.data.targetPostId ?? undefined, selected: parsed.data.targetAccountId ?? undefined });
   }
@@ -161,6 +167,7 @@ export async function markReplyCopiedAction(formData: FormData) {
     selectedAccountId = draft.targetAccountId ?? undefined;
     targetPostId = draft.targetPostId ?? undefined;
   } catch (error) {
+    rethrowIfRedirect(error);
     console.error("Failed to mark reply copied", { reason: error instanceof Error ? error.message : "unknown" });
     redirectToReplyGuy({ notice: "reply_action_failed" });
   }
@@ -183,6 +190,7 @@ export async function markReplyUsedAction(formData: FormData) {
     selectedAccountId = draft.targetAccountId ?? undefined;
     targetPostId = draft.targetPostId ?? undefined;
   } catch (error) {
+    rethrowIfRedirect(error);
     console.error("Failed to mark reply used", { reason: error instanceof Error ? error.message : "unknown" });
     redirectToReplyGuy({ notice: "reply_action_failed" });
   }
@@ -205,6 +213,7 @@ export async function createReplyPublishingDraftAction(formData: FormData) {
     selectedAccountId = result.replyDraft.targetAccountId ?? undefined;
     targetPostId = result.replyDraft.targetPostId ?? undefined;
   } catch (error) {
+    rethrowIfRedirect(error);
     console.error("Failed to create reply publishing handoff", { reason: error instanceof Error ? error.message : "unknown" });
     redirectToReplyGuy({ notice: "handoff_failed" });
   }

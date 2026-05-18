@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 
 import { requireAdmin } from "@/lib/auth/admin";
+import { rethrowIfRedirect } from "@/lib/server-only/action-redirect";
 import { createFixedWindowRateLimiter, MemoryRateLimitStore } from "@/lib/rate-limit";
 import { disconnectXConnection } from "@/lib/x/oauth";
 import { runXReadSync } from "@/lib/x/sync";
@@ -50,6 +51,7 @@ export async function disconnectXConnectionAction(formData: FormData) {
       deleteSnapshots: parsed.data.delete_snapshots,
     });
   } catch (error) {
+    rethrowIfRedirect(error);
     console.error("Settings X disconnect failed", {
       reason: error instanceof Error ? error.message : "unknown",
     });
@@ -79,6 +81,7 @@ export async function syncXConnectionAction(formData: FormData) {
     const prefix = parsed.data.mode === "mock" ? "mock" : "live";
     notice = result.status === "succeeded" ? `${prefix}_sync_complete` : `${prefix}_sync_failed`;
   } catch (error) {
+    rethrowIfRedirect(error);
     console.error("Settings X sync failed", {
       reason: error instanceof Error ? error.message : "unknown",
     });

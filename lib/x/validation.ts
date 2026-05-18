@@ -6,7 +6,13 @@ const booleanish = z
   .union([z.boolean(), z.string()])
   .optional()
   .transform((value) => value === true || value === "true" || value === "on");
-const requiredConfirmation = z.preprocess((value) => String(value ?? "").trim().toLowerCase(), z.string().refine((value) => value.includes("confirm") || value.includes("approve") || value.includes("delete"), "Explicit owner confirmation is required."));
+// Confirmation must START WITH a known token followed by a word boundary.
+// Plain substring matching previously accepted phrases like "please don't
+// delete" or "we will never approve" or "i confirmation"; this version still
+// allows an audit-friendly suffix ("approve exact payload-hash-abc") while
+// rejecting accidental matches.
+const confirmationPattern = /^(?:confirm|approve|delete)\b/;
+const requiredConfirmation = z.preprocess((value) => String(value ?? "").trim().toLowerCase(), z.string().refine((value) => confirmationPattern.test(value), "Explicit owner confirmation is required."));
 const optionalTrimmedText = z.preprocess((value) => {
   if (value === null || value === undefined) return null;
   const trimmed = String(value).trim();

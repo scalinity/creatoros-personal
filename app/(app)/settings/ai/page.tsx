@@ -1,3 +1,5 @@
+import type { Metadata } from "next";
+
 import { VoiceProfilePanel } from "@/components/settings/voice-profile-panel";
 import { SettingsSectionPage } from "@/components/settings";
 import { requireAdmin } from "@/lib/auth/admin";
@@ -6,6 +8,10 @@ import { getOperationalDiagnostics } from "@/lib/server-only/diagnostics";
 import { loadVoiceProfileStatus } from "@/lib/voice";
 
 import { recomputeVoiceProfileAction, refreshEmbeddingsAction } from "./actions";
+
+export const metadata: Metadata = {
+  title: "AI · Settings · CreatorOS Personal",
+};
 
 export const dynamic = "force-dynamic";
 

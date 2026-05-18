@@ -549,6 +549,7 @@ describe("Phase 12 workflow views", () => {
           extractedStories: ["A messy note became a week of posts."],
           extractedThemes: ["workflow"],
           generatedPack: brainDumpPayload,
+          generatedPackParseFailed: false,
           id: "brain-1",
           model: "mock-model",
           promptVersion: "brain-dump.v1",

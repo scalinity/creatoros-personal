@@ -102,9 +102,27 @@ function parseBoolean(value: unknown, fallback = false) {
   return fallback;
 }
 
+// L-28: parseOptionalMetric returns null for empty cells so callers that need
+// to differentiate "unknown" from "zero reported" (e.g. engagement-rate
+// fallback in scoring) can branch correctly. parseMetric retains its 0-fallback
+// behavior for callers that just need a non-null DB value.
+export function parseOptionalMetric(value: unknown): null | number {
+  const stringValue = cleanString(value);
+  if (!stringValue) return null;
+  const normalized = stringValue.replaceAll(",", "");
+  const numberValue = Number(normalized);
+  if (!Number.isFinite(numberValue) || numberValue < 0 || !Number.isInteger(numberValue)) {
+    return null;
+  }
+  return numberValue;
+}
+
 function parseMetric(value: unknown, field: string, errors: ImportParseError[], row?: number) {
   const stringValue = cleanString(value);
 
+  // L-28: empty cell = "unknown / not reported"; return 0 here for the
+  // non-null DB column. Use parseOptionalMetric in callers that need to
+  // distinguish "unknown" from "zero reported".
   if (!stringValue) {
     return 0;
   }
@@ -129,6 +147,20 @@ function parseDate(value: unknown, field: string, errors: ImportParseError[], ro
   const dateValue = cleanString(value);
 
   if (!dateValue) {
+    return null;
+  }
+
+  // Reject pure-numeric strings (e.g. tweet ids pasted into a date column).
+  // `new Date("12345")` would otherwise be accepted as year 12345. Numeric
+  // unix timestamps are typically passed as numbers, not strings, and we
+  // already coerce numbers above.
+  if (/^\d+$/.test(dateValue)) {
+    errors.push({
+      code: "validation_error",
+      field,
+      message: `${field} must be a valid ISO-8601 date or timestamp, not a bare integer.`,
+      row,
+    });
     return null;
   }
 
@@ -364,7 +396,9 @@ export function parsePostsCsv(input: string): ImportParseResult {
 
   const headers = rows[0]?.map((header) => header.trim()) ?? [];
   const records = rows.slice(1).map((row) => rowRecord(headers, row));
-  const result = collectUniquePosts(records, { defaultSource: "import", startRow: 1, untrusted: true });
+  // Header occupies row 1 of the source CSV, so the first data record corresponds
+  // to row 2. Without this, duplicate-row diagnostics misreport the source line.
+  const result = collectUniquePosts(records, { defaultSource: "import", startRow: 2, untrusted: true });
 
   return {
     errors: [...result.errors, ...errors],

@@ -1,3 +1,5 @@
+import type { Metadata } from "next";
+
 import { ComposerWorkspaceView } from "@/components/composer";
 import { requireAdmin } from "@/lib/auth/admin";
 import { loadComposerWorkspace, type ComposerFilters, type ComposerIdeaStatus } from "@/lib/content";
@@ -10,6 +12,10 @@ import {
   updateGeneratedOutputStatusAction,
 } from "./actions";
 import { createPublishingDraftFromSourceAction } from "../publishing/actions";
+
+export const metadata: Metadata = {
+  title: "Composer · CreatorOS Personal",
+};
 
 export const dynamic = "force-dynamic";
 

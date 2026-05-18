@@ -41,7 +41,10 @@ test.describe("Phase 24 production readiness smoke flows", () => {
 
     await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
     await expect(page.getByText("private session")).toBeVisible();
-    await expect(page.getByLabel("Archive counts")).toContainText("Posts imported");
+    // ArchivePanel was refactored to use aria-labelledby pointing at the
+    // RuleHeader whose label is "Archive". Use a substring match against the
+    // label rather than the prior aria-label "Archive counts" string.
+    await expect(page.getByRole("region", { name: /Archive/ })).toContainText("Posts imported");
   });
 
   test("creates idea and generated output records with deterministic local fixtures", async ({ page }) => {
@@ -122,7 +125,11 @@ test.describe("Phase 24 production readiness smoke flows", () => {
     await page.getByRole("button", { name: "Analyze draft" }).click();
 
     await expect(page.getByText("Draft analysis saved with prompt run and report records.")).toBeVisible();
-    await expect(page.getByLabel("Algorithm analysis result")).toContainText("9 metrics");
+    // Analyzer report section was refactored to use aria-labelledby pointing
+    // at the RuleHeader whose label is "Score surface" with sub "9 metrics".
+    // Match against the region's accessible name + the rendered "9 metrics"
+    // sub-label that exists in the section content.
+    await expect(page.getByRole("region", { name: /Score surface/ })).toContainText("9 metrics");
     await expect(page.getByRole("button", { name: "Save output" }).first()).toBeEnabled();
 
     await page.getByRole("button", { name: "Save output" }).first().click();
@@ -147,7 +154,9 @@ test.describe("Phase 24 production readiness smoke flows", () => {
     );
 
     await page.goto(`/blogs?selected=${blogData.blog.id}`);
-    await expect(page.getByRole("heading", { name: "Blogs" })).toBeVisible();
+    // The Blogs h1 has folio "§ 14" + label "Blogs"; relax the matcher so a
+    // future folio change doesn't break this test.
+    await expect(page.getByRole("heading", { level: 1 })).toContainText(/Blogs/i);
     await expect(page.getByRole("link", { name: /Phase 24 Blog Draft/ })).toBeVisible();
   });
 

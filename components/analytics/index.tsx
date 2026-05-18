@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { AssumptionFlag, Badge, Card, EmptyState, KeyValueRow, MetricBlock, RuleHeader, ScoreGauge, Table } from "@/components/design-system";
+import { AssumptionFlag, Badge, Card, EmptyState, KeyValueRow, LinkButton, MetricBlock, RuleHeader, ScoreGauge, Table } from "@/components/design-system";
 import type { AnalyticsAggregate, AnalyticsPostSummary, AnalyticsReport, VelocityPostSummary } from "@/lib/analytics";
 
 export type AnalyticsViewProps = {
@@ -83,7 +83,7 @@ function PostTable({ empty, posts, title }: { empty: string; posts: AnalyticsPos
             engagement: formatPercentish(post.engagementRate),
             id: post.id,
             post: (
-              <Link aria-label={`Open post history for: ${post.text}`} href={`/post-history?selected=${post.id}`} title={post.text}>
+              <Link aria-label={`Open post history for: ${post.text}`} href={{ pathname: "/post-history", query: { selected: post.id } }} title={post.text}>
                 {shortText(post.text)}
               </Link>
             ),
@@ -118,7 +118,7 @@ function VelocityTable({ rows }: { rows: VelocityPostSummary[] }) {
             id: row.postId,
             likes: formatScore(row.likeVelocityPerHour),
             post: (
-              <Link aria-label={`Open post history for: ${row.text}`} href={`/post-history?selected=${row.postId}`} title={row.text}>
+              <Link aria-label={`Open post history for: ${row.text}`} href={{ pathname: "/post-history", query: { selected: row.postId } }} title={row.text}>
                 {shortText(row.text)}
               </Link>
             ),
@@ -275,20 +275,32 @@ function OperatingMetrics({ report }: { report: AnalyticsReport }) {
 
 export function AnalyticsView({ report }: AnalyticsViewProps) {
   return (
-    <main className="analytics-page" aria-labelledby="analytics-title">
-      <h1 className="workflow-title" id="analytics-title">Analytics</h1>
-      <RuleHeader actions={<Badge variant="outline">deterministic</Badge>} folio="§ 18" label="Analytics" sub="explainable reports" />
+    <main aria-labelledby="analytics-title" className="analytics-page">
+      <RuleHeader
+        actions={<Badge variant="outline">deterministic</Badge>}
+        as="h1"
+        folio="§ 18"
+        id="analytics-title"
+        label="Analytics"
+        sub="explainable reports"
+      />
       <MetricSummary report={report} />
       {report.performance.totalPosts === 0 ? (
-        <EmptyState action={<Link className="btn btn-secondary btn-sm" href="/post-history"><span className="btn-label">Import posts</span></Link>} message="Manual imports and X sync snapshots feed every post-level report here." title="No analytics source data" />
+        <EmptyState
+          action={<LinkButton href="/post-history" size="sm" variant="secondary">Import posts</LinkButton>}
+          message="Manual imports and X sync snapshots feed every post-level report here."
+          title="No analytics source data"
+        />
       ) : null}
       <section className="analytics-workbench">
         <div className="analytics-main">
-          <section className="analytics-table-grid" aria-label="Post ranking tables">
+          <section aria-labelledby="analytics-rankings-title" className="analytics-table-grid">
+            <RuleHeader className="visually-hidden" folio="§" id="analytics-rankings-title" label="Post ranking tables" />
             <PostTable empty="Scored posts appear after manual import, sync, or metric edits." posts={report.topPosts} title="Top posts" />
             <PostTable empty="Bottom posts appear once at least one post has a known score." posts={report.bottomPosts} title="Bottom posts" />
           </section>
-          <section className="analytics-aggregate-grid" aria-label="Post aggregate tables">
+          <section aria-labelledby="analytics-aggregates-title" className="analytics-aggregate-grid">
+            <RuleHeader className="visually-hidden" folio="§" id="analytics-aggregates-title" label="Post aggregate tables" />
             <AggregateTable groups={report.aggregates.topic} title="Topics" />
             <AggregateTable groups={report.aggregates.format} title="Formats" />
             <AggregateTable groups={report.aggregates.hook} title="Hooks" />

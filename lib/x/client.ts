@@ -147,15 +147,91 @@ function objectValue(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 }
 
-function parseRateLimitReset(response: Response) {
-  const reset = response.headers.get("x-rate-limit-reset");
-  const resetSeconds = reset ? Number(reset) : NaN;
+// Bound the X API request lifetime so a hung server cannot pin a serverless
+// function up to its platform-max wallclock. Mark all aborts as retryable.
+const X_API_DEFAULT_TIMEOUT_MS = 30_000;
+const X_API_MEDIA_TIMEOUT_MS = 60_000;
 
-  if (!Number.isFinite(resetSeconds)) {
+function fetchWithTimeout(fetchImpl: FetchImpl, input: string, init: RequestInit, timeoutMs = X_API_DEFAULT_TIMEOUT_MS) {
+  if (init.signal) {
+    return fetchImpl(input, init);
+  }
+
+  return fetchImpl(input, { ...init, signal: AbortSignal.timeout(timeoutMs) });
+}
+
+function classifyFetchAbort(error: unknown, status?: number): never {
+  if (error instanceof XApiError) {
+    throw error;
+  }
+
+  if (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")) {
+    throw new XApiError("X API request timed out.", {
+      code: "x_api_timeout",
+      rateLimitResetAt: null,
+      retryable: true,
+      status: status ?? 0,
+    });
+  }
+
+  if (error instanceof Error) {
+    throw new XApiError(`X API request failed: ${error.message}`, {
+      code: "x_api_network",
+      rateLimitResetAt: null,
+      retryable: true,
+      status: status ?? 0,
+    });
+  }
+
+  throw new XApiError("X API request failed with unknown error.", {
+    code: "x_api_network",
+    rateLimitResetAt: null,
+    retryable: true,
+    status: status ?? 0,
+  });
+}
+
+function parseRateLimitReset(response: Response) {
+  const nowMs = Date.now();
+
+  // L-18: prefer x-rate-limit-reset (Twitter-style), then fall back to the
+  // standard Retry-After header (RFC 7231) which X also returns on some 429s.
+  // Retry-After can be either a delta-seconds integer or an HTTP-date.
+  let resetMs: null | number = null;
+
+  const reset = response.headers.get("x-rate-limit-reset");
+  if (reset) {
+    const resetSeconds = Number(reset);
+    if (Number.isFinite(resetSeconds)) {
+      resetMs = resetSeconds * 1_000;
+    }
+  }
+
+  if (resetMs === null) {
+    const retryAfter = response.headers.get("retry-after");
+    if (retryAfter) {
+      const asSeconds = Number(retryAfter);
+      if (Number.isFinite(asSeconds)) {
+        resetMs = nowMs + asSeconds * 1_000;
+      } else {
+        const asDate = Date.parse(retryAfter);
+        if (Number.isFinite(asDate)) {
+          resetMs = asDate;
+        }
+      }
+    }
+  }
+
+  if (resetMs === null) {
     return null;
   }
 
-  return new Date(resetSeconds * 1_000).toISOString();
+  // Bound the reset clock to a sane window so a misbehaving upstream cannot
+  // poison `publishing_jobs.rate_limit_reset_at` with a year-2099 timestamp.
+  const minMs = nowMs;
+  const maxMs = nowMs + 60 * 60 * 1_000;
+  const bounded = Math.min(Math.max(resetMs, minMs), maxMs);
+  return new Date(bounded).toISOString();
 }
 
 async function parseJsonResponse(response: Response) {
@@ -167,12 +243,17 @@ async function parseJsonResponse(response: Response) {
 }
 
 async function requestJson(accessToken: string, path: string, fetchImpl: FetchImpl) {
-  const response = await fetchImpl(`${X_API_BASE}${path}`, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      Accept: "application/json",
-    },
-  });
+  let response: Response;
+  try {
+    response = await fetchWithTimeout(fetchImpl, `${X_API_BASE}${path}`, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: "application/json",
+      },
+    });
+  } catch (error) {
+    classifyFetchAbort(error);
+  }
   const payload = await parseJsonResponse(response);
 
   if (!response.ok) {
@@ -197,16 +278,21 @@ function errorCodeForStatus(status: number) {
   return "x_api_error";
 }
 
-async function requestJsonWithBody(accessToken: string, path: string, fetchImpl: FetchImpl, init: { body?: unknown; method: "DELETE" | "POST" }) {
-  const response = await fetchImpl(`${X_API_BASE}${path}`, {
-    body: init.body === undefined ? undefined : JSON.stringify(init.body),
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      Accept: "application/json",
-      ...(init.body === undefined ? {} : { "Content-Type": "application/json" }),
-    },
-    method: init.method,
-  });
+async function requestJsonWithBody(accessToken: string, path: string, fetchImpl: FetchImpl, init: { body?: unknown; method: "DELETE" | "POST"; timeoutMs?: number }) {
+  let response: Response;
+  try {
+    response = await fetchWithTimeout(fetchImpl, `${X_API_BASE}${path}`, {
+      body: init.body === undefined ? undefined : JSON.stringify(init.body),
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: "application/json",
+        ...(init.body === undefined ? {} : { "Content-Type": "application/json" }),
+      },
+      method: init.method,
+    }, init.timeoutMs ?? X_API_DEFAULT_TIMEOUT_MS);
+  } catch (error) {
+    classifyFetchAbort(error);
+  }
   const payload = await parseJsonResponse(response);
 
   if (!response.ok) {
@@ -412,6 +498,7 @@ export function createLiveXPublishingClient(accessToken: string, options: { fetc
           shared: input.shared ?? false,
         },
         method: "POST",
+        timeoutMs: X_API_MEDIA_TIMEOUT_MS,
       });
       return parseMediaUpload(payload);
     },

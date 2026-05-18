@@ -4,6 +4,7 @@ import { logAuditEvent } from "@/lib/audit";
 import { requireAdminForRoute } from "@/lib/auth/admin";
 import { createFixedWindowRateLimiter, MemoryRateLimitStore, rateLimitHeaders } from "@/lib/rate-limit";
 import { buildXAuthorizationUrl, createXCodeChallenge, createXCodeVerifier, createXOAuthState, getOptionalXOAuthConfig } from "@/lib/x/oauth";
+import { persistOAuthState } from "@/lib/x/oauth-state";
 import { xOAuthStartQuerySchema } from "@/lib/x/validation";
 
 import { errorResponse } from "../../_utils";
@@ -16,7 +17,10 @@ const oauthStartLimiter = createFixedWindowRateLimiter({
   windowMs: 60_000,
 });
 
-const cookieOptions = {
+// H-5: only the lookup key (state) goes in a cookie now. The PKCE verifier,
+// requested scopes, mode, return_to, and the binding user_id all live in the
+// x_oauth_states table and are removed by consumeOAuthState in the callback.
+const stateCookieOptions = {
   httpOnly: true,
   maxAge: 10 * 60,
   path: "/",
@@ -58,6 +62,20 @@ export async function GET(request: NextRequest) {
     state,
   });
 
+  try {
+    await persistOAuthState({
+      codeVerifier: verifier,
+      mode: parsed.data.mode,
+      returnTo: parsed.data.return_to,
+      scopes,
+      state,
+      userId: guard.admin.userId,
+    });
+  } catch (error) {
+    console.error("Failed to persist X OAuth state", { reason: error instanceof Error ? error.message : "unknown" });
+    return errorResponse("internal_error", "Could not begin X OAuth flow.", 500, headers);
+  }
+
   await logAuditEvent({
     actorEmail: guard.admin.email,
     eventType: parsed.data.mode === "publishing" ? "x_scope_escalation_started" : "x_connect_started",
@@ -74,11 +92,6 @@ export async function GET(request: NextRequest) {
   });
 
   const response = NextResponse.redirect(url, { headers });
-  response.cookies.set("creatoros_x_oauth_state", state, cookieOptions);
-  response.cookies.set("creatoros_x_oauth_verifier", verifier, cookieOptions);
-  response.cookies.set("creatoros_x_oauth_return_to", parsed.data.return_to, cookieOptions);
-  response.cookies.set("creatoros_x_oauth_scopes", scopes.join(" "), cookieOptions);
-  response.cookies.set("creatoros_x_oauth_mode", parsed.data.mode, cookieOptions);
-
+  response.cookies.set("creatoros_x_oauth_state", state, stateCookieOptions);
   return response;
 }

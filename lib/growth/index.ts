@@ -1,6 +1,32 @@
+// =============================================================================
+// M-15: lib/growth/index.ts (~1140 lines) bundles several growth sub-domains.
+// File sections (current line ranges, approximate):
+//
+//   1. Domain types + adapters                                  (~80-200)
+//   2. Json/citation helpers (toJson, sanitizeCitations)        (~210-470)
+//   3. Goals + pillars CRUD                                     (~480-700)
+//   4. Campaigns + campaign items CRUD                          (~700-780)
+//   5. Experiments + experiment results (recordExperimentResult) (~780-870)
+//   6. Weekly + monthly review generation                       (~870-1010)
+//   7. Profile audits                                           (~1010-1100)
+//   8. Workspace loaders                                        (~1100+)
+//
+// A future split should extract:
+//   * lib/growth/types.ts      (sections 1)
+//   * lib/growth/citations.ts  (section 2)
+//   * lib/growth/entities.ts   (sections 3 + 4 + 5)
+//   * lib/growth/reviews.ts    (sections 6 + 7)
+//   * lib/growth/workspace.ts  (section 8)
+//
+// As with M-14 in lib/publishing/index.ts, the split is deferred per the
+// FINAL_CODEBASE_REVIEW M-15 note ("pure refactor, no behavior change") and
+// recorded here as section markers instead.
+// =============================================================================
+
 import "server-only";
 
 import { experimentAnalysisOutputSchema, growthStrategyOutputSchema, profileAuditOutputSchema, runStructuredPrompt, type AiProvider, type ContextPacket } from "@/lib/ai";
+import { validateAiStructuredOutput } from "@/lib/ai/json";
 import { logAuditEvent } from "@/lib/audit";
 import type { AdminContext } from "@/lib/auth/admin";
 import type {
@@ -783,14 +809,18 @@ async function runExperimentAnalysis(admin: AdminContext, experiment: Experiment
     provider: options.provider,
   });
 
-  return experimentAnalysisOutputSchema.parse(response.structured);
+  return validateAiStructuredOutput(response.structured, experimentAnalysisOutputSchema);
 }
 
 export async function recordExperimentResult(admin: AdminContext, input: ExperimentResultWriteInput, options: GrowthAiOptions = {}) {
   const experiment = await loadExperimentRow(admin, input.experimentId);
   const aiOutput = input.runAi ? await runExperimentAnalysis(admin, experiment, input, options) : null;
   const decision = input.decision ?? aiOutput?.decision ?? null;
-  const confidenceLabel = aiOutput?.confidence_label ?? (input.runAi ? "speculation" : "mixed");
+  // L-11: per AGENTS section 12, confidence labels distinguish fact/inference/
+  // speculation strictly. A non-AI experiment record without a decision has
+  // no inferential basis, so default to "speculation" rather than the looser
+  // "mixed" tag (which had previously implied a partial AI signal).
+  const confidenceLabel = aiOutput?.confidence_label ?? "speculation";
   const aiInterpretation = aiOutput ? { ...aiOutput } : {};
 
   const { data, error } = await admin.supabase
@@ -955,7 +985,7 @@ export async function runWeeklyGrowthReview(admin: AdminContext, input: WeeklyRe
     promptId: "growth-strategy.v1",
     provider: options.provider,
   });
-  const output = growthStrategyOutputSchema.parse(response.structured);
+  const output = validateAiStructuredOutput(response.structured, growthStrategyOutputSchema);
   const evidence = sanitizeCitations(output.evidence, context);
   const confidenceLabel = evidence.length > 0 ? output.confidence_label : "speculation";
   const recommendations = combinedGrowthRecommendations(output);
@@ -995,7 +1025,7 @@ export async function runMonthlyGrowthReview(admin: AdminContext, input: Monthly
     promptId: "growth-strategy.v1",
     provider: options.provider,
   });
-  const output = growthStrategyOutputSchema.parse(response.structured);
+  const output = validateAiStructuredOutput(response.structured, growthStrategyOutputSchema);
   const evidence = sanitizeCitations(output.evidence, context);
   const confidenceLabel = evidence.length > 0 ? output.confidence_label : "speculation";
   const strategyChanges = combinedGrowthRecommendations(output);
@@ -1040,6 +1070,11 @@ function profileAuditPromptInput(input: ProfileAuditWriteInput, context: GrowthC
       "Suggested pinned post drafts are drafts for owner review only.",
       "Do not infer unavailable private profile metrics.",
     ],
+    // L-12: profileAuditOutputSchema does not carry an evidence-citation list,
+    // so sanitizeCitations (which strips hallucinated record IDs) does not
+    // apply here — the schema's `findings`/`recommendations` are free-text
+    // and validated only for length/shape. Cap the context packets shown to
+    // the model so the audit cannot synthesize from off-set evidence.
     contextPackets: context.contextPackets.slice(0, 12),
     objective: "Audit X profile positioning and recommend owner-reviewed improvements.",
     ownerNotes: input.ownerNotes ?? undefined,
@@ -1057,7 +1092,7 @@ export async function runProfileAudit(admin: AdminContext, input: ProfileAuditWr
     promptId: "profile-audit.v1",
     provider: options.provider,
   });
-  const output = profileAuditOutputSchema.parse(response.structured);
+  const output = validateAiStructuredOutput(response.structured, profileAuditOutputSchema);
   const suggestedPinnedPostDrafts = output.suggested_pinned_post_drafts.map((draft) => ({
     rationale: draft.rationale,
     text: `${draft.text}\n\nowner review required before pinning or publishing.`,

@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { logAuditEvent } from "@/lib/audit";
 import { runStructuredPrompt } from "@/lib/ai";
+import { validateAiStructuredOutput } from "@/lib/ai/json";
 import { coachChatOutputSchema, historyPlaybookOutputSchema, type confidenceLabelSchema } from "@/lib/ai/schemas";
 import type { AiProvider, ContextPacket } from "@/lib/ai/types";
 import type { AdminContext } from "@/lib/auth/admin";
@@ -604,7 +605,7 @@ export async function answerCoachQuestion(admin: AdminContext, input: CoachQuest
     promptId: "coach-chat.v1",
     provider: options.provider,
   });
-  const structured = coachChatOutputSchema.parse(response.structured) satisfies CoachChatOutput;
+  const structured = validateAiStructuredOutput(response.structured, coachChatOutputSchema) satisfies CoachChatOutput;
   const requestedEvidence = structured.evidence;
   const persistedEvidence = sanitizeCitations(requestedEvidence, context);
   const confidenceLabels = normalizedConfidenceLabels(structured.confidence_labels, persistedEvidence.length > 0);
@@ -671,7 +672,7 @@ export async function generateContentPlaybook(admin: AdminContext, options: Coac
     promptId: "history-playbook.v1",
     provider: options.provider,
   });
-  const structured = historyPlaybookOutputSchema.parse(response.structured) satisfies HistoryPlaybookOutput;
+  const structured = validateAiStructuredOutput(response.structured, historyPlaybookOutputSchema) satisfies HistoryPlaybookOutput;
   const persistedEvidence = sanitizeCitations(structured.evidence, context);
   const recommendations = [...structured.playbooks, ...structured.repurposing_suggestions];
   const confidenceLabels = persistedEvidence.length > 0 ? (["fact", "inference"] as ConfidenceLabel[]) : (["speculation"] as ConfidenceLabel[]);

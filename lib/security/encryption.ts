@@ -7,8 +7,41 @@ const IV_BYTE_LENGTH = 12;
 
 export type TokenEncryptionOptions = {
   key?: string;
+  // M-8: optional list of legacy AAD purposes to try on decrypt. Encrypt
+  // always uses `purpose`; decrypt tries `purpose` first, then each
+  // `legacyPurposes` value in order. This unblocks key/AAD rotation without a
+  // backfill — old rows decrypt under the old AAD; new rows are written with
+  // the new AAD and roll forward naturally.
+  legacyPurposes?: readonly string[];
   purpose?: string;
 };
+
+// M-9: weak-key heuristic. Length alone (>=32) is not enough — a string of 32
+// identical characters trivially passes. Reject keys that have fewer than 16
+// distinct characters or whose Shannon entropy is below ~3.0 bits/char.
+function approximateShannonEntropy(value: string): number {
+  if (value.length === 0) return 0;
+  const counts = new Map<string, number>();
+  for (const char of value) {
+    counts.set(char, (counts.get(char) ?? 0) + 1);
+  }
+  let entropy = 0;
+  for (const count of counts.values()) {
+    const probability = count / value.length;
+    entropy -= probability * Math.log2(probability);
+  }
+  return entropy;
+}
+
+function assertEncryptionKeyStrength(value: string) {
+  const distinct = new Set(value).size;
+  if (distinct < 16) {
+    throw new Error("ENCRYPTION_KEY is missing or invalid.");
+  }
+  if (approximateShannonEntropy(value) < 3.0) {
+    throw new Error("ENCRYPTION_KEY is missing or invalid.");
+  }
+}
 
 function resolveEncryptionSecret(key?: string) {
   const secret = key ?? process.env.ENCRYPTION_KEY;
@@ -17,7 +50,10 @@ function resolveEncryptionSecret(key?: string) {
     throw new Error("ENCRYPTION_KEY is missing or invalid.");
   }
 
-  return createHash("sha256").update(secret.trim()).digest();
+  const trimmed = secret.trim();
+  assertEncryptionKeyStrength(trimmed);
+
+  return createHash("sha256").update(trimmed).digest();
 }
 
 function encodePart(value: Buffer) {
@@ -59,19 +95,25 @@ export function decryptToken(payload: string, options: TokenEncryptionOptions = 
     throw new Error("Token payload could not be decrypted.");
   }
 
-  try {
-    const key = resolveEncryptionSecret(options.key);
-    const decipher = createDecipheriv("aes-256-gcm", key, decodePart(encodedIv));
-    const aad = aadForPurpose(options.purpose);
+  const purposesToTry = [options.purpose, ...(options.legacyPurposes ?? [])];
 
-    if (aad) {
-      decipher.setAAD(aad);
+  for (const purpose of purposesToTry) {
+    try {
+      const key = resolveEncryptionSecret(options.key);
+      const decipher = createDecipheriv("aes-256-gcm", key, decodePart(encodedIv));
+      const aad = aadForPurpose(purpose);
+
+      if (aad) {
+        decipher.setAAD(aad);
+      }
+
+      decipher.setAuthTag(decodePart(encodedTag));
+
+      return Buffer.concat([decipher.update(decodePart(encodedCiphertext)), decipher.final()]).toString("utf8");
+    } catch {
+      // Try next legacy purpose. If none work, fall through to the throw below.
     }
-
-    decipher.setAuthTag(decodePart(encodedTag));
-
-    return Buffer.concat([decipher.update(decodePart(encodedCiphertext)), decipher.final()]).toString("utf8");
-  } catch {
-    throw new Error("Token payload could not be decrypted.");
   }
+
+  throw new Error("Token payload could not be decrypted.");
 }

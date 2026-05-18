@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 
 import { requireAdmin } from "@/lib/auth/admin";
+import { rethrowIfRedirect } from "@/lib/server-only/action-redirect";
 import {
   approvePublishingDraft,
   cancelPublishingDraft,
@@ -66,6 +67,7 @@ export async function createPublishingDraftAction(formData: FormData) {
     const draft = await createPublishingDraft(admin, parsed.data);
     redirectToPublishing({ notice: "draft_created", selected: draft.id });
   } catch (error) {
+    rethrowIfRedirect(error);
     console.error("Failed to create publishing draft", {
       reason: error instanceof Error ? error.message : "unknown",
     });
@@ -86,6 +88,7 @@ export async function createPublishingDraftFromSourceAction(formData: FormData) 
     const draft = await createPublishingDraftFromSource(admin, parsed.data);
     redirectToPublishing({ notice: "draft_created", selected: draft.id });
   } catch (error) {
+    rethrowIfRedirect(error);
     console.error("Failed to create publishing draft from source", {
       reason: error instanceof Error ? error.message : "unknown",
       sourceId: parsed.data.sourceId,
@@ -108,6 +111,7 @@ export async function updatePublishingDraftAction(formData: FormData) {
     const draft = await updatePublishingDraft(admin, parsed.data);
     redirectToPublishing({ notice: "draft_updated", selected: draft.id });
   } catch (error) {
+    rethrowIfRedirect(error);
     console.error("Failed to update publishing draft", {
       draftId: parsed.data.id,
       reason: error instanceof Error ? error.message : "unknown",
@@ -129,6 +133,7 @@ export async function approvePublishingDraftAction(formData: FormData) {
     const draft = await approvePublishingDraft(admin, parsed.data);
     redirectToPublishing({ notice: "draft_approved", selected: draft.id });
   } catch (error) {
+    rethrowIfRedirect(error);
     console.error("Failed to approve publishing draft", {
       draftId: parsed.data.id,
       reason: error instanceof Error ? error.message : "unknown",
@@ -150,6 +155,7 @@ export async function schedulePublishingDraftAction(formData: FormData) {
     const result = await scheduleApprovedDraft(admin, parsed.data);
     redirectToPublishing({ notice: "draft_scheduled", selected: result.draft.id });
   } catch (error) {
+    rethrowIfRedirect(error);
     console.error("Failed to schedule publishing draft", {
       draftId: parsed.data.id,
       reason: error instanceof Error ? error.message : "unknown",
@@ -171,6 +177,7 @@ export async function runDryRunPublishingAction(formData: FormData) {
     const result = await runDryRunPublishingJob(admin, parsed.data);
     redirectToPublishing({ notice: "dry_run_complete", selected: result.job.draftId });
   } catch (error) {
+    rethrowIfRedirect(error);
     console.error("Failed to run dry-run publishing job", {
       draftId: parsed.data.id,
       reason: error instanceof Error ? error.message : "unknown",
@@ -195,6 +202,7 @@ export async function runLivePublishingAction(formData: FormData) {
     notice = result.job.status === "succeeded" ? "live_publish_complete" : "publish_failed";
     selected = result.job.draftId;
   } catch (error) {
+    rethrowIfRedirect(error);
     console.error("Failed to run live publishing job", {
       draftId: parsed.data.id,
       reason: error instanceof Error ? error.message : "unknown",
@@ -217,6 +225,7 @@ export async function retryPublishingJobAction(formData: FormData) {
     const result = await retryPublishingJob(admin, parsed.data);
     redirectToPublishing({ notice: "retry_complete", selected: result.job.draftId });
   } catch (error) {
+    rethrowIfRedirect(error);
     console.error("Failed to retry publishing job", {
       jobId: parsed.data.id,
       reason: error instanceof Error ? error.message : "unknown",
@@ -238,6 +247,7 @@ export async function cancelPublishingDraftAction(formData: FormData) {
     const draft = await cancelPublishingDraft(admin, parsed.data);
     redirectToPublishing({ notice: "canceled", selected: draft.id });
   } catch (error) {
+    rethrowIfRedirect(error);
     console.error("Failed to cancel publishing draft", {
       draftId: parsed.data.id,
       reason: error instanceof Error ? error.message : "unknown",

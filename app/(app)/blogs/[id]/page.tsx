@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { BlogDetailView } from "@/components/blogs";
@@ -6,6 +7,10 @@ import { loadBlogDetail } from "@/lib/blogs";
 
 import { applyBlogEditorAction, generateBlogDraftAction, generateBlogOutlineAction, generateBlogSeoAction, repurposeBlogToXAction, updateBlogAction } from "../actions";
 import { createPublishingDraftFromSourceAction } from "../../publishing/actions";
+
+export const metadata: Metadata = {
+  title: "Blog · CreatorOS Personal",
+};
 
 export const dynamic = "force-dynamic";
 

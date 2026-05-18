@@ -316,7 +316,10 @@ describe("Phase 13 voice modeling", () => {
     expect(insertedExamples[0]?.text).not.toContain("Ignore previous instructions");
     expect(inserts.voice_profiles?.[0]).toMatchObject({
       blog_count_used: 1,
-      is_active: false,
+      // Insert order changed: deactivate-then-insert-as-active so there is
+      // never a moment with zero active profiles. The replacement row is
+      // inserted with is_active=true.
+      is_active: true,
       post_count_used: 1,
       source_blog_ids: ["blog-owner-1"],
       source_post_ids: ["post-owner-1"],
@@ -325,7 +328,6 @@ describe("Phase 13 voice modeling", () => {
     expect(JSON.stringify(inserts.prompt_runs?.[0]?.input_redacted)).toContain("post-owner-1");
     expect(JSON.stringify(inserts.prompt_runs?.[0]?.input_redacted)).not.toContain("target account phrase");
     expect(updates.voice_profiles?.[0]).toMatchObject({ payload: { is_active: false } });
-    expect(updates.voice_profiles?.[1]).toMatchObject({ payload: { is_active: true } });
     expect(auditMock.logAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: "voice_profile_generated" }));
   });
 

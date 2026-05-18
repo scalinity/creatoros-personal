@@ -1,3 +1,5 @@
+import type { Metadata } from "next";
+
 import { XConnectionPanel } from "@/components/settings/x-connection-panel";
 import { SettingsSectionPage } from "@/components/settings";
 import { requireAdmin } from "@/lib/auth/admin";
@@ -5,6 +7,10 @@ import { getOperationalDiagnostics } from "@/lib/server-only/diagnostics";
 import { loadXConnectionStatus } from "@/lib/x/oauth";
 
 import { disconnectXConnectionAction, syncXConnectionAction } from "./actions";
+
+export const metadata: Metadata = {
+  title: "X Connection · Settings · CreatorOS Personal",
+};
 
 export const dynamic = "force-dynamic";
 

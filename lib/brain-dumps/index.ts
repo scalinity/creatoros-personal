@@ -5,6 +5,7 @@ import type { z } from "zod";
 import { logAuditEvent } from "@/lib/audit";
 import type { AdminContext } from "@/lib/auth/admin";
 import { brainDumpOutputSchema, type AiProvider } from "@/lib/ai";
+import { validateAiStructuredOutput } from "@/lib/ai/json";
 import { runStructuredPrompt } from "@/lib/ai/run";
 import { createGeneratedOutput } from "@/lib/content";
 import type { GeneratedOutputCreateInput } from "@/lib/content/validation";
@@ -25,6 +26,10 @@ export type BrainDumpRecord = {
   extractedStories: string[];
   extractedThemes: string[];
   generatedPack: BrainDumpGeneratedPack;
+  // L-29: true when the stored generated_pack failed schema parse and we
+  // returned the placeholder pack. UI should treat this as "regenerate me"
+  // rather than rendering placeholder strings as real AI output.
+  generatedPackParseFailed: boolean;
   id: string;
   model: null | string;
   promptVersion: null | string;
@@ -90,12 +95,14 @@ function safeArray(value: Json): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
 
-function generatedPackFromJson(value: Json): BrainDumpGeneratedPack {
+function generatedPackFromJson(value: Json): { pack: BrainDumpGeneratedPack; parseFailed: boolean } {
   const parsed = brainDumpOutputSchema.safeParse(value);
-  return parsed.success ? parsed.data : emptyBrainDumpPack;
+  if (parsed.success) return { pack: parsed.data, parseFailed: false };
+  return { pack: emptyBrainDumpPack, parseFailed: true };
 }
 
 export function rowToBrainDumpRecord(row: BrainDumpRow): BrainDumpRecord {
+  const generated = generatedPackFromJson(row.generated_pack);
   return {
     createdAt: row.created_at,
     extractedClaims: safeArray(row.extracted_claims),
@@ -103,7 +110,8 @@ export function rowToBrainDumpRecord(row: BrainDumpRow): BrainDumpRecord {
     extractedExamples: safeArray(row.extracted_examples),
     extractedStories: safeArray(row.extracted_stories),
     extractedThemes: safeArray(row.extracted_themes),
-    generatedPack: generatedPackFromJson(row.generated_pack),
+    generatedPack: generated.pack,
+    generatedPackParseFailed: generated.parseFailed,
     id: row.id,
     model: row.model,
     promptVersion: row.prompt_version,
@@ -145,7 +153,7 @@ export async function transformBrainDump(admin: AdminContext, input: BrainDumpIn
     promptId: PROMPT_ID,
     provider: options.provider,
   });
-  const output = brainDumpOutputSchema.parse(response.structured);
+  const output = validateAiStructuredOutput(response.structured, brainDumpOutputSchema);
 
   const { data, error } = await admin.supabase
     .from("brain_dumps")

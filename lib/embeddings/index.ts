@@ -350,7 +350,32 @@ export async function refreshEmbeddingsForUser(admin: AdminContext, options: Emb
 
   try {
     const model = embeddingModel();
-    const response = await provider.embed({ input: documents.map((document) => document.content), model });
+
+    // L-26: chunk the embed call so a single OpenAI per-request token-limit
+    // failure does not abort the entire refresh. The provider returns
+    // embeddings in input order, so we can concatenate the chunked responses.
+    const EMBEDDING_BATCH_SIZE = 64;
+    const allEmbeddings: number[][] = [];
+    let usedModel = model;
+    for (let start = 0; start < documents.length; start += EMBEDDING_BATCH_SIZE) {
+      const chunk = documents.slice(start, start + EMBEDDING_BATCH_SIZE).map((document) => document.content);
+      const chunkResponse = await provider.embed({ input: chunk, model });
+      if (chunkResponse.embeddings.length !== chunk.length) {
+        await retireStaleEmbeddings(admin, targetEntityTypes(options), chunkResponse.embedding_model);
+        await completeJob(admin, job.jobId ?? null, "succeeded");
+        return {
+          jobId: job.jobId ?? null,
+          mode: "keyword",
+          reason: "embedding_chunk_length_mismatch",
+          refreshed: 0,
+          skipped: documents.length,
+        };
+      }
+      allEmbeddings.push(...chunkResponse.embeddings);
+      usedModel = chunkResponse.embedding_model;
+    }
+
+    const response = { embedding_model: usedModel, embeddings: allEmbeddings };
 
     if (response.embeddings.length !== documents.length || !isVectorDimensionSafe(response.embeddings)) {
       await retireStaleEmbeddings(admin, targetEntityTypes(options), response.embedding_model);

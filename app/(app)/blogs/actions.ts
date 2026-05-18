@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 
 import { requireAdmin } from "@/lib/auth/admin";
+import { rethrowIfRedirect } from "@/lib/server-only/action-redirect";
 import { createBlog, generateBlogDraft, generateBlogOutline, generateBlogSeo, repurposeBlogToX, suggestBlogEdits, updateBlog } from "@/lib/blogs";
 import { blogAiActionSchema, blogCreateSchema, blogUpdateSchema, formDataToBlogRecord } from "@/lib/blogs/validation";
 import { createFixedWindowRateLimiter, MemoryRateLimitStore } from "@/lib/rate-limit";
@@ -46,12 +47,16 @@ export async function createBlogAction(formData: FormData) {
     redirectToBlogs({ notice: "blog_create_failed" });
   }
 
-  let blogId: string;
+  // L-9: initialize so the variable is never read in a definitely-assigned-by-flow
+  // dependent on `redirectToBlogs(): never` — keeps the read at line below safe
+  // even if the redirect helper's never-typing is weakened by future TS changes.
+  let blogId = "";
 
   try {
     const blog = await createBlog(admin, parsed.data);
     blogId = blog.id;
   } catch (error) {
+    rethrowIfRedirect(error);
     console.error("Failed to create blog", {
       reason: error instanceof Error ? error.message : "unknown",
     });
@@ -75,6 +80,7 @@ export async function updateBlogAction(formData: FormData) {
     const blog = await updateBlog(admin, parsed.data);
     redirectToBlog(blog.id, { notice: "blog_updated" });
   } catch (error) {
+    rethrowIfRedirect(error);
     console.error("Failed to update blog", {
       blogId: parsed.data.id,
       reason: error instanceof Error ? error.message : "unknown",
@@ -100,6 +106,7 @@ async function runBlogAiAction(formData: FormData, expectedMode: "blog_to_x" | "
     if (expectedMode === "seo") await generateBlogSeo(admin, parsed.data);
     if (expectedMode === "blog_to_x") await repurposeBlogToX(admin, parsed.data);
   } catch (error) {
+    rethrowIfRedirect(error);
     console.error("Blog AI workflow failed", {
       blogId: parsed.data.blogId,
       mode: expectedMode,

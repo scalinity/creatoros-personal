@@ -1,9 +1,17 @@
+import type { Metadata } from "next";
+
 import { SettingsSectionPage } from "@/components/settings";
+import { requireAdmin } from "@/lib/auth/admin";
 import { getOperationalDiagnostics } from "@/lib/server-only/diagnostics";
+
+export const metadata: Metadata = {
+  title: "Settings · CreatorOS Personal",
+};
 
 export const dynamic = "force-dynamic";
 
-export default function SettingsPage() {
+export default async function SettingsPage() {
+  await requireAdmin();
   const diagnostics = getOperationalDiagnostics();
 
   return (

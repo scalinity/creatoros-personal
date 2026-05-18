@@ -1,3 +1,5 @@
+import type { Metadata } from "next";
+
 import { InspirationWorkspaceView } from "@/components/inspiration";
 import { requireAdmin } from "@/lib/auth/admin";
 import { loadInspirationWorkspace } from "@/lib/inspiration";
@@ -8,6 +10,10 @@ import {
   transformInspirationAction,
   updateInspirationAction,
 } from "./actions";
+
+export const metadata: Metadata = {
+  title: "Inspiration · CreatorOS Personal",
+};
 
 export const dynamic = "force-dynamic";
 

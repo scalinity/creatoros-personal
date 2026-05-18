@@ -53,12 +53,33 @@ function metric(value: null | number | undefined) {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.trunc(value) : 0;
 }
 
-function safeError(error: unknown) {
-  if (error instanceof XApiError) {
-    return error.message.slice(0, 500);
-  }
+// L-16: scrub token-shaped substrings before persisting any error message to
+// `last_error`, `sync_jobs.error`, or audit metadata. If X ever echoes a token
+// fragment in an error body it must not survive into our audit log.
+const TOKEN_SHAPED_PATTERNS = [
+  /\bBearer\s+[A-Za-z0-9._~+/-]+=*/gi,
+  /\b[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}\b/g, // JWT-shape
+  /\b(?:sk-[A-Za-z0-9_-]{12,}|ghp_[A-Za-z0-9_]{12,}|AKIA[A-Z0-9]{12,})\b/g,
+  /\boauth[_-]?token=([^\s&]+)/gi,
+  /\baccess[_-]?token["'\s:=]*[A-Za-z0-9._~+/-]{16,}/gi,
+  /\brefresh[_-]?token["'\s:=]*[A-Za-z0-9._~+/-]{16,}/gi,
+];
 
-  return error instanceof Error ? error.message.slice(0, 500) : "unknown X sync failure";
+function scrubTokenShapedSubstrings(message: string): string {
+  let scrubbed = message;
+  for (const pattern of TOKEN_SHAPED_PATTERNS) {
+    scrubbed = scrubbed.replace(pattern, "[redacted-token]");
+  }
+  return scrubbed;
+}
+
+function safeError(error: unknown) {
+  const message = error instanceof XApiError
+    ? error.message
+    : error instanceof Error
+      ? error.message
+      : "unknown X sync failure";
+  return scrubTokenShapedSubstrings(message).slice(0, 500);
 }
 
 function dbMetrics(post: XSyncPost) {

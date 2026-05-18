@@ -1,7 +1,13 @@
+import type { Metadata } from "next";
+
 import { NewBlogView } from "@/components/blogs";
 import { requireAdmin } from "@/lib/auth/admin";
 
 import { createBlogAction } from "../actions";
+
+export const metadata: Metadata = {
+  title: "New blog · CreatorOS Personal",
+};
 
 export const dynamic = "force-dynamic";
 

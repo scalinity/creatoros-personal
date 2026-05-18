@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 
 import { requireAdmin } from "@/lib/auth/admin";
+import { rethrowIfRedirect } from "@/lib/server-only/action-redirect";
 import { createExperiment, recordExperimentResult, runProfileAudit } from "@/lib/growth";
 import { experimentCreateSchema, experimentResultSchema, formDataToGrowthRecord, profileAuditInputSchema } from "@/lib/growth/validation";
 import { createFixedWindowRateLimiter, MemoryRateLimitStore } from "@/lib/rate-limit";
@@ -42,6 +43,7 @@ export async function createExperimentAction(formData: FormData) {
     const experiment = await createExperiment(admin, parsed.data);
     experimentId = experiment.id;
   } catch (error) {
+    rethrowIfRedirect(error);
     console.error("Failed to save experiment", { reason: error instanceof Error ? error.message : "unknown" });
     redirectToExperiments({ notice: "experiment_failed" });
   }
@@ -60,6 +62,7 @@ export async function recordExperimentResultAction(formData: FormData) {
   try {
     await recordExperimentResult(admin, parsed.data);
   } catch (error) {
+    rethrowIfRedirect(error);
     console.error("Failed to record experiment result", { reason: error instanceof Error ? error.message : "unknown" });
     redirectToExperiments({ notice: "experiment_result_failed", selectedExperiment: parsed.data.experimentId });
   }
@@ -77,6 +80,7 @@ export async function runProfileAuditAction(formData: FormData) {
   try {
     await runProfileAudit(admin, parsed.data);
   } catch (error) {
+    rethrowIfRedirect(error);
     console.error("Failed to generate profile audit", { reason: error instanceof Error ? error.message : "unknown" });
     redirectToExperiments({ notice: "profile_audit_failed" });
   }

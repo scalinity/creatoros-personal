@@ -151,8 +151,13 @@ describe("AI providers", () => {
 
     expect(response.content).toBe("hello");
     expect(body.stream).toBe(true);
-    expect(body.thinking).toEqual({ type: "adaptive" });
+    // H-9 / L-4: the Anthropic Messages API does not accept `output_config` or
+    // a `thinking.type: "adaptive"` value. We now send `thinking.type: "enabled"`
+    // with a budget_tokens computed from the configured effort level.
+    expect(body.thinking).toEqual({ budget_tokens: expect.any(Number), type: "enabled" });
+    expect((body.thinking as { budget_tokens: number }).budget_tokens).toBeGreaterThan(0);
     expect(body).not.toHaveProperty("temperature");
+    expect(body).not.toHaveProperty("output_config");
   });
 
   it("retries OpenAI HTTP failures inside the streaming response path", async () => {

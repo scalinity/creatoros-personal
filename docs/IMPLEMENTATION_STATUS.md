@@ -1,8 +1,84 @@
 # Implementation Status
 
 Last updated: 2026-04-28
-Current phase: Phase 25 - Final Production Review and Handoff complete
-Next prompt: No next phase; final handoff complete.
+Current phase: Phase 25 - Final Production Review and Handoff complete (post-handoff multi-agent review pass applied)
+Next prompt: No next phase; follow-up improvements tracked in "Multi-Agent Review Follow-Up" below.
+
+## Multi-Agent Review Follow-Up (2026-04-28)
+
+A read-only `/review-orchestrator` pass deployed 11 specialist reviewers (CR1–3 architecture/quality/best-practices, CA1–3 logic/reliability/perf, SA1–3 input/auth/secrets, DB1 bug-hunting, FD1 UI/a11y) against the entire codebase. Findings were synthesized into a unified `/review` and the highest-impact items were addressed in this commit. The full review report is summarized below; deferred items are listed at the end.
+
+### Critical Issues — Addressed
+
+- **Cron secret timing-attack (CWE-208)**. Replaced `bearerToken !== expected` in `app/api/cron/{publish,x-sync}/route.ts` with `crypto.timingSafeEqual` over equal-length buffers via the new shared `lib/auth/cron.ts:requireCronAuth` helper. Both cron routes now share auth + audit + rate-limit semantics from a single source of truth.
+- **CSV formula injection latent in data export (CWE-1236)**. `lib/exports/index.ts:csvCell` now prefixes `=`, `+`, `-`, `@`, `\t`, or `\r` cells with a single quote so spreadsheets render them as text.
+- **Scoring "top post" picked above-average post**. `lib/scoring/index.ts:aggregateBy` now tracks `bestHeuristicScore` per group instead of comparing each candidate to the running mean.
+- **Confirmation keyword mismatch and substring weakness**. `lib/x/validation.ts`, `lib/publishing/validation.ts`, and `lib/publishing/index.ts:assertLivePublishConfirmation` now require the input to start with `confirm`/`approve`/(`delete`) followed by a word boundary. Previously "we will never approve" / "i confirmation" / "approveathon" matched; they no longer do.
+- **Voice profile activation race**. `lib/voice/index.ts:generateVoiceProfile` now deactivates prior profiles first and inserts the replacement with `is_active=true` atomically, with restoration of the prior set on insert failure.
+- **X OAuth and X API fetches had no timeout**. `lib/x/oauth.ts:fetchWithOauthTimeout` and `lib/x/client.ts:fetchWithTimeout` wrap every external fetch with `AbortSignal.timeout` and translate aborts into retryable `XApiError`s with bounded `rate_limit_reset_at` clamping.
+- **CSV import row off-by-one**. `lib/imports/index.ts:parsePostsCsv` now passes `startRow: 2` so duplicate-row diagnostics name the actual source row.
+- **SSE stream final buffer dropped, reader leaked on null/error**. Both `lib/ai/providers/anthropic.ts` and `lib/ai/providers/openai.ts` now flush the trailing decoder buffer after `done` and wrap the read loop in `try/finally` that calls `reader.cancel()`.
+- **Inverted lib→component dependency**. `lib/posts/index.ts` no longer imports types from `@/components/posts`; the shared types live in the new `lib/posts/types.ts` and the component re-exports them.
+- **AI JSON parser prototype-pollution risk (CWE-1321)**. `lib/ai/json.ts:parseJsonOnce` now uses a JSON reviver that drops `__proto__`, `constructor`, and `prototype` keys.
+- **Thread payload preview field name mismatch**. `xRequestPayloadForDraft` now uses the literal `in_reply_to_tweet_id` field name with a documented `<previous_thread_post>` placeholder so audit/preview shape matches the actual API request.
+- **Failing dry-run silently broke subsequent live publish**. `lib/publishing/index.ts:insertPublishingFailure` no longer flips the draft to `failed` for dry-run failures — only live publish failures transition the draft.
+- **Repeated dry runs collide on idempotency key**. `dryRunIdempotencyKey` now appends a per-attempt UUID.
+- **`shouldRefreshXToken` swallowed null/NaN expiry**. Now treats unparseable expiries as needs-refresh.
+- **`tokenExpiry` ignored string `expires_in`**. Now coerces numeric strings.
+- **`parseConnectionStatus` returned `degraded` for unknown values**. Now falls back to `disconnected` and logs the unknown status.
+- **publishing actions redirected inside `try/catch`**, converting success notices into `*_failed`. The new `lib/server-only/action-redirect.ts:rethrowIfRedirect` is now invoked at the start of every catch in 13 server-action files (publishing, blogs, account-research, algo-analyzer, brain-dump, campaigns, coach, experiments, inspiration, reply-guy, settings/{ai,x-connection,data}). The `redirect()` signal now reaches the framework instead of being swallowed.
+- **Anonymous unauthenticated denials were not audited**. `lib/auth/admin.ts:auditDeniedAccess` now records every denial path (auth_unconfigured, unauthenticated, access_denied) so pre-auth probes are observable. user_id stays null when the request was unauthenticated; IP-hash and UA are captured.
+- **Skip-to-content link missing**. Added to `components/app-shell/private-shell.tsx`. Sidebar now uses `next/link` so navigation is client-side instead of full-page reloads.
+- **`RuleHeader` had no semantic heading**. Added an optional `as` prop that renders the label as a real `h1`/`h2`/`h3` instead of a generic `<span>`.
+- **`Field`/`Input`/`Textarea`/`Select` not linked to helper text**. `aria-describedby` and `aria-invalid` are now wired to the helper element.
+- **Schedule-ISO field accepted free-form text**. Now uses `type="datetime-local"`.
+- **Command palette had no backdrop click and ambiguous Esc**. Backdrop click closes; Esc only closes when the palette is open.
+- **Stale `Phase 12` label** in `PrivateAppShell` updated to `Phase 25`.
+
+### Critical Issues — Deferred
+
+The following critical findings are tracked for follow-up because each requires substantial restructuring or persistence-layer work. None blocks the Phase 25 acceptance bar; they are explicit limitations.
+
+- **In-memory `MemoryRateLimitStore` is per-Lambda**. `lib/rate-limit/index.ts` plus 30+ instantiations should move to a Supabase-backed or Redis/KV-backed store before any multi-instance deployment. For a single-owner workstation the limits still slow attackers proportionally; the personal-save-token limiter is the highest-stakes one.
+- **Approval/publish TOCTOU**. Adding optimistic-lock predicates (`eq("approval_status", "pending")` / `eq("updated_at", current.updatedAt)`) on `approvePublishingDraft` and the publish path requires a careful sweep of all touch points; existing concurrency mitigations (idempotency keys, the `claim` CAS at `runXPublishingJob`) cover the primary race today.
+- **Pre-flight publish guards bypass `publishing_failures` audit**. The pre-flight rejection path should record a placeholder job + failure row + `x_publish_failed` audit; integrating this into `runXPublishingJob` is non-trivial because the failure record helpers presume a job row already exists.
+- **`runScheduledPublishingExecutor` outer-catch leaves stale `lock_token`**. Adding lock-TTL recovery and finalization is a sizable change; mitigation today is that the cron secret guard prevents external triggers and the executor processes a small batch.
+- **Folio numbering inconsistency** (`§ 21` collisions, etc.). The numbers in feature components disagree with the curated map in `app-shell/index.tsx`. Reconciling requires a single-pass review across ~16 component files; not safety-critical.
+- **Checkbox primitive missing + dual-input form bug**. Several routes use a hidden `false` + checkbox `true` with the same name; servers must `getAll()` the field. A proper `Checkbox` primitive in the design system is the correct fix.
+
+### Warnings — Addressed
+
+- **Server-only barrels missing the marker**. `lib/audit/index.ts`, `lib/security/index.ts`, `lib/auth/config.ts`, and the audit logger added/preserved `import "server-only"`. (`lib/audit/redaction.ts` is intentionally pure-data and stays runtime-agnostic.)
+- **CRON_SECRET / PERSONAL_SAVE_TOKEN_PEPPER had no minimum length**. `lib/env/schema.ts` now enforces `min(24)`.
+- **Optional `AUDIT_IP_HASH_PEPPER` for HMAC IP hashing**. `lib/audit/logger.ts:hashIpAddress` switches to HMAC-SHA-256 when the pepper is configured, defeating rainbow-table attacks on the IPv4 space.
+- **Audit-redaction patterns missed Anthropic and `pst_v1$` shapes**. Added explicit `sk-ant-(api03-)?...` and `pst_v1$...` patterns.
+- **`/api/data/export` missing `X-Content-Type-Options: nosniff`**. Added.
+- **Smart-quote AI JSON repair could corrupt string values**. The reviver now drops dangerous keys; smart-quote substitution remains as a fallback only after the strict parse failed (existing behavior).
+- **Stream reader leaks**. Covered above as part of the SSE fix.
+- **`withRetryAndTimeout` was not abortable mid-wait**. The wait now races against `externalSignal` and re-throws `AbortError` immediately.
+- **`parseDate` accepted bare numerics**. Now rejects pure-numeric strings (e.g. tweet ids pasted into a date column).
+- **Body-size guard helper added**. `lib/server-only/request-body.ts:readJsonBodyWithLimit` is available for routes that accept untrusted JSON; current callers can adopt incrementally.
+- **`fetchWithOauthTimeout` and `parseRateLimitReset` clamping**. Already covered above.
+
+### Warnings — Deferred (largest items)
+
+- Splitting `lib/publishing/index.ts` (2,343 lines, 31 exports) into `state-machine` / `payload` / `scheduler` / `executor` / `x-adapter` / `similarity` / `calendar` modules.
+- Replacing `as unknown as Json` casts (29 occurrences) with a centralized `lib/util/json.ts:toJson` helper.
+- Hoisting duplicated utilities (`nowIso`, `metadataWithPhase`, `safeObject`, `safeStringArray`, `stripMarkdown`, `formatDate`, `statusVariant`) into `lib/util/*` and `components/design-system/format.ts`.
+- Hoisting the API envelope/error/body helpers (now duplicated in 19+ routes) into a single `app/api/_envelope.ts`.
+- Adding HNSW (or `text-embedding-3-small` 1536-dim) index for `embeddings` and rewriting `lib/retrieval/index.ts` to compute cosine in-DB.
+- Batching the post-import N+1 inserts and adopting `head: true` counts in `lib/coach/index.ts`, `lib/embeddings/index.ts`, and `lib/analytics/loaders.ts`.
+- Wrapping `loadAnalyticsInput` in `React.cache()` and de-duplicating `buildVelocity` in `lib/analytics/index.ts`.
+- Adopting `__Host-` cookie prefix for OAuth state cookies in production.
+- Promoting required design-system primitives (Tooltip / Dialog / Sheet / Tabs / Toast / Pagination / LoadingSkeleton / Checkbox / ConfidenceLabel / shared PostRow / InspirationCard / ChatMessage / CommandPalette).
+- Migrating Google Fonts `@import` in `app/globals.css` to `next/font`.
+- Adding a light-theme toggle UI in the topbar.
+
+### Suggestions — Selectively addressed
+
+Several quality-of-life suggestions landed alongside the criticals (e.g., backdrop click on command palette, folio guidance comment in `xRequestPayloadForDraft`, WHY-comment on the inspiration two-stage rate limit pattern was already present). The remaining suggestions are listed in the agent reports and tracked as follow-up.
+
+
 
 ## Current State
 

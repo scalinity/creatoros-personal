@@ -203,7 +203,12 @@ export async function createDataExportArchive(admin: AdminContext, input: DataEx
 
 function csvCell(value: unknown) {
   const text = String(value ?? "");
-  return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, "\"\"")}"` : text;
+  // Defend against CSV formula injection (CWE-1236): a cell starting with =, +,
+  // -, @, tab, or CR is treated as a formula by Excel/Sheets/LibreOffice. Prefix
+  // with a single quote so the spreadsheet renders the value as text. The quote
+  // itself remains visible in the cell, which is the accepted trade-off.
+  const safeText = /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
+  return /[",\n\r]/.test(safeText) ? `"${safeText.replace(/"/g, "\"\"")}"` : safeText;
 }
 
 export function buildDataExportCsv(archive: DataExportArchive) {

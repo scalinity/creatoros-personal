@@ -3,6 +3,7 @@ import "server-only";
 import { logAuditEvent } from "@/lib/audit";
 import type { AdminContext } from "@/lib/auth/admin";
 import { accountResearchOutputSchema, runStructuredPrompt } from "@/lib/ai";
+import { validateAiStructuredOutput } from "@/lib/ai/json";
 import type { AiProvider } from "@/lib/ai/types";
 import { createContentIdea } from "@/lib/content";
 import { createTargetAccount, importParsedTargetPosts, type TargetAccount, type TargetPost } from "@/lib/reply-guy";
@@ -390,7 +391,7 @@ export async function runAccountResearch(admin: AdminContext, rawInput: AccountR
     promptId: "account-research.v1",
     provider: options.provider,
   });
-  const output = accountResearchOutputSchema.parse(response.structured);
+  const output = validateAiStructuredOutput(response.structured, accountResearchOutputSchema);
   const report = await persistReport(admin, input, targetAccount, topPosts, output, response, options);
 
   return { report, targetAccountId: targetAccount?.id ?? null };

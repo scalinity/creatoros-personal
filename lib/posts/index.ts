@@ -19,8 +19,9 @@ import {
   detectPossibleHookType,
   type PerformanceBucket,
 } from "@/lib/scoring";
-import type { PostHistoryAggregates, PostHistoryFilters, PostHistoryPost, PostHistorySort } from "@/components/posts";
 import type { Database, Json, PostRow } from "@/types/database";
+
+import type { PostHistoryAggregates, PostHistoryFilters, PostHistoryPost, PostHistorySort } from "./types";
 
 type Supabase = SupabaseClient<Database>;
 
@@ -136,6 +137,14 @@ function scorePost(post: NormalizedPostInput): ScoreBundle {
     heuristicScore,
     qualityScore,
     scoreMetadata: {
+      // L-24: renamed from detected_format_placeholder / detected_hook_type_placeholder.
+      // The flag indicates whether `format` / `hookType` were inferred by the
+      // scoring pipeline because the user did not provide them. Old keys were
+      // misleading because nothing was a "placeholder" — they were heuristics.
+      // Kept the legacy keys alongside as `*_placeholder` aliases for one
+      // release window so any persisted score_metadata blob still parses by key.
+      detected_format_inferred: post.format ? false : true,
+      detected_hook_type_inferred: post.hookType ? false : true,
       detected_format_placeholder: post.format ? false : true,
       detected_hook_type_placeholder: post.hookType ? false : true,
       format,

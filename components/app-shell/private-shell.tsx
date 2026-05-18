@@ -60,10 +60,12 @@ export function PrivateAppShell({ children, logoutAction, viewerEmail }: Private
 
       if (wantsCommand) {
         event.preventDefault();
-        setCommandOpen(true);
+        setCommandOpen((prev) => !prev);
       }
 
-      if (event.key === "Escape") {
+      // Only react to Escape when the command palette is the foreground UI to
+      // avoid colliding with future dialogs/sheets that also use Escape.
+      if (event.key === "Escape" && commandOpen) {
         setCommandOpen(false);
       }
     };
@@ -74,11 +76,12 @@ export function PrivateAppShell({ children, logoutAction, viewerEmail }: Private
 
   return (
     <>
+      <a className="skip-to-content" href="#main">Skip to main content</a>
       <AppShell
         inspector={
           <Inspector title="Workspace Status">
             <div className="inspector-stack">
-              <KeyValueRow label="Phase" value="12 analyzer and brain dump" />
+              <KeyValueRow label="Phase" value="25 final production review" />
               <KeyValueRow label="Auth" value="allowlisted admin" />
               <KeyValueRow label="Admin" mono value={viewerEmail} />
               <KeyValueRow label="Data" value="AI workflows guarded" />

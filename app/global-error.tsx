@@ -7,23 +7,22 @@ import "./globals.css";
 type GlobalErrorProps = {
   error: Error & { digest?: string };
   reset: () => void;
-  unstable_retry?: () => void;
 };
 
-export default function GlobalError({ reset, unstable_retry }: GlobalErrorProps) {
-  const retry = unstable_retry ?? reset;
+export default function GlobalError({ error, reset }: GlobalErrorProps) {
+  const digest = error.digest;
 
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body>
         <main className="route-scaffold">
           <ErrorFallback
             action={
-              <Button onClick={retry} variant="secondary">
+              <Button onClick={reset} variant="secondary">
                 Retry shell
               </Button>
             }
-            code="§ E00"
+            code={digest ? `§ E00 · ${digest}` : "§ E00"}
             message="A global rendering failure occurred before the workstation shell could mount. Details are intentionally withheld from the browser."
             title="Global boundary tripped"
           />

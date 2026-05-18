@@ -1,4 +1,9 @@
+// L-30: app shell uses a fixed two-column layout (sidebar + workspace).
+// CreatorOS Personal is scoped by spec as a single-owner desktop cockpit;
+// there is no mobile drawer/collapse mode because the product is not
+// designed for mobile use. Documented in RUNBOOK.md "Local Development".
 import type { HTMLAttributes, ReactNode } from "react";
+import Link from "next/link";
 
 import { Badge, Card, EmptyState, IconButton, RuleHeader, cn } from "@/components/design-system";
 
@@ -483,16 +488,28 @@ export function CommandPaletteShell({ className, commands, onClose, open, ...pro
   const groups = Array.from(new Set(commands.map((command) => command.group)));
 
   return (
-    <div className={cn("command-palette-overlay", className)} {...props}>
+    <div
+      className={cn("command-palette-overlay", className)}
+      // Backdrop click closes; the inner section stops propagation so clicks on
+      // the dialog itself do not dismiss it.
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+      {...props}
+    >
       <section
         aria-labelledby="command-palette-title"
         aria-modal="true"
         className="command-palette-shell"
+        onClick={(event) => event.stopPropagation()}
         role="dialog"
       >
         <RuleHeader
           actions={<IconButton label="Close command palette" onClick={onClose}>×</IconButton>}
           folio="⌘"
+          // The id below is referenced by aria-labelledby so screen readers
+          // announce the dialog name when focus enters.
+          id="command-palette-title"
           label="Command Palette"
           sub="pending implementation"
         />
@@ -535,17 +552,21 @@ export function Sidebar({ brand = "CreatorOS", className, collapsed = false, sec
           <section className="sidebar-section" key={section.label}>
             <div className="sidebar-section-label smallcaps">{section.label}</div>
             {section.items.map((item) => (
-              <a
+              <Link
                 aria-current={item.active ? "page" : undefined}
                 className={cn("sidebar-item", item.active && "sidebar-item-active")}
-                href={item.href}
+                // The sidebar carries dynamically-built hrefs (admin-configured
+                // route catalog), so we step out of `typedRoutes` here. The
+                // route values still come from the curated `privateSidebarSections`
+                // map — there are no untyped strings reaching this anchor.
+                href={item.href as unknown as never}
                 key={item.href}
               >
                 <span className="sidebar-icon mono" aria-hidden="true">
                   {item.glyph}
                 </span>
                 <span className="sidebar-label smallcaps">{item.label}</span>
-              </a>
+              </Link>
             ))}
           </section>
         ))}

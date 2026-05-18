@@ -43,6 +43,9 @@ function exportHeaders(headers: Record<string, string>, format: "csv" | "json") 
     "Cache-Control": "no-store",
     "Content-Disposition": `attachment; filename="creatoros-data-export.${extension}"`,
     "Content-Type": contentType,
+    // Prevent the browser from MIME-sniffing the export body and rendering it
+    // inline as HTML if a malicious imported field happens to start with "<html".
+    "X-Content-Type-Options": "nosniff",
   };
 }
 

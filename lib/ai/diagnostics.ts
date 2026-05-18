@@ -46,7 +46,13 @@ export function getAiFoundationDiagnostics(source: NodeJS.ProcessEnv | Record<st
       client_side_ai: "disabled",
       prompt_injection_defense: "context_packets_wrapped_as_untrusted_data",
       secret_redaction: "presence_only",
-      structured_outputs: "zod_validated_with_one_repair_attempt",
+      // H-9: be honest about enforcement. Anthropic does not accept
+      // output_config / json_schema on the Messages API; we rely on textual
+      // prompting plus Zod validation with three parse passes (raw, common-
+      // syntax repair, brace-balance repair). OpenAI uses structured
+      // outputs natively when supported.
+      structured_outputs: "zod_validated_anthropic_textual_openai_structured",
+      structured_outputs_repair_passes: 3,
     },
     thinking: {
       effort: runtime.effort,

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { ComponentProps } from "react";
 
-import { AssumptionFlag, Badge, Button, Card, EmptyState, Input, KeyValueRow, MetricBlock, RuleHeader, ScoreGauge, Select, Table, Textarea, cn } from "@/components/design-system";
+import { AssumptionFlag, Badge, Card, EmptyState, Input, KeyValueRow, LinkButton, MetricBlock, RuleHeader, ScoreGauge, Select, SubmitButton, Table, Textarea, cn } from "@/components/design-system";
 import type { Campaign, CampaignItem, Experiment, GrowthReview, GrowthWorkspace, ProfileAudit } from "@/lib/growth";
 
 export type FormAction = ComponentProps<"form">["action"];
@@ -121,7 +121,7 @@ function GoalForm({ action }: { action?: FormAction }) {
             <Input label="End" name="end_date" type="date" />
           </div>
           <Textarea label="Description" name="description" rows={3} />
-          <Button size="sm" type="submit">Save goal</Button>
+          <SubmitButton size="sm">Save goal</SubmitButton>
         </form>
       </Card.Body>
     </Card>
@@ -145,7 +145,7 @@ function PillarForm({ action }: { action?: FormAction }) {
             <span aria-hidden="true" className="checkbox-box" />
             <span>Active</span>
           </label>
-          <Button size="sm" type="submit">Save pillar</Button>
+          <SubmitButton size="sm">Save pillar</SubmitButton>
         </form>
       </Card.Body>
     </Card>
@@ -170,7 +170,7 @@ function CampaignForm({ action, workspace }: { action?: FormAction; workspace: G
           <Textarea label="Objective" name="objective" rows={3} />
           <Textarea label="Hypothesis" name="hypothesis" rows={3} />
           <Textarea helper="JSON object, for example {&quot;replies&quot;: 40}." label="Target metrics" mono name="target_metrics" rows={3} />
-          <Button size="sm" type="submit">Save campaign</Button>
+          <SubmitButton size="sm">Save campaign</SubmitButton>
         </form>
       </Card.Body>
     </Card>
@@ -194,7 +194,7 @@ function CampaignItemForm({ action, campaign }: { action?: FormAction; campaign:
             <Input label="Role" name="role" placeholder="anchor / proof / cta" />
             <Input label="Scheduled" name="scheduled_for" type="datetime-local" />
           </div>
-          <Button disabled={!campaign} size="sm" type="submit">Link item</Button>
+          <SubmitButton disabled={!campaign} size="sm">Link item</SubmitButton>
         </form>
       </Card.Body>
     </Card>
@@ -219,7 +219,14 @@ export function CampaignCard({ campaign, items }: { campaign: Campaign; items: C
         <KeyValueRow label="Targets"><JsonPreview value={campaign.targetMetrics} /></KeyValueRow>
       </Card.Body>
       <Card.Footer>
-        <Link aria-label={`Inspect campaign ${campaign.name}`} className="btn btn-secondary btn-sm" href={`/campaigns?selectedCampaign=${campaign.id}`}><span className="btn-label">Inspect</span></Link>
+        <LinkButton
+          aria-label={`Inspect campaign ${campaign.name}`}
+          href={{ pathname: "/campaigns", query: { selectedCampaign: campaign.id } }}
+          size="sm"
+          variant="secondary"
+        >
+          Inspect
+        </LinkButton>
       </Card.Footer>
     </Card>
   );
@@ -282,7 +289,7 @@ function ReviewForms({ monthlyAction, weeklyAction }: { monthlyAction?: FormActi
               <Input label="Week end" name="week_end" type="date" />
             </div>
             <Textarea label="Owner notes" name="owner_notes" rows={3} />
-            <Button size="sm" type="submit">Generate Weekly review</Button>
+            <SubmitButton size="sm">Generate weekly review</SubmitButton>
           </form>
         </Card.Body>
       </Card>
@@ -295,7 +302,7 @@ function ReviewForms({ monthlyAction, weeklyAction }: { monthlyAction?: FormActi
               <Input label="Month end" name="month_end" type="date" />
             </div>
             <Textarea label="Owner notes" name="owner_notes" rows={3} />
-            <Button size="sm" type="submit">Generate monthly review</Button>
+            <SubmitButton size="sm">Generate monthly review</SubmitButton>
           </form>
         </Card.Body>
       </Card>
@@ -340,9 +347,15 @@ export function GrowthCampaignsView({
 }: GrowthCampaignsViewProps) {
   const selectedItems = workspace.selectedCampaign ? workspace.campaignItems.filter((item) => item.campaignId === workspace.selectedCampaign?.id) : [];
   return (
-    <main className="network-page" aria-labelledby="campaigns-title">
-      <h1 className="workflow-title" id="campaigns-title">Campaigns</h1>
-      <RuleHeader actions={<Badge variant="outline">private strategy</Badge>} folio="§ 22" label="Campaigns" sub="growth operating layer" />
+    <main aria-labelledby="campaigns-title" className="network-page">
+      <RuleHeader
+        actions={<Badge variant="outline">private strategy</Badge>}
+        as="h1"
+        folio="§ 22"
+        id="campaigns-title"
+        label="Campaigns"
+        sub="growth operating layer"
+      />
       <NoticeBanner notice={notice} />
       <MetricSummary workspace={workspace} />
       <section className="network-workbench">
@@ -404,7 +417,7 @@ function ExperimentForm({ action }: { action?: FormAction }) {
           </div>
           <Textarea label="Hypothesis" name="hypothesis" rows={3} />
           <Textarea helper="JSON filters, for example {&quot;campaign_id&quot;:&quot;...&quot;}." label="Included content filter" mono name="content_filters" rows={3} />
-          <Button size="sm" type="submit">Save experiment</Button>
+          <SubmitButton size="sm">Save experiment</SubmitButton>
         </form>
       </Card.Body>
     </Card>
@@ -423,7 +436,7 @@ function ResultForm({ action, experiment }: { action?: FormAction; experiment: E
           <Textarea label="Result notes" name="result" rows={3} />
           <Select label="Manual decision" name="decision" options={[{ label: "Let AI recommend", value: "" }, "continue", "stop", "iterate", "scale"].map((item) => (typeof item === "string" ? { label: item, value: item } : item))} />
           <input name="run_ai" type="hidden" value="true" />
-          <Button disabled={!experiment} size="sm" type="submit">Record result</Button>
+          <SubmitButton disabled={!experiment} size="sm">Record result</SubmitButton>
         </form>
       </Card.Body>
     </Card>
@@ -444,7 +457,7 @@ export function ExperimentLedger({ experiments }: { experiments: Experiment[] })
       ]}
       rows={experiments.map((experiment) => ({
         decision: <Badge variant={badgeForDecision(experiment.latestResult?.decision ?? experiment.decision)}>{experiment.latestResult?.decision ?? experiment.decision ?? "undecided"}</Badge>,
-        experiment: <Link href={`/experiments?selectedExperiment=${experiment.id}`}>{experiment.title}</Link>,
+        experiment: <Link href={{ pathname: "/experiments", query: { selectedExperiment: experiment.id } }}>{experiment.title}</Link>,
         id: experiment.id,
         results: experiment.resultCount,
         type: experiment.experimentType.replaceAll("_", " "),
@@ -493,7 +506,7 @@ function ProfileAuditForm({ action }: { action?: FormAction }) {
           <Textarea label="Recent grid notes" name="recent_post_grid_notes" rows={3} />
           <Input label="Link / CTA" name="link_cta" />
           <Textarea label="Owner notes" name="owner_notes" rows={3} />
-          <Button size="sm" type="submit">Run profile audit</Button>
+          <SubmitButton size="sm">Run profile audit</SubmitButton>
         </form>
       </Card.Body>
     </Card>
@@ -528,9 +541,15 @@ function SelectedExperiment({ experiment }: { experiment: Experiment | null }) {
 
 export function GrowthExperimentsView({ createExperimentAction, notice, recordExperimentResultAction, runProfileAuditAction, workspace }: GrowthExperimentsViewProps) {
   return (
-    <main className="network-page" aria-labelledby="experiments-title">
-      <h1 className="workflow-title" id="experiments-title">Experiments</h1>
-      <RuleHeader actions={<Badge variant="outline">decision ledger</Badge>} folio="§ 22" label="Experiments" sub="hypotheses and outcomes" />
+    <main aria-labelledby="experiments-title" className="network-page">
+      <RuleHeader
+        actions={<Badge variant="outline">decision ledger</Badge>}
+        as="h1"
+        folio="§ 22"
+        id="experiments-title"
+        label="Experiments"
+        sub="hypotheses and outcomes"
+      />
       <NoticeBanner notice={notice} />
       <MetricSummary workspace={workspace} />
       <section className="network-workbench">

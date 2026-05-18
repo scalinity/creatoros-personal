@@ -638,6 +638,27 @@ export type ProfileAuditRow = AppendOnlyOwnerRow & AiAttributionColumns & Confid
   generated_at: Timestamp;
 };
 
+export type XOAuthStateRow = {
+  state: string;
+  user_id: Uuid;
+  code_verifier: string;
+  scopes: string[];
+  mode: "publishing" | "read";
+  return_to: Nullable<string>;
+  created_at: Timestamp;
+  expires_at: Timestamp;
+  consumed_at: Nullable<Timestamp>;
+};
+
+export type RateLimitBucketRow = {
+  id: string;
+  bucket_id: string;
+  window_start_ms: number;
+  count: number;
+  reset_at: Timestamp;
+  created_at: Timestamp;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -683,6 +704,8 @@ export type Database = {
       weekly_reviews: Table<WeeklyReviewRow>;
       monthly_reviews: Table<MonthlyReviewRow>;
       profile_audits: Table<ProfileAuditRow>;
+      x_oauth_states: Table<XOAuthStateRow>;
+      rate_limit_buckets: Table<RateLimitBucketRow>;
     };
     Views: Record<string, never>;
     Functions: {
@@ -707,6 +730,23 @@ export type Database = {
           p_user_id: Uuid;
         };
         Returns: BlogPostRow;
+      };
+      creatoros_rate_limit_increment: {
+        Args: {
+          p_id: string;
+          p_bucket_id: string;
+          p_window_start_ms: number;
+          p_window_ms: number;
+        };
+        Returns: { count: number; reset_at: Timestamp }[];
+      };
+      creatoros_rate_limit_cleanup: {
+        Args: { p_now?: Timestamp };
+        Returns: number;
+      };
+      creatoros_x_oauth_states_cleanup: {
+        Args: { p_now?: Timestamp };
+        Returns: number;
       };
     };
     Enums: Record<string, never>;

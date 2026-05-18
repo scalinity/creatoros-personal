@@ -5,6 +5,7 @@ import { createHash } from "node:crypto";
 import { logAuditEvent } from "@/lib/audit";
 import type { AdminContext } from "@/lib/auth/admin";
 import { replyWriterOutputSchema, runStructuredPrompt } from "@/lib/ai";
+import { validateAiStructuredOutput } from "@/lib/ai/json";
 import type { AiProvider } from "@/lib/ai/types";
 import { cancelPublishingDraft, createPublishingDraft, type PublishingDraft } from "@/lib/publishing";
 import type { Json, ReplyDraftRow, TargetAccountPostRow, TargetAccountRow } from "@/types/database";
@@ -563,7 +564,7 @@ export async function generateReplyDrafts(admin: AdminContext, input: ReplyGener
     promptId: "reply-writer.v1",
     provider: options.provider,
   });
-  const output = replyWriterOutputSchema.parse(response.structured);
+  const output = validateAiStructuredOutput(response.structured, replyWriterOutputSchema);
   const drafts: ReplyDraft[] = [];
 
   for (const [index, draft] of output.drafts.slice(0, normalizedInput.count).entries()) {

@@ -76,23 +76,52 @@ function messagesForAnthropic(request: AiTextRequest) {
   }));
 }
 
-type AnthropicOutputFormatMetadata = {
-  outputJsonSchema?: unknown;
+// H-9 / L-4: the Anthropic Messages API does NOT accept `output_config` or
+// `format: json_schema`. The prior implementation sent it, which silently
+// no-op'd at the wire and made the diagnostics misleading. JSON-schema
+// enforcement on Anthropic must be Zod-based on our side; we still
+// instruct the model textually in the prompt body.
+//
+// `effort` is also not a wire-level Anthropic field. We map the four levels to
+// `thinking.budget_tokens` per the Anthropic Messages API extended-thinking
+// docs. The `low` level disables thinking; higher levels grow the budget.
+// Anthropic's extended-thinking minimum is 1024 budget tokens, and the
+// assistant still needs headroom after thinking to emit the actual response.
+// If the caller's max_tokens is less than this combined floor we cannot
+// produce a valid {thinking, completion} split — better to disable thinking
+// silently than to fail the request with a 400 from Anthropic.
+const THINKING_MIN_TOTAL_TOKENS = 2_048;
+const THINKING_BUDGETS_BY_EFFORT: Record<Exclude<AnthropicProviderOptions["effort"], "low">, number> = {
+  high: 32_000,
+  max: 64_000,
+  medium: 8_000,
 };
 
-function outputConfig(metadata: AiTextRequest["metadata"], effort: AnthropicProviderOptions["effort"]) {
-  const structured = metadata as AnthropicOutputFormatMetadata | undefined;
+function thinkingBlock(options: AnthropicProviderOptions, requestMaxTokens: number) {
+  const effort = options.effort;
+  if (effort === "low") {
+    return undefined;
+  }
+
+  if (requestMaxTokens < THINKING_MIN_TOTAL_TOKENS) {
+    // Caller explicitly chose a small budget; respect it and skip thinking.
+    // Logging at debug level rather than warn/error: this is a normal config
+    // outcome, not a defect.
+    console.debug("Anthropic thinking disabled: requestMaxTokens below floor", { effort, requestMaxTokens });
+    return undefined;
+  }
+
+  // Cap budget_tokens at request max_tokens minus a completion margin so the
+  // assistant has room to actually emit JSON after thinking.
+  const maxBudget = Math.max(1_024, requestMaxTokens - 1_024);
+  const budget = Math.min(THINKING_BUDGETS_BY_EFFORT[effort], maxBudget);
 
   return {
-    effort,
-    ...(structured?.outputJsonSchema
-      ? {
-          format: {
-            schema: structured.outputJsonSchema,
-            type: "json_schema",
-          },
-        }
-      : {}),
+    budget_tokens: budget,
+    // Only "enabled" is on the public API today. The internal `adaptive` value
+    // is preserved in options for forward compatibility but does not flow to
+    // the wire.
+    type: "enabled" as const,
   };
 }
 
@@ -100,17 +129,15 @@ function requestBody(request: AiTextRequest, options: AnthropicProviderOptions, 
   const model = request.model || options.model;
   const maxTokens = request.maxTokens ?? options.maxTokens;
   const system = joinSystemMessages(request.messages);
+  const thinking = thinkingBlock(options, maxTokens);
 
   return {
     ...(system ? { system } : {}),
     max_tokens: maxTokens,
     messages: messagesForAnthropic(request),
     model,
-    output_config: outputConfig(request.metadata, options.effort),
     stream,
-    thinking: {
-      type: options.thinkingType,
-    },
+    ...(thinking ? { thinking } : {}),
   };
 }
 
@@ -126,6 +153,7 @@ async function readAnthropicStream(response: Response): Promise<AnthropicRespons
   const reader = response.body?.getReader();
 
   if (!reader) {
+    response.body?.cancel().catch(() => {});
     return { content: [] };
   }
 
@@ -140,51 +168,68 @@ async function readAnthropicStream(response: Response): Promise<AnthropicRespons
   let stopReason: unknown;
   let type: unknown = "message";
 
-  while (true) {
-    const { done, value } = await reader.read();
-
-    if (done) {
-      break;
+  // Process a finalized line. Extracted so we can flush whatever is left in the
+  // buffer after the stream signals done — providers do not always send a
+  // trailing newline, so the final event would otherwise be discarded.
+  const consumeLine = (line: string) => {
+    if (!line.startsWith("data:")) {
+      return;
     }
 
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split(/\r?\n/);
-    buffer = lines.pop() ?? "";
+    const event = parseAnthropicStreamEvent(line.slice(5).trim());
+    if (!event) {
+      return;
+    }
 
-    for (const line of lines) {
-      if (!line.startsWith("data:")) {
-        continue;
-      }
+    if (event.type === "message_start" && event.message && typeof event.message === "object") {
+      const message = event.message as Record<string, unknown>;
+      id = message.id;
+      model = message.model;
+      role = message.role;
+      type = message.type;
+      const usage = message.usage as Record<string, unknown> | undefined;
+      inputTokens = typeof usage?.input_tokens === "number" ? usage.input_tokens : inputTokens;
+    }
 
-      const event = parseAnthropicStreamEvent(line.slice(5).trim());
-      if (!event) {
-        continue;
-      }
-
-      if (event.type === "message_start" && event.message && typeof event.message === "object") {
-        const message = event.message as Record<string, unknown>;
-        id = message.id;
-        model = message.model;
-        role = message.role;
-        type = message.type;
-        const usage = message.usage as Record<string, unknown> | undefined;
-        inputTokens = typeof usage?.input_tokens === "number" ? usage.input_tokens : inputTokens;
-      }
-
-      if (event.type === "content_block_delta" && event.delta && typeof event.delta === "object") {
-        const delta = event.delta as Record<string, unknown>;
-        if (delta.type === "text_delta" && typeof delta.text === "string") {
-          text += delta.text;
-        }
-      }
-
-      if (event.type === "message_delta") {
-        const delta = event.delta as Record<string, unknown> | undefined;
-        const usage = event.usage as Record<string, unknown> | undefined;
-        stopReason = delta?.stop_reason ?? stopReason;
-        outputTokens = typeof usage?.output_tokens === "number" ? usage.output_tokens : outputTokens;
+    if (event.type === "content_block_delta" && event.delta && typeof event.delta === "object") {
+      const delta = event.delta as Record<string, unknown>;
+      if (delta.type === "text_delta" && typeof delta.text === "string") {
+        text += delta.text;
       }
     }
+
+    if (event.type === "message_delta") {
+      const delta = event.delta as Record<string, unknown> | undefined;
+      const usage = event.usage as Record<string, unknown> | undefined;
+      stopReason = delta?.stop_reason ?? stopReason;
+      outputTokens = typeof usage?.output_tokens === "number" ? usage.output_tokens : outputTokens;
+    }
+  };
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+
+      if (done) {
+        break;
+      }
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split(/\r?\n/);
+      buffer = lines.pop() ?? "";
+
+      for (const line of lines) {
+        consumeLine(line);
+      }
+    }
+
+    // Flush any final event the provider sent without a trailing newline.
+    buffer += decoder.decode();
+    if (buffer.length > 0) {
+      consumeLine(buffer);
+    }
+  } finally {
+    reader.cancel().catch(() => {});
   }
 
   return {
@@ -313,27 +358,43 @@ export function createAnthropicProvider(options: AnthropicProviderOptions): AiPr
       );
 
       const reader = response.body?.getReader();
-      if (!reader) return;
+      if (!reader) {
+        response.body?.cancel().catch(() => {});
+        return;
+      }
 
       const decoder = new TextDecoder();
       let buffer = "";
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+      const yieldTextFromLine = function* (line: string) {
+        if (!line.startsWith("data:")) return;
+        const event = parseAnthropicStreamEvent(line.slice(5).trim());
+        const delta = event?.delta;
+        if (delta && typeof delta === "object" && "type" in delta && delta.type === "text_delta" && "text" in delta && typeof delta.text === "string") {
+          yield delta.text;
+        }
+      };
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split(/\r?\n/);
-        buffer = lines.pop() ?? "";
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
 
-        for (const line of lines) {
-          if (!line.startsWith("data:")) continue;
-          const event = parseAnthropicStreamEvent(line.slice(5).trim());
-          const delta = event?.delta;
-          if (delta && typeof delta === "object" && "type" in delta && delta.type === "text_delta" && "text" in delta && typeof delta.text === "string") {
-            yield delta.text;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split(/\r?\n/);
+          buffer = lines.pop() ?? "";
+
+          for (const line of lines) {
+            yield* yieldTextFromLine(line);
           }
         }
+
+        buffer += decoder.decode();
+        if (buffer.length > 0) {
+          yield* yieldTextFromLine(buffer);
+        }
+      } finally {
+        reader.cancel().catch(() => {});
       }
     },
   };

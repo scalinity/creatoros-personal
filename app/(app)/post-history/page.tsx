@@ -1,8 +1,14 @@
+import type { Metadata } from "next";
+
 import { PostHistoryView, type PostHistoryFilters, type PostHistorySort } from "@/components/posts";
 import { requireAdmin } from "@/lib/auth/admin";
 import { loadPostHistory } from "@/lib/posts";
 
 import { createManualPostAction, importPostsAction, updatePostMetricsAction } from "./actions";
+
+export const metadata: Metadata = {
+  title: "Post history · CreatorOS Personal",
+};
 
 export const dynamic = "force-dynamic";
 

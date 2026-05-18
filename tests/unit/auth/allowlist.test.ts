@@ -1,4 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("server-only", () => ({}));
 
 import { authorizeAdminIdentity, isAdminEmail, parseAdminEmails } from "@/lib/auth/allowlist";
 import { redactAuditMetadata, redactAuditString } from "@/lib/audit/redaction";

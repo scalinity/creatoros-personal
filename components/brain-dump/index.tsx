@@ -1,7 +1,17 @@
 import type { ComponentProps, ReactNode } from "react";
+import Link from "next/link";
 
 import { CopyButton } from "@/components/ai/copy-button";
-import { AssumptionFlag, Badge, Button, Card, EmptyState, MetricBlock, RuleHeader, Textarea } from "@/components/design-system";
+import {
+  AssumptionFlag,
+  Badge,
+  Card,
+  EmptyState,
+  MetricBlock,
+  RuleHeader,
+  SubmitButton,
+  Textarea,
+} from "@/components/design-system";
 import type { BrainDumpGeneratedPack, BrainDumpRecord } from "@/lib/brain-dumps";
 
 type FormAction = ComponentProps<"form">["action"];
@@ -70,9 +80,9 @@ function SaveGeneratedForm({
       <input name="brain_dump_id" type="hidden" value={brainDump.id} />
       <input name="item_index" type="hidden" value={itemIndex} />
       <input name="section" type="hidden" value={section} />
-      <Button size="sm" type="submit" variant="secondary">
+      <SubmitButton size="sm" variant="secondary">
         {children}
-      </Button>
+      </SubmitButton>
     </form>
   );
 }
@@ -143,8 +153,8 @@ function GeneratedPack({ brainDump, saveOutputAction }: { brainDump: BrainDumpRe
   const pack = brainDump.generatedPack;
 
   return (
-    <section className="brain-dump-pack" aria-label="Generated content pack">
-      <RuleHeader folio="§ 04" label="Generated pack" sub="posts, threads, outlines, scripts, strategy" />
+    <section aria-labelledby="brain-dump-pack-title" className="brain-dump-pack">
+      <RuleHeader folio="§ 04" id="brain-dump-pack-title" label="Generated pack" sub="posts, threads, outlines, scripts, strategy" />
       <div className="brain-dump-output-section">
         <RuleHeader folio="¶" label="10 posts" sub={`${pack.x_posts.length} returned`} />
         {pack.x_posts.map((post, index) => (
@@ -200,17 +210,22 @@ function GeneratedPack({ brainDump, saveOutputAction }: { brainDump: BrainDumpRe
 
 function RecentDumps({ dumps, selectedId }: { dumps: BrainDumpRecord[]; selectedId?: string }) {
   if (dumps.length === 0) {
-    return <EmptyState title="No brain dumps" message="Transform a raw note to start the local dump history." />;
+    return <EmptyState message="Transform a raw note to start the local dump history." title="No brain dumps" />;
   }
 
   return (
-    <div className="ai-workflow-history" aria-label="Recent brain dumps">
+    <div aria-label="Recent brain dumps" className="ai-workflow-history">
       {dumps.map((dump) => (
-        <a className="ai-history-row" href={`/brain-dump?selected=${dump.id}`} key={dump.id} aria-current={dump.id === selectedId ? "page" : undefined}>
+        <Link
+          aria-current={dump.id === selectedId ? "page" : undefined}
+          className="ai-history-row"
+          href={{ pathname: "/brain-dump", query: { selected: dump.id } }}
+          key={dump.id}
+        >
           <span className="ai-history-score mono">{dump.generatedPack.x_posts.length}</span>
           <span className="ai-history-text">{dump.title ?? dump.rawText}</span>
           <Badge variant={dump.id === selectedId ? "accent" : "outline"}>dump</Badge>
-        </a>
+        </Link>
       ))}
     </div>
   );
@@ -221,13 +236,17 @@ export function BrainDumpWorkspaceView({ brainDump, dumps, notice, saveOutputAct
   const tone = noticeTone(notice);
 
   return (
-    <main className="ai-workflow-page brain-dump-page" aria-labelledby="brain-dump-title">
-      <RuleHeader actions={<Badge variant="accent">structured pack</Badge>} folio="§ 05" label="Brain dump transformer" sub="messy thought to content" />
-      <h1 className="workflow-title" id="brain-dump-title">
-        Brain dump transformer
-      </h1>
+    <main aria-labelledby="brain-dump-title" className="ai-workflow-page brain-dump-page">
+      <RuleHeader
+        actions={<Badge variant="accent">structured pack</Badge>}
+        as="h1"
+        folio="§ 05"
+        id="brain-dump-title"
+        label="Brain dump transformer"
+        sub="messy thought to content"
+      />
       {message && tone ? (
-        <div className={`workflow-notice workflow-notice-${tone}`} role={tone === "success" ? "status" : "alert"}>
+        <div aria-live="polite" className={`workflow-notice workflow-notice-${tone}`} role={tone === "success" ? "status" : "alert"}>
           {message}
         </div>
       ) : null}
@@ -237,15 +256,15 @@ export function BrainDumpWorkspaceView({ brainDump, dumps, notice, saveOutputAct
       <section className="ai-workflow-workbench">
         <div className="ai-workflow-main">
           <form action={transformAction} className="workflow-form">
-            <RuleHeader folio="§ 01" label="Raw dump" sub="save and transform" />
+            <RuleHeader folio="§ 01" id="brain-dump-form-title" label="Raw dump" sub="save and transform" />
             <Textarea label="Raw dump" name="raw_text" placeholder="Paste the messy note, thesis fragments, stories, contradictions, half-hooks, and open questions." required rows={12} />
             <Textarea label="Title" name="title" placeholder="Optional working title" rows={2} />
-            <Button type="submit">Transform dump</Button>
+            <SubmitButton>Transform dump</SubmitButton>
           </form>
           {brainDump ? (
             <>
-              <section className="brain-dump-extraction" aria-label="Extracted material">
-                <RuleHeader folio="§ 02" label="Extraction" sub="themes, claims, stories, contradictions" />
+              <section aria-labelledby="brain-dump-extraction-title" className="brain-dump-extraction">
+                <RuleHeader folio="§ 02" id="brain-dump-extraction-title" label="Extraction" sub="themes, claims, stories, contradictions" />
                 <div className="composer-metrics">
                   <MetricBlock label="Themes" value={brainDump.extractedThemes.length} />
                   <MetricBlock label="Claims" value={brainDump.extractedClaims.length} />
@@ -261,8 +280,8 @@ export function BrainDumpWorkspaceView({ brainDump, dumps, notice, saveOutputAct
                   <ListCard items={brainDump.strongLines} label="Strong lines" />
                 </div>
               </section>
-              <section className="brain-dump-questions" aria-label="Clarifying questions">
-                <RuleHeader folio="§ 03" label="Clarifying questions" sub={`${brainDump.generatedPack.questions.length} prompts`} />
+              <section aria-labelledby="brain-dump-questions-title" className="brain-dump-questions">
+                <RuleHeader folio="§ 03" id="brain-dump-questions-title" label="Clarifying questions" sub={`${brainDump.generatedPack.questions.length} prompts`} />
                 <ul className="workflow-list">
                   {brainDump.generatedPack.questions.map((question) => (
                     <li key={question}>{question}</li>
@@ -272,11 +291,14 @@ export function BrainDumpWorkspaceView({ brainDump, dumps, notice, saveOutputAct
               <GeneratedPack brainDump={brainDump} saveOutputAction={saveOutputAction} />
             </>
           ) : (
-            <EmptyState title="No brain dump transformed" message="Submit a raw note to save the dump, extract structure, and generate posts, threads, outlines, scripts, strategy, and questions." />
+            <EmptyState
+              message="Submit a raw note to save the dump, extract structure, and generate posts, threads, outlines, scripts, strategy, and questions."
+              title="No brain dump transformed"
+            />
           )}
         </div>
-        <aside className="ai-workflow-inspector">
-          <RuleHeader folio="§ 06" label="Dump history" sub={`${dumps.length} saved`} />
+        <aside aria-labelledby="brain-dump-history-title" className="ai-workflow-inspector">
+          <RuleHeader folio="§ 06" id="brain-dump-history-title" label="Dump history" sub={`${dumps.length} saved`} />
           <RecentDumps dumps={dumps} selectedId={brainDump?.id} />
         </aside>
       </section>

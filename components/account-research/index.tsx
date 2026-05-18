@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { ComponentProps } from "react";
 
-import { Badge, Button, Card, EmptyState, Input, KeyValueRow, MetricBlock, RuleHeader, Select, Table, Textarea, cn } from "@/components/design-system";
+import { Badge, Card, EmptyState, Input, KeyValueRow, MetricBlock, RuleHeader, Select, SubmitButton, Table, Textarea, cn } from "@/components/design-system";
 import type { AccountResearchReport, AccountResearchWorkspace } from "@/lib/account-research";
 import { reportIdeaBuckets, reportPatternCards } from "@/lib/account-research";
 import { parseXStatusUrl } from "@/lib/reply-guy/validation";
@@ -43,7 +43,7 @@ function ResearchForm({ action, workspace }: { action?: FormAction; workspace: A
     <Card className="network-create" variant="inset">
       <Card.Body>
         <form action={action} className="network-form">
-          <RuleHeader folio="§ 01" label="Research Input" sub="manual or saved" />
+          <RuleHeader folio="§ 01" id="account-research-input-title" label="Research Input" sub="manual or saved" />
           <div className="network-form-grid">
             <Input label="Username" name="username" placeholder="@thoughtfulbuilder" />
             <Select
@@ -60,7 +60,7 @@ function ResearchForm({ action, workspace }: { action?: FormAction; workspace: A
             <span aria-hidden="true" className="checkbox-box" />
             <span>Save target account</span>
           </label>
-          <Button size="sm" type="submit">Run account research</Button>
+          <SubmitButton size="sm">Run account research</SubmitButton>
         </form>
       </Card.Body>
     </Card>
@@ -87,7 +87,7 @@ function ReportList({ reports, selectedReport }: { reports: AccountResearchRepor
             { header: "Generated", key: "generated" },
           ]}
           rows={reports.map((report) => ({
-            account: <Link href={`/account-research?selected=${report.id}`}>@{report.username ?? "pasted"}</Link>,
+            account: <Link href={{ pathname: "/account-research", query: { selected: report.id } }}>@{report.username ?? "pasted"}</Link>,
             generated: <span className="mono">{formatDate(report.generatedAt)}</span>,
             id: report.id,
             posts: report.topPosts.length,
@@ -119,7 +119,13 @@ function TopPostsTable({ report }: { report: AccountResearchReport }) {
         return {
           id: post.id ?? index,
           likes: post.likeCount,
-          post: safeHref ? <a href={safeHref}>{post.text.slice(0, 96)}</a> : post.text.slice(0, 96),
+          post: safeHref ? (
+            <a href={safeHref} rel="noopener noreferrer" target="_blank">
+              {post.text.slice(0, 96)}
+            </a>
+          ) : (
+            post.text.slice(0, 96)
+          ),
           replies: post.replyCount,
           score: post.engagementScore,
         };
@@ -174,7 +180,7 @@ function IdeaSaver({ report, saveIdeaAction }: { report: AccountResearchReport; 
                 <input name="idea_kind" type="hidden" value={bucket.kind} />
                 <input name="idea_text" type="hidden" value={idea} />
                 <span>{idea}</span>
-                <Button size="sm" type="submit" variant="secondary">Save to composer</Button>
+                <SubmitButton size="sm" variant="secondary">Save to composer</SubmitButton>
               </form>
             ))}
           </Card.Body>
@@ -236,10 +242,10 @@ function ResearchInspector({ report }: { report: AccountResearchReport | null })
 export function AccountResearchWorkspaceView({ notice, researchAction, saveIdeaAction, workspace }: AccountResearchWorkspaceViewProps) {
   return (
     <main aria-labelledby="account-research-title" className="network-page account-research-page">
-      <h1 className="workflow-title" id="account-research-title">Account Research</h1>
-      <RuleHeader folio="§ 21" label="Account Research" sub="public pattern intelligence" />
+      <RuleHeader as="h1" folio="§ 21" id="account-research-title" label="Account Research" sub="public pattern intelligence" />
       <NoticeBanner notice={notice} />
-      <section aria-label="Account research metrics" className="network-metrics">
+      <section aria-labelledby="account-research-metrics-title" className="network-metrics">
+        <RuleHeader className="visually-hidden" folio="§" id="account-research-metrics-title" label="Account research metrics" />
         <MetricBlock label="Reports" value={workspace.reports.length} />
         <MetricBlock label="Saved targets" value={workspace.targetAccounts.length} />
         <MetricBlock label="Top posts" value={workspace.selectedReport?.topPosts.length ?? 0} />

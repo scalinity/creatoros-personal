@@ -1,8 +1,14 @@
+import type { Metadata } from "next";
+
 import { CoachWorkspaceView } from "@/components/coach";
 import { requireAdmin } from "@/lib/auth/admin";
 import { loadCoachWorkspace } from "@/lib/coach";
 
 import { askCoachAction, generateCoachPlaybookAction } from "./actions";
+
+export const metadata: Metadata = {
+  title: "Coach · CreatorOS Personal",
+};
 
 export const dynamic = "force-dynamic";
 
@@ -24,5 +30,11 @@ export default async function CoachPage({ searchParams }: CoachPageProps) {
     selected: firstValue(params.selected),
   });
 
-  return <CoachWorkspaceView askAction={askCoachAction} generatePlaybookAction={generateCoachPlaybookAction} workspace={workspace} />;
+  return (
+    <CoachWorkspaceView
+      askAction={askCoachAction}
+      generatePlaybookAction={generateCoachPlaybookAction}
+      workspace={workspace}
+    />
+  );
 }

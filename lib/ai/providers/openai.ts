@@ -159,6 +159,7 @@ async function readOpenAiStream(response: Response): Promise<OpenAiResponsesPayl
   const reader = response.body?.getReader();
 
   if (!reader) {
+    response.body?.cancel().catch(() => {});
     return { output_text: "" };
   }
 
@@ -167,34 +168,50 @@ async function readOpenAiStream(response: Response): Promise<OpenAiResponsesPayl
   let outputText = "";
   let completed: OpenAiResponsesPayload = {};
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
+  const consumeLine = (line: string) => {
+    if (!line.startsWith("data:")) return;
+    const raw = line.slice(5).trim();
+    if (raw === "[DONE]") return;
 
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split(/\r?\n/);
-    buffer = lines.pop() ?? "";
+    const event = parseOpenAiStreamEvent(raw);
+    if (!event) return;
 
-    for (const line of lines) {
-      if (!line.startsWith("data:")) continue;
-      const raw = line.slice(5).trim();
-      if (raw === "[DONE]") continue;
+    if (event.type === "response.output_text.delta" && typeof event.delta === "string") {
+      outputText += event.delta;
+    }
 
-      const event = parseOpenAiStreamEvent(raw);
-      if (!event) continue;
+    if (event.type === "response.output_text.done" && typeof event.text === "string") {
+      outputText = event.text;
+    }
 
-      if (event.type === "response.output_text.delta" && typeof event.delta === "string") {
-        outputText += event.delta;
-      }
+    if (event.type === "response.completed" && event.response && typeof event.response === "object") {
+      completed = event.response as OpenAiResponsesPayload;
+    }
+  };
 
-      if (event.type === "response.output_text.done" && typeof event.text === "string") {
-        outputText = event.text;
-      }
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
 
-      if (event.type === "response.completed" && event.response && typeof event.response === "object") {
-        completed = event.response as OpenAiResponsesPayload;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split(/\r?\n/);
+      buffer = lines.pop() ?? "";
+
+      for (const line of lines) {
+        consumeLine(line);
       }
     }
+
+    // Flush any trailing event the provider sent without a final newline. The
+    // `response.completed` envelope (which carries usage) typically arrives
+    // last and without a trailing terminator on some runtimes.
+    buffer += decoder.decode();
+    if (buffer.length > 0) {
+      consumeLine(buffer);
+    }
+  } finally {
+    reader.cancel().catch(() => {});
   }
 
   return {
@@ -345,28 +362,44 @@ export function createOpenAiProvider(options: OpenAiProviderOptions): AiProvider
       );
 
       const reader = response.body?.getReader();
-      if (!reader) return;
+      if (!reader) {
+        response.body?.cancel().catch(() => {});
+        return;
+      }
 
       const decoder = new TextDecoder();
       let buffer = "";
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+      const yieldTextFromLine = function* (line: string) {
+        if (!line.startsWith("data:")) return;
+        const raw = line.slice(5).trim();
+        if (raw === "[DONE]") return;
+        const event = parseOpenAiStreamEvent(raw);
+        if (event?.type === "response.output_text.delta" && typeof event.delta === "string") {
+          yield event.delta;
+        }
+      };
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split(/\r?\n/);
-        buffer = lines.pop() ?? "";
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
 
-        for (const line of lines) {
-          if (!line.startsWith("data:")) continue;
-          const raw = line.slice(5).trim();
-          if (raw === "[DONE]") continue;
-          const event = parseOpenAiStreamEvent(raw);
-          if (event?.type === "response.output_text.delta" && typeof event.delta === "string") {
-            yield event.delta;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split(/\r?\n/);
+          buffer = lines.pop() ?? "";
+
+          for (const line of lines) {
+            yield* yieldTextFromLine(line);
           }
         }
+
+        buffer += decoder.decode();
+        if (buffer.length > 0) {
+          yield* yieldTextFromLine(buffer);
+        }
+      } finally {
+        reader.cancel().catch(() => {});
       }
     },
   };

@@ -100,6 +100,16 @@ export async function POST(request: NextRequest) {
     return errorResponse("access_denied", "Chrome extension origin is not allowed.", 403, cors);
   }
 
+  // M-13: Bearer (extension) requests must come from an allowlisted
+  // chrome-extension:// origin. Without this, a stolen personal save token
+  // could be replayed from any web origin (or a curl call with a forged Origin
+  // header) — the prior implementation only used CORS allowlisting which is a
+  // browser-side check, not a server-side gate.
+  const requestOrigin = request.headers.get("origin");
+  if (token && requestOrigin && !extensionOrigin) {
+    return errorResponse("access_denied", "Personal save tokens may only be used from an allowlisted Chrome extension origin.", 403, cors);
+  }
+
   if (token) {
     try {
       const result = await saveInspirationWithExtensionToken(token, body, { request });

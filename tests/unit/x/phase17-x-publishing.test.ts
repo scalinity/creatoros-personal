@@ -16,7 +16,7 @@ import { buildXAuthorizationUrl, deriveXCapabilities, type DecryptedXConnection 
 import { xPublishSchema } from "@/lib/x/validation";
 
 type TableRow = Record<string, unknown>;
-type SelectFilter = { key: string; op: "eq" | "is" | "lte"; value: unknown };
+type SelectFilter = { key: string; op: "eq" | "in" | "is" | "lte"; value: unknown };
 
 const now = "2026-04-28T12:00:00.000Z";
 const approvedAt = "2026-04-28T11:00:00.000Z";
@@ -44,6 +44,9 @@ function createSupabaseMock(seedRows: Record<string, TableRow[]> = {}) {
       filters.every((filter) => {
         const value = row[filter.key];
         if (filter.op === "lte") return String(value) <= String(filter.value);
+        if (filter.op === "in") {
+          return Array.isArray(filter.value) && (filter.value as unknown[]).includes(value);
+        }
         return value === filter.value;
       }),
     );
@@ -90,9 +93,26 @@ function createSupabaseMock(seedRows: Record<string, TableRow[]> = {}) {
 
   function updateChain(table: string, payload: TableRow) {
     const filters: SelectFilter[] = [];
+    function applyUpdate() {
+      const matching = filteredRows(table, filters);
+      const updated: TableRow[] = [];
+      rows[table] = (rows[table] ?? []).map((row) => {
+        if (!matching.includes(row)) return row;
+        const next = { ...row, ...payload, updated_at: now };
+        updated.push(next);
+        return next;
+      });
+      updates[table] = [...(updates[table] ?? []), { filters, payload }];
+      return updated;
+    }
+
     const chain = {
       eq(key: string, value: unknown) {
         filters.push({ key, op: "eq", value });
+        return chain;
+      },
+      in(key: string, value: unknown) {
+        filters.push({ key, op: "in", value });
         return chain;
       },
       is(key: string, value: unknown) {
@@ -101,13 +121,14 @@ function createSupabaseMock(seedRows: Record<string, TableRow[]> = {}) {
       },
       select() {
         return {
+          async maybeSingle() {
+            const updated = applyUpdate();
+            return { data: updated[0] ?? null, error: null };
+          },
           async single() {
-            const existing = filteredRows(table, filters)[0] ?? null;
-            if (!existing) return { data: null, error: { message: "not found" } };
-            const updated = { ...existing, ...payload, updated_at: now };
-            rows[table] = (rows[table] ?? []).map((row) => (row === existing ? updated : row));
-            updates[table] = [...(updates[table] ?? []), { filters, payload }];
-            return { data: updated, error: null };
+            const updated = applyUpdate();
+            const data = updated[0] ?? null;
+            return { data, error: data ? null : { message: "not found" } };
           },
         };
       },
@@ -115,8 +136,7 @@ function createSupabaseMock(seedRows: Record<string, TableRow[]> = {}) {
         onfulfilled?: ((value: { error: null }) => TResult1 | PromiseLike<TResult1>) | null,
         onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
       ) {
-        rows[table] = (rows[table] ?? []).map((row) => (filteredRows(table, filters).includes(row) ? { ...row, ...payload, updated_at: now } : row));
-        updates[table] = [...(updates[table] ?? []), { filters, payload }];
+        applyUpdate();
         return Promise.resolve({ error: null }).then(onfulfilled, onrejected);
       },
     };
@@ -527,6 +547,57 @@ describe("Phase 17 publishing executor", () => {
     expect(result.failure?.failureType).toBe("payload_mismatch");
     expect(createSpy).not.toHaveBeenCalled();
     expect(inserts.published_posts).toBeUndefined();
+  });
+
+  it("C-1 regression: a retry whose draft was already re-published is rejected by the status CAS", async () => {
+    // Simulate the race: another publish path already transitioned the draft
+    // out of `failed` (e.g. a parallel retry won the CAS first and is in
+    // `publishing` or has already moved it to `published`). The second retry
+    // then walks into runXPublishingJob and the CAS update returns zero rows.
+    const connection = connectedX();
+    const decrypted = decryptedConnection(connection);
+    const draft = approvedDraft({ status: "publishing" }, decrypted);
+    const { inserts, supabase } = createSupabaseMock({ publishing_drafts: [draft], x_connections: [connection] });
+    const admin = createAdminContext(supabase);
+    const client = publishingClient();
+    const createSpy = vi.spyOn(client, "createPost");
+
+    await expect(
+      runXPublishingJob(
+        admin,
+        { confirmation: "confirm live publish", id: "draft-1", payloadHash: String(draft.approval_payload_hash) },
+        { client, connection: decrypted, jobType: "retry", mode: "live", now: () => new Date(now), priorFailedJobId: "prior-failed-job-1" },
+      ),
+    ).rejects.toMatchObject({ code: "status_conflict" });
+
+    // No publishing_jobs row is created because the CAS bails before
+    // createLivePublishingJob.
+    expect(inserts.publishing_jobs).toBeUndefined();
+    // No external X call.
+    expect(createSpy).not.toHaveBeenCalled();
+    // No published_posts row.
+    expect(inserts.published_posts).toBeUndefined();
+  });
+
+  it("C-1 regression: a retry on a still-failed draft uses a deterministic idempotency key bound to the prior job", async () => {
+    const connection = connectedX();
+    const decrypted = decryptedConnection(connection);
+    const draft = approvedDraft({ status: "failed" }, decrypted);
+    const { inserts, supabase } = createSupabaseMock({ publishing_drafts: [draft], x_connections: [connection] });
+    const admin = createAdminContext(supabase);
+    const client = publishingClient();
+
+    await runXPublishingJob(
+      admin,
+      { confirmation: "confirm live publish", id: "draft-1", payloadHash: String(draft.approval_payload_hash) },
+      { client, connection: decrypted, jobType: "retry", mode: "live", now: () => new Date(now), priorFailedJobId: "prior-failed-job-7" },
+    );
+
+    const job = inserts.publishing_jobs?.[0];
+    expect(job).toBeDefined();
+    expect(String(job?.idempotency_key ?? "")).toContain(":retry-of:prior-failed-job-7");
+    // The key must NOT contain a UUID — that was the C-1 randomisation we removed.
+    expect(String(job?.idempotency_key ?? "")).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
   });
 });
 

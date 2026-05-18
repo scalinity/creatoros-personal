@@ -1,6 +1,12 @@
+import type { Metadata } from "next";
+
 import { BlogWorkspaceView } from "@/components/blogs";
 import { requireAdmin } from "@/lib/auth/admin";
 import { loadBlogsWorkspace } from "@/lib/blogs";
+
+export const metadata: Metadata = {
+  title: "Blogs · CreatorOS Personal",
+};
 
 export const dynamic = "force-dynamic";
 

@@ -45,8 +45,9 @@ export const serverEnvSchema = clientEnvSchema.extend({
   X_DEFAULT_SCOPES: scopeList.pipe(z.array(nonEmptyString).min(1)),
   X_PUBLISHING_SCOPES: scopeList.pipe(z.array(nonEmptyString).min(1)),
   ENCRYPTION_KEY: z.string().trim().min(32),
-  CRON_SECRET: nonEmptyString,
-  PERSONAL_SAVE_TOKEN_PEPPER: nonEmptyString,
+  CRON_SECRET: z.string().trim().min(24),
+  PERSONAL_SAVE_TOKEN_PEPPER: z.string().trim().min(24),
+  AUDIT_IP_HASH_PEPPER: z.string().trim().min(16).optional(),
 });
 
 export type ClientEnv = z.infer<typeof clientEnvSchema>;

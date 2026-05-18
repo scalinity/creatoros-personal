@@ -42,6 +42,16 @@ npx pnpm@10.33.2 dev
 
 5. Open `http://localhost:3000/login` and sign in with an email present in `ADMIN_EMAILS`.
 
+> **Note on layout:** the app shell is a fixed two-column desktop layout
+> (sidebar + workspace) by design. CreatorOS Personal is scoped as a
+> single-owner desktop cockpit; there is no mobile drawer. Open it on a
+> desktop browser ≥ 1024px wide.
+
+> **Note on Next.js 16 conventions:** the middleware file is named
+> `proxy.ts` (not `middleware.ts`). This is intentional — Next.js 16
+> renamed the convention. Any guide that refers to `middleware.ts` should
+> be read as `proxy.ts` here.
+
 ## Verification Commands
 
 Run before a release or handoff:
@@ -50,9 +60,16 @@ Run before a release or handoff:
 pnpm typecheck
 pnpm lint
 pnpm test
+pnpm exec playwright install chromium    # one-time per machine; skip if browsers already installed
 pnpm test:e2e
 pnpm build
 ```
+
+> **Important:** `pnpm test:e2e` requires the Playwright browser binaries.
+> On a fresh machine you must run `pnpm exec playwright install chromium`
+> first; otherwise the e2e suite fails with
+> `browserType.launch: Executable doesn't exist`. This is a Playwright-side
+> dependency, not a project test bug.
 
 Fallback verified in this environment:
 
@@ -60,6 +77,7 @@ Fallback verified in this environment:
 npx pnpm@10.33.2 typecheck
 npx pnpm@10.33.2 lint
 npx pnpm@10.33.2 test
+npx pnpm@10.33.2 exec playwright install chromium
 npx pnpm@10.33.2 test:e2e
 npx pnpm@10.33.2 build
 ```

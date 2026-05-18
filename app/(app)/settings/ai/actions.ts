@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 
 import { refreshEmbeddingsForUser } from "@/lib/embeddings";
 import { requireAdmin } from "@/lib/auth/admin";
+import { rethrowIfRedirect } from "@/lib/server-only/action-redirect";
 import { createFixedWindowRateLimiter, MemoryRateLimitStore } from "@/lib/rate-limit";
 import { generateVoiceProfile } from "@/lib/voice";
 
@@ -41,6 +42,7 @@ export async function recomputeVoiceProfileAction() {
     const profile = await generateVoiceProfile(admin);
     profileId = profile.id;
   } catch (error) {
+    rethrowIfRedirect(error);
     console.error("Voice profile recompute failed", {
       reason: error instanceof Error ? error.message : "unknown",
     });
@@ -59,6 +61,7 @@ export async function refreshEmbeddingsAction() {
     const result = await refreshEmbeddingsForUser(admin);
     notice = result.mode === "embedding" ? "embedding_refresh_completed" : "embedding_refresh_fallback";
   } catch (error) {
+    rethrowIfRedirect(error);
     console.error("Embedding refresh failed", {
       reason: error instanceof Error ? error.message : "unknown",
     });

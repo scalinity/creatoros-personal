@@ -1,6 +1,15 @@
 import Link from "next/link";
 
-import { Badge, Card, EmptyState, KeyValueRow, MetricBlock, RuleHeader, Table } from "@/components/design-system";
+import {
+  Badge,
+  Card,
+  EmptyState,
+  KeyValueRow,
+  LinkButton,
+  MetricBlock,
+  RuleHeader,
+  Table,
+} from "@/components/design-system";
 import type { DashboardSummary } from "@/lib/analytics";
 
 export type DashboardViewProps = {
@@ -20,18 +29,36 @@ function formatDate(value: null | string) {
     hour: "numeric",
     minute: "2-digit",
     month: "short",
-    timeZone: "UTC",
     timeZoneName: "short",
   }).format(date);
 }
 
 function shortText(value: string) {
   const normalized = value.replace(/\s+/g, " ").trim();
-  return normalized.length > 90 ? `${normalized.slice(0, 87).trim()}...` : normalized;
+  if (normalized.length <= 90) return normalized;
+  if (typeof Intl !== "undefined" && "Segmenter" in Intl) {
+    const segmenter = new Intl.Segmenter("en-US", { granularity: "grapheme" });
+    let count = 0;
+    let cut = 0;
+    for (const segment of segmenter.segment(normalized)) {
+      count += 1;
+      if (count > 87) break;
+      cut = segment.index + segment.segment.length;
+    }
+    return `${normalized.slice(0, cut).trim()}…`;
+  }
+  return `${normalized.slice(0, 87).trim()}…`;
 }
 
 function queueKindLabel(kind: DashboardSummary["queueRows"][number]["kind"]) {
-  return kind.replaceAll("_", " ");
+  const labels: Record<typeof kind, string> = {
+    due_today: "due today",
+    failed: "failed",
+    needs_approval: "needs approval",
+    publishing: "publishing",
+    scheduled: "scheduled",
+  };
+  return labels[kind] ?? kind.replaceAll("_", " ");
 }
 
 function queueVariant(kind: DashboardSummary["queueRows"][number]["kind"]) {
@@ -50,8 +77,8 @@ function statusVariant(status: string) {
 
 function StatusPanel({ summary }: { summary: DashboardSummary }) {
   return (
-    <section className="dashboard-section" aria-label="Status">
-      <RuleHeader folio="§ 01" label="Status" sub="connection and permissions" />
+    <section aria-labelledby="dashboard-status-title" className="dashboard-section">
+      <RuleHeader folio="§ 01" id="dashboard-status-title" label="Status" sub="connection and permissions" />
       <div className="dashboard-card-grid dashboard-card-grid-three">
         <Card>
           <Card.Header>
@@ -93,8 +120,8 @@ function StatusPanel({ summary }: { summary: DashboardSummary }) {
 
 function QueuePanel({ summary }: { summary: DashboardSummary }) {
   return (
-    <section className="dashboard-section" aria-label="Queue">
-      <RuleHeader folio="§ 02" label="Queue" sub="publishing workload" />
+    <section aria-labelledby="dashboard-queue-title" className="dashboard-section">
+      <RuleHeader folio="§ 02" id="dashboard-queue-title" label="Queue" sub="publishing workload" />
       <div className="dashboard-metrics">
         <MetricBlock label="Needs approval" value={summary.queue.needsApproval} />
         <MetricBlock label="Scheduled" value={summary.queue.scheduled} />
@@ -114,7 +141,7 @@ function QueuePanel({ summary }: { summary: DashboardSummary }) {
             detail: `${row.status.replaceAll("_", " ")} / ${row.detail}`,
             id: row.id,
             item: (
-              <Link aria-label={`Open publishing draft: ${row.label}`} href={`/publishing?selected=${row.id}`} title={row.label}>
+              <Link aria-label={`Open publishing draft: ${row.label}`} href={{ pathname: "/publishing", query: { selected: row.id } }} title={row.label}>
                 {shortText(row.label)}
               </Link>
             ),
@@ -131,8 +158,8 @@ function QueuePanel({ summary }: { summary: DashboardSummary }) {
 
 function ArchivePanel({ summary }: { summary: DashboardSummary }) {
   return (
-    <section className="dashboard-section" aria-label="Archive counts">
-      <RuleHeader folio="§ 03" label="Archive" sub="local source inventory" />
+    <section aria-labelledby="dashboard-archive-title" className="dashboard-section">
+      <RuleHeader folio="§ 03" id="dashboard-archive-title" label="Archive" sub="local source inventory" />
       <div className="dashboard-metrics">
         <MetricBlock label="Posts imported" value={formatNumber(summary.archive.posts)} />
         <MetricBlock label="Ideas" value={formatNumber(summary.archive.ideas)} />
@@ -145,8 +172,18 @@ function ArchivePanel({ summary }: { summary: DashboardSummary }) {
 
 function PerformancePanel({ summary }: { summary: DashboardSummary }) {
   return (
-    <section className="dashboard-section" aria-label="Performance">
-      <RuleHeader actions={<Link className="btn btn-secondary btn-sm" href="/analytics"><span className="btn-label">Open analytics</span></Link>} folio="§ 04" label="Performance" sub="recent archive" />
+    <section aria-labelledby="dashboard-performance-title" className="dashboard-section">
+      <RuleHeader
+        actions={
+          <LinkButton href="/analytics" size="sm" variant="secondary">
+            Open analytics
+          </LinkButton>
+        }
+        folio="§ 04"
+        id="dashboard-performance-title"
+        label="Performance"
+        sub="recent archive"
+      />
       <div className="dashboard-metrics dashboard-metrics-three">
         <MetricBlock label="Views" value={formatNumber(summary.performance.totalImpressions)} />
         <MetricBlock label="Engagements" value={formatNumber(summary.performance.totalEngagements)} />
@@ -163,11 +200,11 @@ function PerformancePanel({ summary }: { summary: DashboardSummary }) {
           rows={summary.performance.topPosts.map((post) => ({
             id: post.id,
             post: (
-              <Link aria-label={`Open post history for: ${post.text}`} href={`/post-history?selected=${post.id}`} title={post.text}>
+              <Link aria-label={`Open post history for: ${post.text}`} href={{ pathname: "/post-history", query: { selected: post.id } }} title={post.text}>
                 {shortText(post.text)}
               </Link>
             ),
-            score: post.heuristicScore?.toFixed(2).replace(/\.00$/, "") ?? "unknown",
+            score: post.heuristicScore?.toFixed(2).replace(/\.00$/, "") ?? "—",
             views: formatNumber(post.impressions),
           }))}
         />
@@ -180,14 +217,24 @@ function PerformancePanel({ summary }: { summary: DashboardSummary }) {
 
 function StrategyPanel({ summary }: { summary: DashboardSummary }) {
   return (
-    <section className="dashboard-section" aria-label="Strategy">
-      <RuleHeader actions={<Link className="btn btn-secondary btn-sm" href="/campaigns"><span className="btn-label">Open campaigns</span></Link>} folio="§ 05" label="Strategy" sub="growth objects" />
+    <section aria-labelledby="dashboard-strategy-title" className="dashboard-section">
+      <RuleHeader
+        actions={
+          <LinkButton href="/campaigns" size="sm" variant="secondary">
+            Open campaigns
+          </LinkButton>
+        }
+        folio="§ 05"
+        id="dashboard-strategy-title"
+        label="Strategy"
+        sub="growth objects"
+      />
       <div className="dashboard-metrics">
         <MetricBlock label="Active campaigns" value={summary.strategy.activeCampaigns} />
         <MetricBlock label="Active experiments" value={summary.strategy.activeExperiments} />
         <MetricBlock label="Active goals" value={summary.strategy.activeGoals} />
         <MetricBlock label="Active pillars" value={summary.strategy.activePillars} />
-        <MetricBlock label="Profile score" value={summary.strategy.latestProfileScore ?? "unknown"} />
+        <MetricBlock label="Profile score" value={summary.strategy.latestProfileScore ?? "—"} />
       </div>
       {summary.strategy.latestReviewStrategy ? (
         <Card variant="inset">
@@ -206,8 +253,8 @@ function StrategyPanel({ summary }: { summary: DashboardSummary }) {
 
 function SuggestionsPanel({ summary }: { summary: DashboardSummary }) {
   return (
-    <section className="dashboard-section" aria-label="Daily suggestions">
-      <RuleHeader folio="§ 06" label="Daily suggestions" sub="coach placeholder" />
+    <section aria-labelledby="dashboard-suggestions-title" className="dashboard-section">
+      <RuleHeader folio="§ 06" id="dashboard-suggestions-title" label="Daily suggestions" sub="coach placeholder" />
       <div className="dashboard-suggestion-list">
         {summary.recommendedNextActions.map((action) => (
           <Card key={action.label} variant="inset">
@@ -227,9 +274,15 @@ function SuggestionsPanel({ summary }: { summary: DashboardSummary }) {
 
 export function DashboardView({ summary }: DashboardViewProps) {
   return (
-    <main className="dashboard-page" aria-labelledby="dashboard-title">
-      <h1 className="workflow-title" id="dashboard-title">Dashboard</h1>
-      <RuleHeader actions={<Badge variant="outline">private cockpit</Badge>} folio="§ 01" label="Dashboard" sub="real data overview" />
+    <main aria-labelledby="dashboard-title" className="dashboard-page">
+      <RuleHeader
+        actions={<Badge variant="outline">private cockpit</Badge>}
+        as="h1"
+        folio="§ 01"
+        id="dashboard-title"
+        label="Dashboard"
+        sub="real data overview"
+      />
       <StatusPanel summary={summary} />
       <QueuePanel summary={summary} />
       <ArchivePanel summary={summary} />

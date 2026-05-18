@@ -1,9 +1,15 @@
-import { Button, Card, Input, Switch } from "@/components/design-system";
+import type { Metadata } from "next";
+
+import { Card, Input, SubmitButton, Switch } from "@/components/design-system";
 import { SettingsSectionPage } from "@/components/settings";
 import { requireAdmin } from "@/lib/auth/admin";
 import { getOperationalDiagnosticsForAdmin } from "@/lib/server-only/diagnostics";
 
 import { deleteWorkspaceDataAction } from "./actions";
+
+export const metadata: Metadata = {
+  title: "Data · Settings · CreatorOS Personal",
+};
 
 export const dynamic = "force-dynamic";
 
@@ -73,9 +79,9 @@ export default async function DataSettingsPage({ searchParams }: DataSettingsPag
               type="text"
             />
             <Switch label="Also delete Supabase auth user" name="delete_auth_user" />
-            <Button size="sm" type="submit" variant="destructive">
+            <SubmitButton size="sm" variant="destructive">
               Delete workspace data
-            </Button>
+            </SubmitButton>
           </form>
         </Card.Body>
       </Card>

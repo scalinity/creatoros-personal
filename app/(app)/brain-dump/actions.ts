@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 
 import { requireAdmin } from "@/lib/auth/admin";
+import { rethrowIfRedirect } from "@/lib/server-only/action-redirect";
 import { transformBrainDump, saveBrainDumpGeneratedOutput } from "@/lib/brain-dumps";
 import { brainDumpInputSchema, brainDumpSaveOutputSchema } from "@/lib/brain-dumps/validation";
 import { formDataToContentRecord } from "@/lib/content/validation";
@@ -48,6 +49,7 @@ export async function transformBrainDumpAction(formData: FormData) {
     const dump = await transformBrainDump(admin, parsed.data);
     dumpId = dump.id;
   } catch (error) {
+    rethrowIfRedirect(error);
     console.error("Brain dump transformation failed", {
       reason: error instanceof Error ? error.message : "unknown",
     });
@@ -69,6 +71,7 @@ export async function saveBrainDumpOutputAction(formData: FormData) {
   try {
     await saveBrainDumpGeneratedOutput(admin, parsed.data);
   } catch (error) {
+    rethrowIfRedirect(error);
     console.error("Failed to save brain dump generated output", {
       reason: error instanceof Error ? error.message : "unknown",
     });

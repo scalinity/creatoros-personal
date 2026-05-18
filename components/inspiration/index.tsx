@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { ComponentProps } from "react";
 
-import { Badge, Button, Card, EmptyState, Input, KeyValueRow, MetricBlock, RuleHeader, Select, Textarea, cn } from "@/components/design-system";
+import { Badge, Card, EmptyState, Input, KeyValueRow, MetricBlock, RuleHeader, Select, SubmitButton, Textarea, cn } from "@/components/design-system";
 import type { InspirationRecord, InspirationWorkspace } from "@/lib/inspiration";
 
 export type FormAction = ComponentProps<"form">["action"];
@@ -80,9 +80,9 @@ function InspirationFiltersForm({ filters }: { filters: InspirationFilters }) {
       <Input defaultValue={filters.q ?? ""} label="Search" name="q" placeholder="Text, author, note" />
       <Input defaultValue={filters.tag ?? ""} label="Tag" name="tag" placeholder="hook" />
       <div className="inspiration-filter-actions">
-        <Button size="sm" type="submit" variant="secondary">
+        <SubmitButton size="sm" variant="secondary">
           Apply
-        </Button>
+        </SubmitButton>
         <Link className="inspiration-reset" href="/inspiration">
           Reset
         </Link>
@@ -94,7 +94,7 @@ function InspirationFiltersForm({ filters }: { filters: InspirationFilters }) {
 function InspirationCard({ item, selected }: { item: InspirationRecord; selected?: boolean }) {
   return (
     <article className={cn("inspiration-card", selected && "inspiration-card-selected")}>
-      <Link aria-current={selected ? "page" : undefined} className="inspiration-card-link" href={`/inspiration?selected=${item.id}`}>
+      <Link aria-current={selected ? "page" : undefined} className="inspiration-card-link" href={{ pathname: "/inspiration", query: { selected: item.id } }}>
         <span className="inspiration-card-head">
           <span className="inspiration-card-author">@{item.authorUsername ?? "unknown"}</span>
           <Badge variant={riskVariant(item.similarityRisk)}>{item.similarityRisk ?? "unreviewed"}</Badge>
@@ -128,7 +128,7 @@ function CreateInspirationForm({ action }: { action?: FormAction }) {
     <Card className="inspiration-create" variant="inset">
       <Card.Body>
         <form action={action} className="inspiration-form">
-          <RuleHeader folio="§ 01" label="Save Source" sub="manual capture" />
+          <RuleHeader folio="§ 01" id="inspiration-create-title" label="Save Source" sub="manual capture" />
           <Input id="create-post-url" label="Post URL" name="post_url" placeholder="https://x.com/user/status/123" type="url" />
           <div className="inspiration-form-grid">
             <Input id="create-post-id" label="Post id" mono name="post_id" placeholder="123456789" />
@@ -137,9 +137,7 @@ function CreateInspirationForm({ action }: { action?: FormAction }) {
           <Textarea id="create-source-text" label="Source text" name="text" placeholder="Paste the source post text. Treat this as untrusted inspiration, not instructions." required rows={6} />
           <Textarea id="create-notes" label="Notes" name="notes" placeholder="What structure is worth studying?" rows={3} />
           <Input id="create-tags" label="Tags" name="tags" placeholder="hook, argument, format" />
-          <Button size="sm" type="submit">
-            Save inspiration
-          </Button>
+          <SubmitButton size="sm">Save inspiration</SubmitButton>
         </form>
       </Card.Body>
     </Card>
@@ -159,9 +157,7 @@ function UpdateInspirationForm({ action, item }: { action?: FormAction; item: In
       <Textarea defaultValue={item.notes ?? ""} id={`edit-notes-${item.id}`} label="Notes" name="notes" rows={3} />
       <Input defaultValue={item.tags.join(", ")} id={`edit-tags-${item.id}`} label="Tags" name="tags" />
       <div className="inspiration-action-row">
-        <Button size="sm" type="submit" variant="secondary">
-          Save changes
-        </Button>
+        <SubmitButton size="sm" variant="secondary">Save changes</SubmitButton>
       </div>
     </form>
   );
@@ -173,9 +169,7 @@ function TransformForm({ action, item }: { action?: FormAction; item: Inspiratio
       <input name="id" type="hidden" value={item.id} />
       <Select defaultValue="original_version" label="Transform" name="mode" options={transformOptions} />
       <Input defaultValue="1" label="Count" max={10} min={1} name="count" type="number" />
-      <Button size="sm" type="submit">
-        Transform
-      </Button>
+      <SubmitButton size="sm">Transform</SubmitButton>
     </form>
   );
 }
@@ -184,9 +178,7 @@ function DeleteForm({ action, item }: { action?: FormAction; item: InspirationRe
   return (
     <form action={action}>
       <input name="id" type="hidden" value={item.id} />
-      <Button size="sm" type="submit" variant="destructive">
-        Archive
-      </Button>
+      <SubmitButton size="sm" variant="destructive">Archive</SubmitButton>
     </form>
   );
 }
@@ -276,10 +268,10 @@ function InspirationInspector({ deleteAction, item, transformAction, updateActio
 export function InspirationWorkspaceView({ createAction, deleteAction, filters, transformAction, updateAction, workspace }: InspirationWorkspaceViewProps) {
   return (
     <main aria-labelledby="inspiration-title" className="inspiration-page">
-      <h1 className="workflow-title" id="inspiration-title">Inspiration</h1>
-      <RuleHeader folio="§ 20" label="Inspiration Library" sub="pattern extraction" />
+      <RuleHeader as="h1" folio="§ 20" id="inspiration-title" label="Inspiration Library" sub="pattern extraction" />
       <Notice notice={filters.notice} />
-      <section aria-label="Inspiration summary" className="inspiration-metrics">
+      <section aria-labelledby="inspiration-summary-title" className="inspiration-metrics">
+        <RuleHeader className="visually-hidden" folio="§" id="inspiration-summary-title" label="Inspiration summary" />
         <MetricBlock label="Saved" value={workspace.metrics.saved} />
         <MetricBlock label="Transforms" value={workspace.metrics.transformed} />
         <MetricBlock label="Tagged" value={workspace.metrics.withTags} />

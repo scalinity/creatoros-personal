@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 
 import { requireAdmin } from "@/lib/auth/admin";
+import { rethrowIfRedirect } from "@/lib/server-only/action-redirect";
 import { formDataToContentRecord } from "@/lib/content/validation";
 import { createFixedWindowRateLimiter, MemoryRateLimitStore } from "@/lib/rate-limit";
 import { runAlgoAnalysis, saveAnalyzerRewriteAsIdea, saveAnalyzerRewriteAsOutput } from "@/lib/algo-analyzer";
@@ -47,6 +48,7 @@ export async function analyzeDraftAction(formData: FormData) {
     const report = await runAlgoAnalysis(admin, parsed.data);
     reportId = report.id;
   } catch (error) {
+    rethrowIfRedirect(error);
     console.error("Algorithm analysis failed", {
       reason: error instanceof Error ? error.message : "unknown",
     });
@@ -68,6 +70,7 @@ export async function saveAnalyzerRewriteOutputAction(formData: FormData) {
   try {
     await saveAnalyzerRewriteAsOutput(admin, parsed.data);
   } catch (error) {
+    rethrowIfRedirect(error);
     console.error("Failed to save analyzer rewrite output", {
       reason: error instanceof Error ? error.message : "unknown",
     });
@@ -89,6 +92,7 @@ export async function saveAnalyzerRewriteIdeaAction(formData: FormData) {
   try {
     await saveAnalyzerRewriteAsIdea(admin, parsed.data);
   } catch (error) {
+    rethrowIfRedirect(error);
     console.error("Failed to save analyzer rewrite idea", {
       reason: error instanceof Error ? error.message : "unknown",
     });

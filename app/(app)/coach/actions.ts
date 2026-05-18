@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 
 import { requireAdmin } from "@/lib/auth/admin";
+import { rethrowIfRedirect } from "@/lib/server-only/action-redirect";
 import { answerCoachQuestion, coachQuestionSchema, generateContentPlaybook } from "@/lib/coach";
 import { formDataToContentRecord } from "@/lib/content/validation";
 import { createFixedWindowRateLimiter, MemoryRateLimitStore } from "@/lib/rate-limit";
@@ -45,6 +46,7 @@ export async function askCoachAction(formData: FormData) {
     const result = await answerCoachQuestion(admin, parsed.data);
     redirectToCoach({ notice: "coach_generated", selected: result.report.id });
   } catch (error) {
+    rethrowIfRedirect(error);
     console.error("Coach question failed", {
       reason: error instanceof Error ? error.message : "unknown",
     });
@@ -60,6 +62,7 @@ export async function generateCoachPlaybookAction() {
     const result = await generateContentPlaybook(admin);
     redirectToCoach({ notice: "playbook_generated", selected: result.report.id });
   } catch (error) {
+    rethrowIfRedirect(error);
     console.error("Coach playbook generation failed", {
       reason: error instanceof Error ? error.message : "unknown",
     });

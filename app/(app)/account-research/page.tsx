@@ -1,8 +1,14 @@
+import type { Metadata } from "next";
+
 import { AccountResearchWorkspaceView } from "@/components/account-research";
 import { requireAdmin } from "@/lib/auth/admin";
 import { loadAccountResearchWorkspace } from "@/lib/account-research";
 
 import { runAccountResearchAction, saveAccountResearchIdeaAction } from "./actions";
+
+export const metadata: Metadata = {
+  title: "Account research · CreatorOS Personal",
+};
 
 export const dynamic = "force-dynamic";
 
@@ -25,5 +31,12 @@ export default async function AccountResearchPage({ searchParams }: AccountResea
   };
   const workspace = await loadAccountResearchWorkspace(admin, filters);
 
-  return <AccountResearchWorkspaceView notice={filters.notice} researchAction={runAccountResearchAction} saveIdeaAction={saveAccountResearchIdeaAction} workspace={workspace} />;
+  return (
+    <AccountResearchWorkspaceView
+      notice={filters.notice}
+      researchAction={runAccountResearchAction}
+      saveIdeaAction={saveAccountResearchIdeaAction}
+      workspace={workspace}
+    />
+  );
 }

@@ -1,6 +1,12 @@
+import type { Metadata } from "next";
+
 import { PublishingCalendarView } from "@/components/publishing";
 import { requireAdmin } from "@/lib/auth/admin";
 import { loadPublishingCalendar } from "@/lib/publishing";
+
+export const metadata: Metadata = {
+  title: "Calendar · CreatorOS Personal",
+};
 
 export const dynamic = "force-dynamic";
 

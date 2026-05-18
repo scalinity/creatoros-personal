@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, createHmac, randomUUID } from "node:crypto";
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
@@ -55,6 +55,14 @@ function getServiceRoleClient() {
 function hashIpAddress(ipAddress: null | string) {
   if (!ipAddress) {
     return null;
+  }
+
+  // Without a server-side pepper a SHA-256 hash of an IPv4 address is reversible
+  // by precomputing the entire 4.3B-key space. Use HMAC with AUDIT_IP_HASH_PEPPER
+  // when present so the resulting hash is not rainbow-tableable.
+  const pepper = process.env.AUDIT_IP_HASH_PEPPER?.trim();
+  if (pepper && pepper.length > 0) {
+    return createHmac("sha256", pepper).update(ipAddress).digest("hex");
   }
 
   return createHash("sha256").update(ipAddress).digest("hex");

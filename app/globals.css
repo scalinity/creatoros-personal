@@ -930,6 +930,10 @@ h6 {
   padding: var(--space-3);
 }
 
+.login-live-region:empty {
+  display: none;
+}
+
 .login-form {
   display: grid;
   gap: var(--space-4);
@@ -3515,4 +3519,40 @@ h6 {
   .coach-prompt-grid {
     grid-template-columns: 1fr;
   }
+}
+
+.visually-hidden {
+  border: 0;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+.skip-to-content {
+  background: var(--bg-canvas);
+  border: 1px solid var(--rule-strong);
+  color: var(--ink-primary);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  left: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  position: absolute;
+  text-decoration: none;
+  top: var(--space-3);
+  transform: translateY(-200%);
+  transition: transform 0.15s ease-out;
+  z-index: 1000;
+}
+
+.skip-to-content:focus,
+.skip-to-content:focus-visible {
+  outline: 2px solid var(--accent-vermillion);
+  outline-offset: 2px;
+  transform: translateY(0);
 }

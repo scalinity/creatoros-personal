@@ -1,6 +1,18 @@
 import Link from "next/link";
 
-import { AssumptionFlag, Badge, Button, Card, EmptyState, KeyValueRow, MetricBlock, RewriteCard, RuleHeader, Textarea } from "@/components/design-system";
+import {
+  AssumptionFlag,
+  Badge,
+  Card,
+  EmptyState,
+  KeyValueRow,
+  LinkButton,
+  MetricBlock,
+  RewriteCard,
+  RuleHeader,
+  SubmitButton,
+  Textarea,
+} from "@/components/design-system";
 import type { CoachEvidenceCitation, CoachReport, CoachWorkspace } from "@/lib/coach";
 import { noticeText } from "@/lib/coach";
 
@@ -25,7 +37,6 @@ function formatDate(value: string) {
     hour: "numeric",
     minute: "2-digit",
     month: "short",
-    timeZone: "UTC",
     timeZoneName: "short",
   }).format(date);
 }
@@ -33,7 +44,7 @@ function formatDate(value: string) {
 function shortText(value: null | string | undefined, max = 120) {
   const normalized = String(value ?? "").replace(/\s+/g, " ").trim();
   if (!normalized) return "Untitled coach report";
-  return normalized.length > max ? `${normalized.slice(0, max - 3).trim()}...` : normalized;
+  return normalized.length > max ? `${normalized.slice(0, max - 1).trim()}…` : normalized;
 }
 
 function Notice({ notice }: { notice?: string }) {
@@ -64,13 +75,13 @@ function SourceMetrics({ workspace }: { workspace: CoachWorkspace }) {
 
 function CoachComposer({ action, prompts }: { action: (formData: FormData) => Promise<void>; prompts: CoachWorkspace["suggestedPrompts"] }) {
   return (
-    <section className="coach-composer" aria-label="Ask coach">
-      <RuleHeader folio="§ 01" label="Ask coach" sub="evidence-cited" />
+    <section aria-labelledby="coach-ask-title" className="coach-composer">
+      <RuleHeader folio="§ 01" id="coach-ask-title" label="Ask coach" sub="evidence-cited" />
       <form action={action} className="coach-question-form">
         <Textarea label="Question" name="question" placeholder="Ask about hooks, cadence, experiments, repurposing, or what to write next." required rows={5} />
-        <Button type="submit">Ask coach</Button>
+        <SubmitButton>Ask coach</SubmitButton>
       </form>
-      <div className="coach-prompt-grid" aria-label="Suggested prompts">
+      <div aria-label="Suggested prompts" className="coach-prompt-grid">
         {prompts.map((prompt) => (
           <form action={action} className="coach-suggested-form" key={prompt.label}>
             <input name="question" type="hidden" value={prompt.question} />
@@ -87,11 +98,11 @@ function CoachComposer({ action, prompts }: { action: (formData: FormData) => Pr
 
 function PlaybookPanel({ action }: { action: (formData: FormData) => Promise<void> }) {
   return (
-    <section className="coach-playbook-panel" aria-label="Content playbook">
-      <RuleHeader folio="§ 02" label="Content playbook" sub="history synthesis" />
+    <section aria-labelledby="coach-playbook-title" className="coach-playbook-panel">
+      <RuleHeader folio="§ 02" id="coach-playbook-title" label="Content playbook" sub="history synthesis" />
       <form action={action} className="coach-playbook-form">
         <p>Generate a reusable playbook from posts, ideas, blogs, campaigns, experiments, publishing history, and the active voice profile.</p>
-        <Button variant="secondary" type="submit">Generate playbook</Button>
+        <SubmitButton variant="secondary">Generate playbook</SubmitButton>
       </form>
     </section>
   );
@@ -103,14 +114,14 @@ function ReportList({ reports, selectedReport }: Pick<CoachWorkspace, "reports" 
   }
 
   return (
-    <section className="coach-report-list" aria-label="Coach report history">
-      <RuleHeader folio="§ 03" label="History" sub="saved reports" />
+    <section aria-labelledby="coach-history-title" className="coach-report-list">
+      <RuleHeader folio="§ 03" id="coach-history-title" label="History" sub="saved reports" />
       <div className="coach-report-links">
         {reports.map((report) => {
           const selected = report.id === selectedReport?.id;
 
           return (
-            <Link aria-current={selected ? "page" : undefined} className={selected ? "coach-report-link coach-report-link-selected" : "coach-report-link"} href={`/coach?selected=${report.id}`} key={report.id}>
+            <Link aria-current={selected ? "page" : undefined} className={selected ? "coach-report-link coach-report-link-selected" : "coach-report-link"} href={{ pathname: "/coach", query: { selected: report.id } }} key={report.id}>
               <span className="coach-report-kind smallcaps">{report.kind.replaceAll("_", " ")}</span>
               <span>{shortText(report.question ?? report.answer, 96)}</span>
               <span className="coach-report-date mono">{formatDate(report.generated_at)}</span>
@@ -176,8 +187,8 @@ function DraftCards({ report }: { report: CoachReport }) {
   if (report.draft_posts.length === 0) return null;
 
   return (
-    <section className="coach-draft-list" aria-label="Draft post suggestions">
-      <RuleHeader folio="§ 04" label="Drafts" sub="not approved" />
+    <section aria-labelledby="coach-drafts-title" className="coach-draft-list">
+      <RuleHeader folio="§ 04" id="coach-drafts-title" label="Drafts" sub="not approved" />
       {report.draft_posts.map((draft) => (
         <RewriteCard key={`${draft.text}-${draft.rationale}`} label="Coach draft" rationale={draft.rationale} text={draft.text} />
       ))}
@@ -187,7 +198,17 @@ function DraftCards({ report }: { report: CoachReport }) {
 
 function SelectedReport({ report }: { report: CoachReport | null }) {
   if (!report) {
-    return <EmptyState action={<Link className="btn btn-secondary btn-sm" href="/post-history"><span className="btn-label">Import posts</span></Link>} message="The coach can answer from real owner records after posts, ideas, blogs, or experiments exist." title="Ask the coach" />;
+    return (
+      <EmptyState
+        action={
+          <LinkButton href="/post-history" size="sm" variant="secondary">
+            Import posts
+          </LinkButton>
+        }
+        message="The coach can answer from real owner records after posts, ideas, blogs, or experiments exist."
+        title="Ask the coach"
+      />
+    );
   }
 
   return (
@@ -241,9 +262,15 @@ function EvidenceInspector({ report }: { report: CoachReport | null }) {
 
 export function CoachWorkspaceView({ askAction, generatePlaybookAction, workspace }: CoachWorkspaceViewProps) {
   return (
-    <main className="coach-page" aria-labelledby="coach-title">
-      <h1 className="workflow-title" id="coach-title">Coach</h1>
-      <RuleHeader actions={<Badge variant="outline">internal evidence only</Badge>} folio="§ 19" label="Coach" sub="retrieval and playbooks" />
+    <main aria-labelledby="coach-title" className="coach-page">
+      <RuleHeader
+        actions={<Badge variant="outline">internal evidence only</Badge>}
+        as="h1"
+        folio="§ 19"
+        id="coach-title"
+        label="Coach"
+        sub="retrieval and playbooks"
+      />
       <Notice notice={workspace.notice} />
       <SourceMetrics workspace={workspace} />
       <section className="coach-workbench">

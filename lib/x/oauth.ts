@@ -73,7 +73,16 @@ type StoreClient = SupabaseClient<Database>;
 
 const X_AUTHORIZE_ENDPOINT = "https://x.com/i/oauth2/authorize";
 const X_TOKEN_ENDPOINT = "https://api.x.com/2/oauth2/token";
+const X_REVOKE_ENDPOINT = "https://api.x.com/2/oauth2/revoke";
 const TOKEN_REFRESH_WINDOW_MS = 5 * 60 * 1_000;
+const X_OAUTH_FETCH_TIMEOUT_MS = 30_000;
+
+// Defend the request handler against a hung X token endpoint. Without an
+// explicit timeout the fetch will pin a Vercel function for the platform max,
+// burning invocation budget and leaving publishing_jobs in `running` forever.
+function fetchWithOauthTimeout(fetchImpl: typeof fetch, input: string, init: RequestInit) {
+  return fetchImpl(input, { ...init, signal: AbortSignal.timeout(X_OAUTH_FETCH_TIMEOUT_MS) });
+}
 
 const fallbackDefaultScopes = ["tweet.read", "users.read", "offline.access", "like.read", "bookmark.read", "follows.read", "list.read"];
 const fallbackPublishingScopes = ["tweet.write", "media.write"];
@@ -94,8 +103,19 @@ function requireEnvValue(value: null | string | undefined, key: string) {
   return cleaned;
 }
 
+// M-8: AAD format is `x-${kind}:${userId}:k1`. The trailing `k1` is the key
+// version slot; bumping it forces a new AAD so a rotated ENCRYPTION_KEY can
+// decrypt only fresh rows. `tokenLegacyPurposes` returns prior AAD shapes so
+// existing pre-k1 rows continue to decrypt without a backfill — the next write
+// rolls them onto the current AAD naturally.
+const TOKEN_KEY_VERSION = "k1";
+
 function tokenPurpose(kind: "access" | "refresh", userId: string) {
-  return `x-${kind}:${userId}`;
+  return `x-${kind}:${userId}:${TOKEN_KEY_VERSION}`;
+}
+
+function tokenLegacyPurposes(kind: "access" | "refresh", userId: string) {
+  return [`x-${kind}:${userId}`];
 }
 
 function encryptedJsonMetadata(input: Record<string, Json | undefined>) {
@@ -107,7 +127,16 @@ function basicAuthHeader(config: XOAuthConfig) {
 }
 
 function tokenExpiry(expiresInSeconds: unknown) {
-  const seconds = typeof expiresInSeconds === "number" && Number.isFinite(expiresInSeconds) ? expiresInSeconds : 7_200;
+  // Some OAuth servers return expires_in as a string; coerce numeric strings as
+  // well as numbers so we don't silently fall back to the 2h default and miss a
+  // shorter actual lifetime.
+  const numeric =
+    typeof expiresInSeconds === "number"
+      ? expiresInSeconds
+      : typeof expiresInSeconds === "string"
+        ? Number(expiresInSeconds.trim())
+        : NaN;
+  const seconds = Number.isFinite(numeric) && numeric > 0 ? numeric : 7_200;
   return new Date(Date.now() + seconds * 1_000).toISOString();
 }
 
@@ -251,20 +280,43 @@ export async function exchangeXAuthorizationCode(input: { code: string; codeVeri
     grant_type: "authorization_code",
     redirect_uri: config.redirectUri,
   });
-  const response = await (options.fetchImpl ?? fetch)(X_TOKEN_ENDPOINT, {
-    body,
-    headers: {
-      Authorization: basicAuthHeader(config),
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    method: "POST",
-  });
+  let response: Response;
+  try {
+    response = await fetchWithOauthTimeout(options.fetchImpl ?? fetch, X_TOKEN_ENDPOINT, {
+      body,
+      headers: {
+        Authorization: basicAuthHeader(config),
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      method: "POST",
+    });
+  } catch (error) {
+    if (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")) {
+      throw new Error("X OAuth code exchange timed out.");
+    }
+    throw error;
+  }
 
   if (!response.ok) {
     throw new Error(`X OAuth code exchange failed with status ${response.status}.`);
   }
 
   return assertTokenPayload(await response.json());
+}
+
+// M-7: distinguish "refresh token is no longer valid" (X returned 4xx with
+// invalid_grant or invalid_client) from a transient 5xx / network error so the
+// caller can mark the connection `revoked` vs `degraded`.
+export class XOAuthRefreshError extends Error {
+  override name = "XOAuthRefreshError";
+
+  constructor(
+    message: string,
+    public readonly kind: "invalid_grant" | "transient" | "unknown",
+    public readonly status: null | number = null,
+  ) {
+    super(message);
+  }
 }
 
 export async function refreshXOAuthToken(refreshToken: string, options: { fetchImpl?: typeof fetch; source?: NodeJS.ProcessEnv } = {}) {
@@ -274,29 +326,59 @@ export async function refreshXOAuthToken(refreshToken: string, options: { fetchI
     grant_type: "refresh_token",
     refresh_token: refreshToken,
   });
-  const response = await (options.fetchImpl ?? fetch)(X_TOKEN_ENDPOINT, {
-    body,
-    headers: {
-      Authorization: basicAuthHeader(config),
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    method: "POST",
-  });
+  let response: Response;
+  try {
+    response = await fetchWithOauthTimeout(options.fetchImpl ?? fetch, X_TOKEN_ENDPOINT, {
+      body,
+      headers: {
+        Authorization: basicAuthHeader(config),
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      method: "POST",
+    });
+  } catch (error) {
+    if (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")) {
+      throw new XOAuthRefreshError("X OAuth refresh timed out.", "transient");
+    }
+    throw new XOAuthRefreshError(error instanceof Error ? error.message : "x_oauth_refresh_network", "transient");
+  }
 
   if (!response.ok) {
-    throw new Error(`X OAuth refresh failed with status ${response.status}.`);
+    let bodyJson: unknown = null;
+    try {
+      bodyJson = await response.json();
+    } catch {
+      // ignore parse errors; classify by status alone
+    }
+    const errorCode = bodyJson && typeof bodyJson === "object" && !Array.isArray(bodyJson)
+      ? String((bodyJson as Record<string, unknown>).error ?? "")
+      : "";
+    const isInvalidGrant = response.status >= 400 && response.status < 500 && (errorCode === "invalid_grant" || errorCode === "invalid_client" || response.status === 401);
+    throw new XOAuthRefreshError(
+      `X OAuth refresh failed with status ${response.status}.`,
+      isInvalidGrant ? "invalid_grant" : response.status >= 500 ? "transient" : "unknown",
+      response.status,
+    );
   }
 
   return assertTokenPayload(await response.json());
 }
 
 export function shouldRefreshXToken(expiresAt: null | string, at = Date.now()) {
+  // Treat missing or unparseable expiry as "needs refresh" so a corrupted /
+  // never-stored expiry does not trap us into using a stale token until X
+  // returns 401 — that path is more expensive than a proactive refresh.
   if (!expiresAt) {
-    return false;
+    return true;
   }
 
   const expiryMs = new Date(expiresAt).getTime();
-  return Number.isFinite(expiryMs) && expiryMs - at <= TOKEN_REFRESH_WINDOW_MS;
+
+  if (!Number.isFinite(expiryMs)) {
+    return true;
+  }
+
+  return expiryMs - at <= TOKEN_REFRESH_WINDOW_MS;
 }
 
 export async function storeXOAuthConnection(
@@ -309,6 +391,10 @@ export async function storeXOAuthConnection(
   options: { client?: StoreClient } = {},
 ) {
   const client = options.client ?? createSupabaseServiceRoleClient();
+  // M-6: prefer the scope string returned by X. The fallback (`input.scopes`)
+  // must come from the server-side x_oauth_states row, NOT a client cookie or
+  // request body. Callers in app/api/x/oauth/callback/route.ts already pass the
+  // server-recorded scopes; this comment exists to make that contract sticky.
   const scopes = normalizeXScopes(input.tokenSet.scope ?? input.scopes);
   const capabilities = deriveXCapabilities(scopes, getXCapabilityOverrides());
   const payload = {
@@ -370,9 +456,13 @@ export async function refreshStoredXConnection(
 
   try {
     const refreshed = await refreshXOAuthToken(connection.refreshToken, options);
+    // L-15: when X does not return a new refresh_token, re-encrypt the existing
+    // plaintext (decrypted earlier) under the current purpose/key version. This
+    // upgrades pre-k1 ciphertext to the current AAD on every refresh and
+    // ensures we never persist legacy ciphertext indefinitely.
     const encryptedRefreshToken = refreshed.refreshToken
       ? encryptToken(refreshed.refreshToken, { purpose: tokenPurpose("refresh", admin.userId) })
-      : connection.encryptedRefreshToken;
+      : encryptToken(connection.refreshToken, { purpose: tokenPurpose("refresh", admin.userId) });
     const refreshedScopes = normalizeXScopes(refreshed.scope ?? connection.scopes);
     const refreshedCapabilities = deriveXCapabilities(refreshedScopes, {
       enterprise_analytics_enabled: connection.capabilities.enterprise_analytics_enabled,
@@ -407,12 +497,22 @@ export async function refreshStoredXConnection(
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown refresh failure";
-    await markXConnectionDegraded(admin, message, options.client);
+    // M-7: hard-failure (invalid_grant / 401) means the refresh token is no
+    // longer valid at X. Mark `revoked` so the connection cannot be silently
+    // re-used and the owner sees a clear "reconnect" prompt. Transient errors
+    // (5xx, network, timeout) keep the connection in `degraded` so the next
+    // attempt can recover without forcing a full reconnect.
+    const kind = error instanceof XOAuthRefreshError ? error.kind : "unknown";
+    if (kind === "invalid_grant") {
+      await markXConnectionRevoked(admin, message, options.client);
+    } else {
+      await markXConnectionDegraded(admin, message, options.client);
+    }
     await logAuditEvent({
       actorEmail: admin.email,
       error: message,
       eventType: "x_token_refresh_failed",
-      metadata: { phase: "16-x-oauth-and-read-sync" },
+      metadata: { kind, phase: "16-x-oauth-and-read-sync" },
       success: false,
       targetId: connection.id,
       targetType: "x_connection",
@@ -422,8 +522,89 @@ export async function refreshStoredXConnection(
   }
 }
 
+export async function markXConnectionRevoked(admin: AdminContext, message: string, client: StoreClient = createSupabaseServiceRoleClient()) {
+  const sanitized = scrubXMessage(message).slice(0, 500);
+  const { error } = await client
+    .from("x_connections")
+    .update({
+      encrypted_access_token: null,
+      encrypted_refresh_token: null,
+      last_error: sanitized,
+      status: "revoked",
+      token_expires_at: null,
+    })
+    .eq("user_id", admin.userId);
+
+  if (error) {
+    throw new Error(`Failed to mark X connection revoked: ${error.message}`);
+  }
+}
+
+// H-3: revoke an X token at the provider so disconnect actually invalidates
+// upstream credentials, not just the local copy. Best-effort: any failure is
+// returned as ok=false so disconnectXConnection can record the partial state in
+// the audit log without aborting the local cleanup.
+export async function revokeXOAuthToken(
+  token: string,
+  hint: "access_token" | "refresh_token",
+  options: { fetchImpl?: typeof fetch; source?: NodeJS.ProcessEnv } = {},
+): Promise<{ error?: string; ok: boolean }> {
+  let config: XOAuthConfig;
+  try {
+    config = getXOAuthConfig(options.source ?? process.env);
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "x_oauth_unconfigured", ok: false };
+  }
+
+  const body = new URLSearchParams({
+    client_id: config.clientId,
+    token,
+    token_type_hint: hint,
+  });
+
+  try {
+    const response = await fetchWithOauthTimeout(options.fetchImpl ?? fetch, X_REVOKE_ENDPOINT, {
+      body,
+      headers: {
+        Authorization: basicAuthHeader(config),
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      method: "POST",
+    });
+
+    if (!response.ok) {
+      return { error: `x_revoke_status_${response.status}`, ok: false };
+    }
+
+    return { ok: true };
+  } catch (error) {
+    if (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")) {
+      return { error: "x_revoke_timeout", ok: false };
+    }
+    return { error: error instanceof Error ? error.message.slice(0, 120) : "x_revoke_unknown", ok: false };
+  }
+}
+
+// L-16: defense-in-depth — strip token-shaped substrings from the message
+// before persistence. The caller (refreshXOAuthToken) already classifies, but
+// raw bodies from the X token endpoint can echo tokens on some 4xx paths.
+const X_OAUTH_TOKEN_PATTERNS = [
+  /\bBearer\s+[A-Za-z0-9._~+/-]+=*/gi,
+  /\b[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}\b/g,
+  /\b(?:sk-[A-Za-z0-9_-]{12,}|ghp_[A-Za-z0-9_]{12,}|AKIA[A-Z0-9]{12,})\b/g,
+  /\b(?:access|refresh)[_-]?token["'\s:=]*[A-Za-z0-9._~+/-]{16,}/gi,
+];
+
+function scrubXMessage(message: string) {
+  let scrubbed = message;
+  for (const pattern of X_OAUTH_TOKEN_PATTERNS) {
+    scrubbed = scrubbed.replace(pattern, "[redacted-token]");
+  }
+  return scrubbed;
+}
+
 export async function markXConnectionDegraded(admin: AdminContext, message: string, client: StoreClient = createSupabaseServiceRoleClient()) {
-  const sanitized = message.slice(0, 500);
+  const sanitized = scrubXMessage(message).slice(0, 500);
   const { error } = await client
     .from("x_connections")
     .update({
@@ -437,8 +618,55 @@ export async function markXConnectionDegraded(admin: AdminContext, message: stri
   }
 }
 
-export async function disconnectXConnection(admin: AdminContext, options: { client?: StoreClient; deleteImportedPosts?: boolean; deleteSnapshots?: boolean } = {}) {
+export async function disconnectXConnection(
+  admin: AdminContext,
+  options: { client?: StoreClient; deleteImportedPosts?: boolean; deleteSnapshots?: boolean; fetchImpl?: typeof fetch; source?: NodeJS.ProcessEnv } = {},
+) {
   const client = options.client ?? createSupabaseServiceRoleClient();
+
+  // H-3: load and decrypt the current tokens BEFORE we wipe them so we can call
+  // X's /oauth2/revoke for both access and refresh. This is best-effort — if X
+  // returns a non-2xx or times out, the audit metadata records the partial
+  // state and the local row is still wiped so the owner cannot accidentally
+  // continue using a connection they asked us to disconnect.
+  let revokeAccess: { error?: string; ok: boolean } = { ok: false, error: "no_token_stored" };
+  let revokeRefresh: { error?: string; ok: boolean } = { ok: false, error: "no_token_stored" };
+  try {
+    const { data: priorRow } = await client
+      .from("x_connections")
+      .select("encrypted_access_token,encrypted_refresh_token")
+      .eq("user_id", admin.userId)
+      .is("deleted_at", null)
+      .maybeSingle();
+
+    if (priorRow?.encrypted_access_token) {
+      try {
+        const accessToken = decryptToken(priorRow.encrypted_access_token, {
+          legacyPurposes: tokenLegacyPurposes("access", admin.userId),
+          purpose: tokenPurpose("access", admin.userId),
+        });
+        revokeAccess = await revokeXOAuthToken(accessToken, "access_token", { fetchImpl: options.fetchImpl, source: options.source });
+      } catch (error) {
+        revokeAccess = { error: error instanceof Error ? error.message.slice(0, 120) : "decrypt_failed", ok: false };
+      }
+    }
+
+    if (priorRow?.encrypted_refresh_token) {
+      try {
+        const refreshToken = decryptToken(priorRow.encrypted_refresh_token, {
+          legacyPurposes: tokenLegacyPurposes("refresh", admin.userId),
+          purpose: tokenPurpose("refresh", admin.userId),
+        });
+        revokeRefresh = await revokeXOAuthToken(refreshToken, "refresh_token", { fetchImpl: options.fetchImpl, source: options.source });
+      } catch (error) {
+        revokeRefresh = { error: error instanceof Error ? error.message.slice(0, 120) : "decrypt_failed", ok: false };
+      }
+    }
+  } catch (error) {
+    // Log but don't abort: we still want to wipe the local row on hard failure.
+    console.error("X disconnect: revoke step failed", { reason: error instanceof Error ? error.message : "unknown" });
+  }
+
   const { data, error } = await client
     .from("x_connections")
     .update({
@@ -451,6 +679,8 @@ export async function disconnectXConnection(admin: AdminContext, options: { clie
         phase: "16-x-oauth-and-read-sync",
         preserved_imported_posts: options.deleteImportedPosts ? false : true,
         preserved_snapshots: options.deleteSnapshots ? false : true,
+        revoked_access_token_at_provider: revokeAccess.ok,
+        revoked_refresh_token_at_provider: revokeRefresh.ok,
       }),
       scopes: [],
       status: "disconnected",
@@ -471,7 +701,14 @@ export async function disconnectXConnection(admin: AdminContext, options: { clie
       delete_imported_posts: options.deleteImportedPosts ?? false,
       delete_snapshots: options.deleteSnapshots ?? false,
       phase: "16-x-oauth-and-read-sync",
-      token_material_deleted: true,
+      // Replaces the prior misleading `token_material_deleted: true` value: now
+      // we record both local wipe and provider-revoke status separately so a
+      // partial-revoke is visible in audit instead of being a silent lie.
+      revoke_access_error: revokeAccess.ok ? null : revokeAccess.error ?? null,
+      revoke_access_ok: revokeAccess.ok,
+      revoke_refresh_error: revokeRefresh.ok ? null : revokeRefresh.error ?? null,
+      revoke_refresh_ok: revokeRefresh.ok,
+      token_material_deleted_locally: true,
     },
     success: true,
     targetId: data.id,
@@ -531,18 +768,30 @@ export async function loadDecryptedXConnection(admin: AdminContext, options: { c
 
   return {
     ...sanitizeXConnection(data),
-    accessToken: decryptToken(data.encrypted_access_token, { purpose: tokenPurpose("access", admin.userId) }),
+    accessToken: decryptToken(data.encrypted_access_token, {
+      legacyPurposes: tokenLegacyPurposes("access", admin.userId),
+      purpose: tokenPurpose("access", admin.userId),
+    }),
     encryptedRefreshToken: data.encrypted_refresh_token,
-    refreshToken: data.encrypted_refresh_token ? decryptToken(data.encrypted_refresh_token, { purpose: tokenPurpose("refresh", admin.userId) }) : null,
+    refreshToken: data.encrypted_refresh_token
+      ? decryptToken(data.encrypted_refresh_token, {
+          legacyPurposes: tokenLegacyPurposes("refresh", admin.userId),
+          purpose: tokenPurpose("refresh", admin.userId),
+        })
+      : null,
   } satisfies DecryptedXConnection;
 }
 
 function parseConnectionStatus(value: string): XConnectionStatus {
-  if (["connected", "degraded", "disconnected", "pending", "revoked"].includes(value)) {
-    return value as XConnectionStatus;
+  if (value === "connected" || value === "degraded" || value === "disconnected" || value === "pending" || value === "revoked") {
+    return value;
   }
 
-  return "degraded";
+  // An unknown stored status indicates schema drift or DB corruption; fall
+  // back to "disconnected" rather than "degraded" so publishing paths refuse
+  // to write until the row is explicitly reconnected.
+  console.error("Unknown X connection status encountered", { value });
+  return "disconnected";
 }
 
 export function parseCapabilities(value: Json): XCapabilities {

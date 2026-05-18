@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 
 import { requireAdmin } from "@/lib/auth/admin";
+import { rethrowIfRedirect } from "@/lib/server-only/action-redirect";
 import { addCampaignItem, createCampaign, createContentPillar, createGrowthGoal, runMonthlyGrowthReview, runWeeklyGrowthReview } from "@/lib/growth";
 import { campaignCreateSchema, campaignItemCreateSchema, formDataToGrowthRecord, goalCreateSchema, monthlyReviewSchema, pillarCreateSchema, weeklyReviewSchema } from "@/lib/growth/validation";
 import { createFixedWindowRateLimiter, MemoryRateLimitStore } from "@/lib/rate-limit";
@@ -39,6 +40,7 @@ export async function createGrowthGoalAction(formData: FormData) {
   try {
     await createGrowthGoal(admin, parsed.data);
   } catch (error) {
+    rethrowIfRedirect(error);
     console.error("Failed to save growth goal", { reason: error instanceof Error ? error.message : "unknown" });
     redirectToCampaigns({ notice: "goal_failed" });
   }
@@ -56,6 +58,7 @@ export async function createContentPillarAction(formData: FormData) {
   try {
     await createContentPillar(admin, parsed.data);
   } catch (error) {
+    rethrowIfRedirect(error);
     console.error("Failed to save content pillar", { reason: error instanceof Error ? error.message : "unknown" });
     redirectToCampaigns({ notice: "pillar_failed" });
   }
@@ -70,11 +73,13 @@ export async function createCampaignAction(formData: FormData) {
 
   if (!parsed.success) redirectToCampaigns({ notice: "campaign_failed" });
 
-  let campaignId: string;
+  // L-9: same pattern as blogs/actions.ts — initialize defensively.
+  let campaignId = "";
   try {
     const campaign = await createCampaign(admin, parsed.data);
     campaignId = campaign.id;
   } catch (error) {
+    rethrowIfRedirect(error);
     console.error("Failed to save campaign", { reason: error instanceof Error ? error.message : "unknown" });
     redirectToCampaigns({ notice: "campaign_failed" });
   }
@@ -93,6 +98,7 @@ export async function addCampaignItemAction(formData: FormData) {
   try {
     await addCampaignItem(admin, parsed.data);
   } catch (error) {
+    rethrowIfRedirect(error);
     console.error("Failed to link campaign item", { reason: error instanceof Error ? error.message : "unknown" });
     redirectToCampaigns({ notice: "campaign_item_failed", selectedCampaign: parsed.data.campaignId });
   }
@@ -110,6 +116,7 @@ export async function runWeeklyGrowthReviewAction(formData: FormData) {
   try {
     await runWeeklyGrowthReview(admin, parsed.data);
   } catch (error) {
+    rethrowIfRedirect(error);
     console.error("Failed to generate weekly growth review", { reason: error instanceof Error ? error.message : "unknown" });
     redirectToCampaigns({ notice: "weekly_review_failed" });
   }
@@ -127,6 +134,7 @@ export async function runMonthlyGrowthReviewAction(formData: FormData) {
   try {
     await runMonthlyGrowthReview(admin, parsed.data);
   } catch (error) {
+    rethrowIfRedirect(error);
     console.error("Failed to generate monthly growth review", { reason: error instanceof Error ? error.message : "unknown" });
     redirectToCampaigns({ notice: "monthly_review_failed" });
   }

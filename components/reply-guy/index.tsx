@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { ComponentProps } from "react";
 
 import { CopyButton } from "@/components/ai/copy-button";
-import { Badge, Button, Card, EmptyState, Input, KeyValueRow, MetricBlock, RuleHeader, Select, Table, Textarea, cn } from "@/components/design-system";
+import { Badge, Card, EmptyState, Input, KeyValueRow, MetricBlock, RuleHeader, Select, SubmitButton, Table, Textarea, cn } from "@/components/design-system";
 import type { ReplyDraft, ReplyGuyWorkspace, TargetAccount, TargetPost } from "@/lib/reply-guy";
 
 export type FormAction = ComponentProps<"form">["action"];
@@ -75,7 +75,7 @@ function TargetAccountForm({ action }: { action?: FormAction }) {
     <Card className="network-create" variant="inset">
       <Card.Body>
         <form action={action} className="network-form">
-          <RuleHeader folio="§ 01" label="Target Account" sub="save or update" />
+          <RuleHeader folio="§ 01" id="reply-guy-target-form-title" label="Target Account" sub="save or update" />
           <div className="network-form-grid">
             <Input label="Username" name="username" placeholder="@thoughtfulbuilder" required />
             <Input label="Display" name="display_name" placeholder="Name" />
@@ -84,7 +84,7 @@ function TargetAccountForm({ action }: { action?: FormAction }) {
           </div>
           <Input label="List" name="list_name" placeholder="operators" />
           <Textarea label="Notes" name="notes" placeholder="Reply boundaries, shared interests, context to remember." rows={3} />
-          <Button size="sm" type="submit">Save target account</Button>
+          <SubmitButton size="sm">Save target account</SubmitButton>
         </form>
       </Card.Body>
     </Card>
@@ -112,11 +112,11 @@ function TargetAccountList({ accounts, archiveAction, selected }: { accounts: Ta
             { header: "", key: "actions" },
           ]}
           rows={accounts.map((account) => ({
-            account: <Link href={`/reply-guy?selected=${account.id}`}>@{account.username}</Link>,
+            account: <Link href={{ pathname: "/reply-guy", query: { selected: account.id } }}>@{account.username}</Link>,
             actions: (
               <form action={archiveAction}>
                 <input name="id" type="hidden" value={account.id} />
-                <Button aria-label={`Archive target account @${account.username}`} size="sm" type="submit" variant="tertiary">Archive</Button>
+                <SubmitButton aria-label={`Archive target account @${account.username}`} size="sm" variant="tertiary">Archive</SubmitButton>
               </form>
             ),
             drafts: account.metrics.generated,
@@ -134,7 +134,7 @@ function TargetAccountList({ accounts, archiveAction, selected }: { accounts: Ta
 function TargetPostCard({ post, selected }: { post: TargetPost; selected?: boolean }) {
   return (
     <article className={cn("network-post-card", selected && "network-post-card-selected")}>
-      <Link aria-current={selected ? "page" : undefined} className="network-post-link" href={`/reply-guy?selected=${post.targetAccountId}&post=${post.id}`}>
+      <Link aria-current={selected ? "page" : undefined} className="network-post-link" href={{ pathname: "/reply-guy", query: { selected: post.targetAccountId, post: post.id } }}>
         <span className="network-post-head">
           <span className="mono">@{post.authorUsername ?? "target"}</span>
           <Badge variant={post.source === "x_api" ? "success" : "outline"}>{post.source}</Badge>
@@ -152,7 +152,7 @@ function TargetPostPanel({ importPostAction, pastePostsAction, posts, selectedAc
   return (
     <Card className="network-post-panel">
       <Card.Header>
-        <RuleHeader folio="§ 03" label="Target Posts" sub={`@${selectedAccount.username}`} />
+        <RuleHeader folio="§ 03" id="reply-guy-target-posts-title" label="Target Posts" sub={`@${selectedAccount.username}`} />
       </Card.Header>
       <Card.Body>
         <form action={importPostAction} className="network-form">
@@ -164,12 +164,12 @@ function TargetPostPanel({ importPostAction, pastePostsAction, posts, selectedAc
             <Input label="Replies" min={0} name="reply_count" type="number" />
             <Input label="Reposts" min={0} name="repost_count" type="number" />
           </div>
-          <Button size="sm" type="submit" variant="secondary">Save post</Button>
+          <SubmitButton size="sm" variant="secondary">Save post</SubmitButton>
         </form>
         <form action={pastePostsAction} className="network-form network-bulk-paste">
           <input name="target_account_id" type="hidden" value={selectedAccount.id} />
           <Textarea label="Pasted posts" name="pasted_posts" placeholder="Paste a small set separated by blank lines for research context." rows={4} />
-          <Button size="sm" type="submit" variant="tertiary">Import pasted posts</Button>
+          <SubmitButton size="sm" variant="tertiary">Import pasted posts</SubmitButton>
         </form>
         <div className="network-post-list">
           {posts.length === 0 ? <EmptyState message="Manual paste remains available even when X read sync is unavailable." title="No target posts" /> : posts.map((post) => <TargetPostCard key={post.id} post={post} selected={post.id === selectedPost?.id} />)}
@@ -184,7 +184,7 @@ function GenerateReplyForm({ action, selectedAccount, selectedPost }: { action?:
     <Card className="network-reply-generator" variant="inset">
       <Card.Body>
         <form action={action} className="network-form">
-          <RuleHeader folio="§ 04" label="Reply Draft" sub="one selected post" />
+          <RuleHeader folio="§ 04" id="reply-guy-generate-title" label="Reply Draft" sub="one selected post" />
           {selectedAccount ? <input name="target_account_id" type="hidden" value={selectedAccount.id} /> : null}
           {selectedPost ? <input name="target_post_id" type="hidden" value={selectedPost.id} /> : null}
           <Textarea defaultValue={selectedPost?.text ?? ""} label={selectedPost ? "Original post text" : "Paste target post"} name="original_post_text" placeholder="Paste one public target post if no saved post is selected." required={!selectedPost} rows={4} />
@@ -193,7 +193,7 @@ function GenerateReplyForm({ action, selectedAccount, selectedPost }: { action?:
             <Input defaultValue="2" label="Draft count" max={3} min={1} name="count" type="number" />
           </div>
           <Textarea label="Owner notes" name="owner_notes" placeholder="Angle, boundary, or relationship context. No relationship is assumed by default." rows={3} />
-          <Button size="sm" type="submit">Generate replies</Button>
+          <SubmitButton size="sm">Generate replies</SubmitButton>
         </form>
       </Card.Body>
     </Card>
@@ -220,16 +220,16 @@ export function ReplyDraftCard({ draft, handoffAction, markCopiedAction, markUse
         <CopyButton text={draft.replyText} />
         <form action={markCopiedAction}>
           <input name="id" type="hidden" value={draft.id} />
-          <Button size="sm" type="submit" variant="tertiary">Mark copied</Button>
+          <SubmitButton size="sm" variant="tertiary">Mark copied</SubmitButton>
         </form>
         <form action={markUsedAction}>
           <input name="id" type="hidden" value={draft.id} />
-          <Button size="sm" type="submit" variant="tertiary">Mark used</Button>
+          <SubmitButton size="sm" variant="tertiary">Mark used</SubmitButton>
         </form>
         <form action={handoffAction}>
           <input name="id" type="hidden" value={draft.id} />
           <input name="confirm_single_reply" type="hidden" value="on" />
-          <Button disabled={Boolean(draft.publishingDraftId) || !canHandoff} size="sm" type="submit" variant="secondary">Create publishing draft</Button>
+          <SubmitButton disabled={Boolean(draft.publishingDraftId) || !canHandoff} size="sm" variant="secondary">Create publishing draft</SubmitButton>
         </form>
       </div>
       <p className="network-muted">{handoffNote}</p>
@@ -273,10 +273,10 @@ function ReplyInspector({ selectedAccount, selectedPost }: { selectedAccount: nu
 export function ReplyGuyWorkspaceView({ archiveTargetAction, createTargetAction, generateReplyAction, handoffAction, importPostAction, markCopiedAction, markUsedAction, notice, pastePostsAction, workspace }: ReplyGuyWorkspaceViewProps) {
   return (
     <main aria-labelledby="reply-guy-title" className="network-page reply-guy-page">
-      <h1 className="workflow-title" id="reply-guy-title">Reply Guy</h1>
-      <RuleHeader folio="§ 21" label="Reply Guy" sub="thoughtful replies" />
+      <RuleHeader as="h1" folio="§ 21" id="reply-guy-title" label="Reply Guy" sub="thoughtful replies" />
       <NoticeBanner notice={notice} />
-      <section aria-label="Reply metrics" className="network-metrics">
+      <section aria-labelledby="reply-guy-metrics-title" className="network-metrics">
+        <RuleHeader className="visually-hidden" folio="§" id="reply-guy-metrics-title" label="Reply metrics" />
         <MetricBlock label="Targets" value={workspace.metrics.accounts} />
         <MetricBlock label="Posts" value={workspace.metrics.posts} />
         <MetricBlock label="Drafts" value={workspace.metrics.drafts} />

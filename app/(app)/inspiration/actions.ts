@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 
 import { requireAdmin } from "@/lib/auth/admin";
+import { rethrowIfRedirect } from "@/lib/server-only/action-redirect";
 import {
   createInspiration,
   deleteInspiration,
@@ -56,6 +57,7 @@ export async function createInspirationAction(formData: FormData) {
     const result = await createInspiration(admin, parsed.data, { source: "in_app" });
     redirectToInspiration({ notice: result.duplicate ? "duplicate" : "saved", selected: result.inspiration.id });
   } catch (error) {
+    rethrowIfRedirect(error);
     console.error("Failed to create inspiration", {
       reason: error instanceof Error ? error.message : "unknown",
     });
@@ -77,6 +79,7 @@ export async function updateInspirationAction(formData: FormData) {
     const item = await updateInspiration(admin, parsed.data);
     redirectToInspiration({ notice: "updated", selected: item.id });
   } catch (error) {
+    rethrowIfRedirect(error);
     console.error("Failed to update inspiration", {
       id: parsed.data.id,
       reason: error instanceof Error ? error.message : "unknown",
@@ -99,6 +102,7 @@ export async function deleteInspirationAction(formData: FormData) {
     await deleteInspiration(admin, parsed.data);
     redirectToInspiration({ notice: "deleted" });
   } catch (error) {
+    rethrowIfRedirect(error);
     console.error("Failed to delete inspiration", {
       id: parsed.data.id,
       reason: error instanceof Error ? error.message : "unknown",
@@ -121,6 +125,7 @@ export async function transformInspirationAction(formData: FormData) {
     const result = await transformInspiration(admin, parsed.data);
     redirectToInspiration({ notice: "transformed", selected: result.inspiration.id });
   } catch (error) {
+    rethrowIfRedirect(error);
     console.error("Failed to transform inspiration", {
       id: parsed.data.id,
       mode: parsed.data.mode,

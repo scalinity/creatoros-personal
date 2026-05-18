@@ -6,6 +6,7 @@ import { z } from "zod";
 
 import { redactAuditString } from "@/lib/audit/redaction";
 import { requireAdmin } from "@/lib/auth/admin";
+import { rethrowIfRedirect } from "@/lib/server-only/action-redirect";
 import { deleteOwnerData } from "@/lib/exports";
 import { createFixedWindowRateLimiter, MemoryRateLimitStore } from "@/lib/rate-limit";
 
@@ -57,6 +58,7 @@ export async function deleteWorkspaceDataAction(formData: FormData) {
       },
     );
   } catch (error) {
+    rethrowIfRedirect(error);
     console.error("Settings data delete failed", {
       reason: redactAuditString(error instanceof Error ? error.message : "unknown data delete failure"),
     });

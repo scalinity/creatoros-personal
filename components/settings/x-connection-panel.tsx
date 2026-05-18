@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { Badge, Button, Card, KeyValueRow, Table } from "@/components/design-system";
+import { Badge, Card, KeyValueRow, SubmitButton, Table } from "@/components/design-system";
 import type { SanitizedXConnection, XCapabilities } from "@/lib/x/oauth";
 
 type XConnectionPanelProps = {
@@ -99,9 +99,9 @@ function SyncForm({ action, disabled = false, mode }: { action: (formData: FormD
       <input name="mode" type="hidden" value={mode} />
       <input name="include_metrics" type="hidden" value="true" />
       <input name="max_posts" type="hidden" value="25" />
-      <Button disabled={disabled} size="sm" type="submit" variant={mode === "live" ? "primary" : "secondary"}>
+      <SubmitButton disabled={disabled} size="sm" variant={mode === "live" ? "primary" : "secondary"}>
         {mode === "live" ? "Run live read sync" : "Run mock sync"}
-      </Button>
+      </SubmitButton>
     </form>
   );
 }
@@ -111,9 +111,9 @@ function DisconnectForm({ action, disabled }: { action: (formData: FormData) => 
     <form action={action} className="x-connection-inline-form">
       <input name="delete_imported_posts" type="hidden" value="false" />
       <input name="delete_snapshots" type="hidden" value="false" />
-      <Button disabled={disabled} size="sm" type="submit" variant="destructive">
+      <SubmitButton disabled={disabled} size="sm" variant="destructive">
         Disconnect X
-      </Button>
+      </SubmitButton>
     </form>
   );
 }

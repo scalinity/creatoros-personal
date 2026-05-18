@@ -4,6 +4,7 @@ import { logAuditEvent } from "@/lib/audit";
 import type { AdminContext } from "@/lib/auth/admin";
 
 import { getAiRuntimeConfig, type AiRuntimeConfig } from "./config";
+import { AiStructuredOutputError } from "./json";
 import { getPromptDefinition, type BasePromptInput, type PromptId } from "./prompts";
 import { createAiProvider, createMockAiProvider } from "./providers";
 import { completeAiJob, createAiJob, recordPromptRun, type AiPersistenceResult, type PromptRunResult } from "./run-logging";
@@ -164,13 +165,23 @@ export async function runStructuredPrompt(options: RunStructuredPromptOptions) {
     const message = error instanceof Error ? error.message : "AI prompt failed.";
     const failedProvider = provider?.provider ?? options.provider?.provider ?? config.provider;
 
+    // H-8: when the provider returned text but it failed Zod / JSON parse, the
+    // AiStructuredOutputError carries a truncated raw sample. Persist it on
+    // the failed prompt_run so malformed-output failures are debuggable. The
+    // sample is still passed through audit redaction at the audit layer.
+    const failureOutput: Record<string, unknown> = {};
+    if (error instanceof AiStructuredOutputError) {
+      if (error.rawSample) failureOutput.raw_sample = error.rawSample;
+      if (error.details) failureOutput.validation_issues = error.details;
+    }
+
     const promptRun = await recordPromptRun(admin, {
       aiJobId: job.jobId ?? null,
       error: message,
       input: options.input,
       metadata,
       model: config.model,
-      output: {},
+      output: failureOutput,
       promptName: prompt.promptName,
       promptVersion: prompt.promptVersion,
       provider: failedProvider,

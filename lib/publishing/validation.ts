@@ -24,7 +24,11 @@ const optionalTrimmedText = z.preprocess((value) => {
   const trimmed = String(value).trim();
   return trimmed.length > 0 ? trimmed : null;
 }, z.string().max(8_000).nullable());
-const requiredConfirmation = z.preprocess((value) => String(value ?? "").trim().toLowerCase(), z.string().refine((value) => value.includes("approve") || value.includes("confirm"), "Explicit owner confirmation is required."));
+// Confirmation must START WITH a known token followed by a word boundary; this
+// keeps audit-friendly suffixes ("approve exact payload") working while
+// rejecting "we will never approve" / "i confirmation" / "approveathon".
+const confirmationPattern = /^(?:confirm|approve)\b/;
+const requiredConfirmation = z.preprocess((value) => String(value ?? "").trim().toLowerCase(), z.string().refine((value) => confirmationPattern.test(value), "Explicit owner confirmation is required."));
 const booleanish = z
   .union([z.boolean(), z.string()])
   .optional()

@@ -284,8 +284,11 @@ describe("Phase 16 X OAuth and capability helpers", () => {
     expect(payload).toMatchObject({ status: "connected", user_id: "user-1", x_user_id: "12345", username: "creatoros" });
     expect(payload?.encrypted_access_token).not.toBe("x-access-token-secret");
     expect(payload?.encrypted_refresh_token).not.toBe("x-refresh-token-secret");
-    expect(decryptToken(String(payload?.encrypted_access_token), { purpose: "x-access:user-1" })).toBe("x-access-token-secret");
-    expect(decryptToken(String(payload?.encrypted_refresh_token), { purpose: "x-refresh:user-1" })).toBe("x-refresh-token-secret");
+    // M-8: tokens are encrypted under the current key-version AAD (`:k1`).
+    // The legacy AAD (`x-access:user-1`) is exposed via legacyPurposes so a
+    // future key rotation does not require backfilling existing rows.
+    expect(decryptToken(String(payload?.encrypted_access_token), { purpose: "x-access:user-1:k1" })).toBe("x-access-token-secret");
+    expect(decryptToken(String(payload?.encrypted_refresh_token), { purpose: "x-refresh:user-1:k1" })).toBe("x-refresh-token-secret");
   });
 });
 

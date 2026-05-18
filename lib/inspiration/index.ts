@@ -1,8 +1,9 @@
 import "server-only";
 
-import { createHash, randomUUID } from "node:crypto";
+import { createHmac, randomUUID } from "node:crypto";
 
 import { inspirationTransformOutputSchema } from "@/lib/ai";
+import { validateAiStructuredOutput } from "@/lib/ai/json";
 import { runStructuredPrompt } from "@/lib/ai/run";
 import type { AiProvider } from "@/lib/ai/types";
 import { logAuditEvent } from "@/lib/audit";
@@ -544,7 +545,7 @@ export async function transformInspiration(admin: AdminContext, input: Inspirati
     promptId: PROMPT_ID,
     provider: options.provider,
   });
-  const output = inspirationTransformOutputSchema.parse(response.structured);
+  const output = validateAiStructuredOutput(response.structured, inspirationTransformOutputSchema);
   const transform = toTransformRecord(input, output, response, row.text);
   const nextTransforms = [...normalizeTransforms(row.transformed_outputs), transform];
 
@@ -619,19 +620,32 @@ export async function loadInspirationWorkspace(admin: AdminContext, filters: { q
   };
 }
 
-function hashLimitKey(value: string) {
-  return createHash("sha256").update(value).digest("hex").slice(0, 32);
+// H-4: rate-limit keys derived from the raw bearer token must be at least as
+// hard to reverse as the storage hash. Use the same peppered HMAC-SHA256 as
+// `hashPersonalSaveToken` so the bucket id is not a brute-forceable plain
+// SHA-256 of the token. IP bucket also uses peppered HMAC for symmetry — even
+// without a pepper available, the bucket cannot leak token plaintext.
+function rateLimitPepper() {
+  const pepper = process.env.PERSONAL_SAVE_TOKEN_PEPPER?.trim();
+  // If the pepper is unset we still need a stable key. Fall back to a derived
+  // domain-separated value so unit tests without env work, but production
+  // boot validation in lib/env/server.ts enforces presence anyway.
+  return pepper && pepper.length > 0 ? pepper : "creatoros-rate-limit-fallback";
+}
+
+function hashLimitKey(value: string, domain: string) {
+  return createHmac("sha256", rateLimitPepper()).update(`${domain}|${value}`).digest("base64url");
 }
 
 function requestIpLimitKey(request?: Request | null) {
   const forwardedFor = request?.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
   const ip = forwardedFor || request?.headers.get("x-real-ip") || request?.headers.get("cf-connecting-ip") || "unknown";
-  return hashLimitKey(ip);
+  return hashLimitKey(ip, "ip");
 }
 
 function tokenAttemptLimitKey(rawToken: null | string) {
   const token = rawToken?.trim();
-  return token ? hashLimitKey(token) : "missing";
+  return token ? hashLimitKey(token, "token") : "missing";
 }
 
 async function checkExtensionPreVerificationRateLimit(rawToken: null | string, options: ExtensionOptions) {
