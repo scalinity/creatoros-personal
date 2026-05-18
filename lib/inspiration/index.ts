@@ -557,7 +557,13 @@ export async function transformInspiration(admin: AdminContext, input: Inspirati
   });
   const output = validateAiStructuredOutput(response.structured, inspirationTransformOutputSchema);
   const transform = toTransformRecord(input, output, response, row.text);
-  const nextTransforms = [...normalizeTransforms(row.transformed_outputs), transform];
+  // SCA-515 (S-9): cap stored transform history at 25 most recent so the
+  // JSONB column doesn't grow unbounded. Older entries are dropped (oldest
+  // first). The truncated marker is preserved in metadata for observability.
+  const TRANSFORM_HISTORY_CAP = 25;
+  const allTransforms = [...normalizeTransforms(row.transformed_outputs), transform];
+  const truncatedHistory = allTransforms.length > TRANSFORM_HISTORY_CAP;
+  const nextTransforms = truncatedHistory ? allTransforms.slice(-TRANSFORM_HISTORY_CAP) : allTransforms;
 
   const { data, error } = await admin.supabase
     .from("saved_inspiration_posts")

@@ -359,13 +359,18 @@ async function loadOperatingEvidence(admin: AdminContext) {
   return groups.flat();
 }
 
+// SCA-519 (S-13): project only the columns we actually filter on (status,
+// is_active) instead of `select("*")`. Substantially cuts payload bytes
+// across the 8 parallel calls in loadSourceCounts. The 500-row cap is still
+// silent — W-19 addresses that more architecturally with count-only probes;
+// this commit is the cheap immediate win.
 async function countOwnerRows(admin: AdminContext, table: "blog_posts" | "campaigns" | "content_coach_reports" | "content_ideas" | "experiments" | "publishing_drafts" | "voice_profiles") {
   const { data, error } = await admin.supabase
     .from(table)
-    .select("*")
+    .select("status,is_active")
     .eq("user_id", admin.userId)
     .is("deleted_at", null)
-    .limit(500);
+    .limit(2_000);
 
   if (error) throw new Error(`Failed to count ${table} for coach: ${error.message}`);
 
@@ -373,16 +378,17 @@ async function countOwnerRows(admin: AdminContext, table: "blog_posts" | "campai
 }
 
 async function countOwnerPosts(admin: AdminContext) {
-  const { data, error } = await admin.supabase
+  // SCA-519 (S-13): head + count='exact' returns no rows, just the total —
+  // no row payload sent over the wire.
+  const { count, error } = await admin.supabase
     .from("posts")
-    .select("id")
+    .select("*", { count: "exact", head: true })
     .eq("user_id", admin.userId)
     .eq("is_owner_post", true)
-    .is("deleted_at", null)
-    .limit(500);
+    .is("deleted_at", null);
 
   if (error) throw new Error(`Failed to count posts for coach: ${error.message}`);
-  return (data ?? []).length;
+  return count ?? 0;
 }
 
 async function loadSourceCounts(admin: AdminContext): Promise<CoachSourceCounts> {

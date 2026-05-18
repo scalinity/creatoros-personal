@@ -66,7 +66,12 @@ export const xScopeEscalationSchema = z
   .object({
     reason: z.string().trim().min(10).max(500),
     requested_scopes: z.preprocess((value) => {
-      if (Array.isArray(value)) return value;
+      // SCA-537 (S-31): String()-coerce array entries for symmetry with the
+      // string branch. Without this, a `requested_scopes: [42]` array would
+      // pass the Array.isArray check and rely on z.enum to reject — fine, but
+      // the asymmetry between the two branches was a footgun for future
+      // refactors.
+      if (Array.isArray(value)) return value.map((item) => String(item ?? "").trim()).filter(Boolean);
       return String(value ?? "")
         .split(/\s+/)
         .map((scope) => scope.trim())
