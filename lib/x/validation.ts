@@ -32,12 +32,24 @@ export const xOAuthStartQuerySchema = z.object({
   return_to: oauthReturnTarget,
 });
 
-export const xOAuthCallbackQuerySchema = z.object({
-  code: z.string().trim().min(1).max(2_048).optional(),
-  error: z.string().trim().min(1).max(120).optional(),
-  error_description: z.string().trim().min(1).max(500).optional(),
-  state: z.string().trim().min(1).max(160).optional(),
-});
+// SCA-495 (W-16): discriminated union so the schema-level shape mirrors the
+// X OAuth callback contract. The prior all-optional object pushed the
+// {code,state} / {error} branching into the route handler — defense-in-depth
+// only if both layers stay in sync.
+export const xOAuthCallbackQuerySchema = z.union([
+  z.object({
+    code: z.string().trim().min(1).max(2_048),
+    state: z.string().trim().min(1).max(160),
+    error: z.string().optional(),
+    error_description: z.string().optional(),
+  }),
+  z.object({
+    error: z.string().trim().min(1).max(120),
+    error_description: z.string().trim().min(1).max(500).optional(),
+    code: z.string().optional(),
+    state: z.string().optional(),
+  }),
+]);
 
 export const xDisconnectSchema = z.object({
   delete_imported_posts: booleanish.default(false),
@@ -68,22 +80,39 @@ export const xScopeEscalationSchema = z
     returnTo: value.return_to,
   }));
 
+// SCA-494 (W-15): discriminated union so confirmation is REQUIRED at the
+// schema level when dry_run is false. The prior optional+superRefine shape
+// produced the same rejection behavior but relied on the refinement firing
+// AFTER all other parsing; future maintenance that loosened the refine or
+// re-ordered the booleanish coercion would have silently regressed the
+// strongest "no live publish without confirmation" invariant.
 export const xPublishSchema = z
-  .object({
-    confirmation: requiredConfirmation.optional(),
-    dry_run: booleanish.default(true),
-    payload_hash: optionalTrimmedText.optional(),
-    publishing_draft_id: z.string().trim().min(1),
-  })
-  .superRefine((value, context) => {
-    if (!value.dry_run && !value.confirmation) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Explicit owner confirmation is required for live X publishing.",
-        path: ["confirmation"],
-      });
-    }
-  })
+  .union([
+    z.object({
+      confirmation: requiredConfirmation.optional(),
+      dry_run: booleanish.transform((value, ctx) => {
+        if (value !== true) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "dry_run must be true for the dry-run branch." });
+          return z.NEVER;
+        }
+        return true;
+      }),
+      payload_hash: optionalTrimmedText.optional(),
+      publishing_draft_id: z.string().trim().min(1),
+    }),
+    z.object({
+      confirmation: requiredConfirmation,
+      dry_run: booleanish.transform((value, ctx) => {
+        if (value !== false) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "dry_run must be false for the live publish branch." });
+          return z.NEVER;
+        }
+        return false;
+      }),
+      payload_hash: optionalTrimmedText.optional(),
+      publishing_draft_id: z.string().trim().min(1),
+    }),
+  ])
   .transform((value) => ({
     confirmation: value.confirmation ?? null,
     dryRun: value.dry_run,

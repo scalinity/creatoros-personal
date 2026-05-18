@@ -55,11 +55,17 @@ export async function consumeOAuthState(state: string, expectedUserId: string): 
   const client = createSupabaseServiceRoleClient();
   const now = new Date().toISOString();
 
-  // Atomic CAS: only consume if not already consumed and not expired.
+  // SCA-500 (W-21): include user_id in the CAS itself so a cross-user replay
+  // (different admin session trying to consume someone else's pending state)
+  // returns null WITHOUT burning the legitimate row. The prior approach
+  // marked consumed_at=now first then checked user_id afterwards — a benign
+  // race or genuine cross-user replay both consumed the legitimate user's
+  // pending state.
   const { data, error } = await client
     .from("x_oauth_states")
     .update({ consumed_at: now })
     .eq("state", state)
+    .eq("user_id", expectedUserId)
     .is("consumed_at", null)
     .gte("expires_at", now)
     .select("*")
@@ -70,10 +76,6 @@ export async function consumeOAuthState(state: string, expectedUserId: string): 
   }
 
   if (!data) {
-    return null;
-  }
-
-  if (data.user_id !== expectedUserId) {
     return null;
   }
 

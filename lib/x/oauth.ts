@@ -353,10 +353,17 @@ export async function refreshXOAuthToken(refreshToken: string, options: { fetchI
     const errorCode = bodyJson && typeof bodyJson === "object" && !Array.isArray(bodyJson)
       ? String((bodyJson as Record<string, unknown>).error ?? "")
       : "";
-    const isInvalidGrant = response.status >= 400 && response.status < 500 && (errorCode === "invalid_grant" || errorCode === "invalid_client" || response.status === 401);
+    // SCA-502 (W-23): only classify as invalid_grant when the response body
+    // explicitly carries an OAuth error code. A bare 401 with empty body
+    // (transient WAF / upstream auth blip) used to force `revoked` and a full
+    // reconnect; now it's classified `transient` so the next attempt can
+    // recover without owner intervention.
+    const isInvalidGrant = response.status >= 400 && response.status < 500
+      && (errorCode === "invalid_grant" || errorCode === "invalid_client" || errorCode === "invalid_request");
+    const kind = isInvalidGrant ? "invalid_grant" : response.status >= 500 || response.status === 401 ? "transient" : "unknown";
     throw new XOAuthRefreshError(
       `X OAuth refresh failed with status ${response.status}.`,
-      isInvalidGrant ? "invalid_grant" : response.status >= 500 ? "transient" : "unknown",
+      kind,
       response.status,
     );
   }
