@@ -5,7 +5,9 @@
 import type { HTMLAttributes, ReactNode } from "react";
 import Link from "next/link";
 
-import { Badge, Card, EmptyState, IconButton, RuleHeader, cn } from "@/components/design-system";
+import { Badge, Card, EmptyState, RuleHeader, cn } from "@/components/design-system";
+
+import type { CommandPaletteItem } from "./shared";
 
 export type AppShellProps = HTMLAttributes<HTMLDivElement> & {
   inspector?: ReactNode;
@@ -419,12 +421,10 @@ export function getRouteShell(path: string) {
   return privateRouteShells.find((route) => route.path === path);
 }
 
-export type CommandPaletteItem = {
-  group: string;
-  href: string;
-  id: string;
-  label: string;
-};
+// SCA-508 (S-2): CommandPaletteItem now lives in ./shared (pure data) so
+// the client-only ./client module can import it without crossing the
+// server-safe boundary. Re-exported here for backwards compat.
+export type { CommandPaletteItem } from "./shared";
 
 export const appShellCommandItems: CommandPaletteItem[] = [
   { id: "write-post", group: "Operate", label: "Write post", href: "/composer" },
@@ -483,71 +483,12 @@ export function RouteScaffold({ route }: { route: RouteShellDefinition }) {
   );
 }
 
-export type CommandPaletteShellProps = HTMLAttributes<HTMLDivElement> & {
-  commands: CommandPaletteItem[];
-  onClose: () => void;
-  open: boolean;
-};
-
-export function CommandPaletteShell({ className, commands, onClose, open, ...props }: CommandPaletteShellProps) {
-  if (!open) return null;
-
-  const groups = Array.from(new Set(commands.map((command) => command.group)));
-
-  return (
-    <div
-      className={cn("command-palette-overlay", className)}
-      // Backdrop click closes; the inner section stops propagation so clicks on
-      // the dialog itself do not dismiss it.
-      onClick={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
-      {...props}
-    >
-      <section
-        aria-labelledby="command-palette-title"
-        aria-modal="true"
-        className="command-palette-shell"
-        onClick={(event) => event.stopPropagation()}
-        role="dialog"
-      >
-        <RuleHeader
-          actions={<IconButton label="Close command palette" onClick={onClose}>×</IconButton>}
-          folio="⌘"
-          // The id below is referenced by aria-labelledby so screen readers
-          // announce the dialog name when focus enters.
-          id="command-palette-title"
-          label="Command Palette"
-          sub="pending implementation"
-        />
-        <ul className="command-palette-list">
-          {groups.map((group) => (
-            <li className="command-palette-group" key={group}>
-              <h2 className="command-palette-group-label smallcaps">{group}</h2>
-              <ul>
-                {commands
-                  .filter((command) => command.group === group)
-                  .map((command) => (
-                    // SCA-531 (S-25): use <Link> inside <li> so the <a>
-                    // retains its native link role and we get client-side
-                    // navigation. The prior `<a href role="listitem">` both
-                    // overrode link semantics with listitem AND caused a
-                    // full page load.
-                    <li key={command.id}>
-                      <Link className="command-palette-row" href={command.href} onClick={onClose}>
-                        <span className="command-palette-row-label">{command.label}</span>
-                        <Badge variant="outline">pending</Badge>
-                      </Link>
-                    </li>
-                  ))}
-              </ul>
-            </li>
-          ))}
-        </ul>
-      </section>
-    </div>
-  );
-}
+// SCA-508 (S-2): CommandPaletteShell moved to ./client (uses onClick + onClose
+// callbacks; can't live in a server-safe module). Re-exported here so the
+// existing import path `@/components/app-shell` keeps working — Next.js
+// bundles the client module separately and consumers automatically cross
+// the boundary by importing those specific names.
+export { CommandPaletteShell, type CommandPaletteShellProps } from "./client";
 
 export type SidebarProps = HTMLAttributes<HTMLElement> & {
   brand?: ReactNode;
@@ -597,60 +538,9 @@ export function Sidebar({ brand = "CreatorOS", className, collapsed = false, sec
   );
 }
 
-export type TopBarProps = HTMLAttributes<HTMLElement> & {
-  actions?: ReactNode;
-  commandAriaLabel?: string;
-  commandDisabled?: boolean;
-  commandLabel?: ReactNode;
-  crumbs?: ReactNode[];
-  onCommandOpen?: () => void;
-  syncStatus?: ReactNode;
-};
-
-export function TopBar({
-  actions,
-  className,
-  commandAriaLabel = "Open command palette",
-  commandDisabled = false,
-  commandLabel,
-  crumbs = [],
-  onCommandOpen,
-  syncStatus,
-  ...props
-}: TopBarProps) {
-  return (
-    <header className={cn("topbar", className)} {...props}>
-      <div className="topbar-crumbs">
-        {crumbs.map((crumb, index) => (
-          <span className="topbar-crumb" key={`${String(crumb)}-${index}`}>
-            {index > 0 ? (
-              <span aria-hidden="true" className="topbar-sep">
-                /
-              </span>
-            ) : null}
-            {crumb}
-          </span>
-        ))}
-      </div>
-      <div className="topbar-actions">
-        {syncStatus ? <span className="topbar-sync">{syncStatus}</span> : null}
-        {commandLabel ? (
-          <button
-            aria-haspopup="dialog"
-            aria-label={commandAriaLabel}
-            className="topbar-cmd mono"
-            disabled={commandDisabled}
-            onClick={onCommandOpen}
-            type="button"
-          >
-            {commandLabel}
-          </button>
-        ) : null}
-        {actions}
-      </div>
-    </header>
-  );
-}
+// SCA-508 (S-2): TopBar moved to ./client (the command-open button binds
+// an onClick handler). Re-exported here for backwards compat.
+export { TopBar, type TopBarProps } from "./client";
 
 export type InspectorProps = HTMLAttributes<HTMLDivElement> & {
   title?: ReactNode;
