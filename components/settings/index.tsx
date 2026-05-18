@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 
-import { Badge, Card, KeyValueRow, RuleHeader, Table, cn } from "@/components/design-system";
+import { Badge, Button, Card, KeyValueRow, LinkButton, RuleHeader, Table } from "@/components/design-system";
 import type { DiagnosticGroup, DiagnosticGroupId, DiagnosticStatus, OperationalDiagnostics } from "@/lib/server-only/diagnostics";
 
 type BadgeVariant = "danger" | "neutral" | "outline" | "success" | "warning";
@@ -73,23 +73,19 @@ function SettingsActions({ actions = [] }: { actions?: SettingsAction[] }) {
     <div className="settings-actions">
       {actions.map((action) => {
         const variant = settingsActionVariant(action.tone);
-        const className = cn("btn", `btn-${variant}`, "btn-sm", action.disabled && "settings-action-disabled");
-
+        // SCA-527 (S-21): migrated from inline btn markup to the design-
+        // system Button / LinkButton primitives so the loading shell and
+        // aria-busy semantics come for free.
         return (
           <div className="settings-action" key={String(action.label)}>
             {action.href && !action.disabled ? (
-              <a className={className} href={action.href}>
-                <span className="btn-label">{action.label}</span>
-              </a>
+              <LinkButton href={action.href} prefetch={false} size="sm" variant={variant}>
+                {action.label}
+              </LinkButton>
             ) : (
-              <button
-                aria-disabled={action.disabled || undefined}
-                className={className}
-                disabled={action.disabled}
-                type="button"
-              >
-                <span className="btn-label">{action.label}</span>
-              </button>
+              <Button disabled={action.disabled} size="sm" variant={variant}>
+                {action.label}
+              </Button>
             )}
             {action.note ? <span className="settings-action-note">{action.note}</span> : null}
           </div>

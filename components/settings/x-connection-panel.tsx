@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { Badge, Card, KeyValueRow, SubmitButton, Table } from "@/components/design-system";
+import { Badge, Card, KeyValueRow, LinkButton, SubmitButton, Table } from "@/components/design-system";
 import type { SanitizedXConnection, XCapabilities } from "@/lib/x/oauth";
 
 type XConnectionPanelProps = {
@@ -83,12 +83,16 @@ function Notice({ notice }: { notice?: null | string }) {
 function ConnectAction({ connected }: { connected: boolean }) {
   return (
     <div className="x-connection-link-actions">
-      <a className="btn btn-primary btn-sm" href="/api/x/oauth/start?mode=read&return_to=/settings/x-connection">
-        <span className="btn-label">{connected ? "Reconnect read access" : "Connect X read access"}</span>
-      </a>
-      <a className="btn btn-secondary btn-sm" href="/api/x/oauth/start?mode=publishing&return_to=/settings/x-connection">
-        <span className="btn-label">Enable publishing scopes</span>
-      </a>
+      {/* SCA-527 (S-21): migrated from hand-rolled <a className="btn ...">
+          to LinkButton. prefetch={false} because /api/x/oauth/start is a
+          server route that redirects to X.com — there's no benefit to
+          Next prefetching it. */}
+      <LinkButton href="/api/x/oauth/start?mode=read&return_to=/settings/x-connection" prefetch={false} size="sm">
+        {connected ? "Reconnect read access" : "Connect X read access"}
+      </LinkButton>
+      <LinkButton href="/api/x/oauth/start?mode=publishing&return_to=/settings/x-connection" prefetch={false} size="sm" variant="secondary">
+        Enable publishing scopes
+      </LinkButton>
     </div>
   );
 }
