@@ -43,12 +43,17 @@ function xPublishErrorResponse(error: unknown, headers?: Record<string, string>)
   return errorResponse("internal_error", "X publish request could not be completed.", 500, headers);
 }
 
+// SCA-488 (W-9): single shared bucket across post/thread/reply/quote so a
+// single owner cannot bypass the documented 10/h ceiling by varying content
+// type. The rateLimitKey param is preserved for diagnostic logging only.
+const X_PUBLISH_LIMIT_BUCKET = "x-publish";
+
 export async function handleXPublishRoute(request: NextRequest, expectedContentTypes: string[], rateLimitKey: string) {
   const guard = await requireAdminForRoute(request);
 
   if (!guard.ok) return guard.response;
 
-  const decision = await publishLimiter.check({ id: `${guard.admin.userId}:${rateLimitKey}` });
+  const decision = await publishLimiter.check({ id: `${guard.admin.userId}:${X_PUBLISH_LIMIT_BUCKET}` });
   const headers = rateLimitHeaders(decision);
 
   if (!decision.allowed) {
