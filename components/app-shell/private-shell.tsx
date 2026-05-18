@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 
 import {
@@ -41,6 +41,12 @@ function routeForPath(pathname: string) {
 export function PrivateAppShell({ children, logoutAction, viewerEmail }: PrivateAppShellProps) {
   const pathname = usePathname();
   const [commandOpen, setCommandOpen] = useState(false);
+  // SCA-479 (C-9): mirror commandOpen into a ref so the mount-time keydown
+  // listener reads the CURRENT value instead of the closure capture from mount
+  // (which was always false). Updating the ref on every render keeps it
+  // in sync without restarting the listener.
+  const commandOpenRef = useRef(commandOpen);
+  commandOpenRef.current = commandOpen;
   const currentRoute = routeForPath(pathname);
   const activeSections = useMemo(
     () =>
@@ -63,9 +69,11 @@ export function PrivateAppShell({ children, logoutAction, viewerEmail }: Private
         setCommandOpen((prev) => !prev);
       }
 
-      // Only react to Escape when the command palette is the foreground UI to
-      // avoid colliding with future dialogs/sheets that also use Escape.
-      if (event.key === "Escape" && commandOpen) {
+      // SCA-479 (C-9): read from the ref so the listener sees the current
+      // commandOpen value, not the mount-time capture (which was always false
+      // and silently broke Escape — only backdrop click and the IconButton
+      // closed the palette before this fix).
+      if (event.key === "Escape" && commandOpenRef.current) {
         setCommandOpen(false);
       }
     };

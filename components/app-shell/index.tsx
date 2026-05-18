@@ -19,9 +19,16 @@ export function AppShell({ children, className, inspector, sidebar, topbar, ...p
       {sidebar}
       <div className="app-main">
         {topbar}
-        <div className="app-content">{children}</div>
+        {/*
+          SCA-476 (C-6): id="main" + tabIndex={-1} wires up the
+          .skip-to-content link in PrivateAppShell (href="#main"). WCAG 2.4.1
+          requires a bypass-blocks target for keyboard users; before this the
+          link was a dangling anchor. tabIndex={-1} lets focus land on the
+          <main> without making it a tab stop.
+        */}
+        <main className="app-content" id="main" tabIndex={-1}>{children}</main>
       </div>
-      {inspector ? <aside className="app-inspector">{inspector}</aside> : null}
+      {inspector ? <aside aria-label="Workspace inspector" className="app-inspector">{inspector}</aside> : null}
     </div>
   );
 }
