@@ -120,8 +120,12 @@ const defaultSuggestedPrompts = [
   },
 ];
 
+// SCA-523 (S-17): named limit so the per-evidence snippet length is one
+// editable knob rather than a magic 360 sprinkled through coach code.
+const MAX_EVIDENCE_SNIPPET_CHARS = 360;
+
 function clampSnippet(value: string) {
-  return value.replace(/\s+/g, " ").trim().slice(0, 360);
+  return value.replace(/\s+/g, " ").trim().slice(0, MAX_EVIDENCE_SNIPPET_CHARS);
 }
 
 function metricText(metrics: Record<string, number>) {

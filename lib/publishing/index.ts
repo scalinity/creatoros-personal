@@ -70,6 +70,17 @@ const PHASE = "15-publishing-state-machine-dry-run-calendar";
 const PHASE_17 = "17-x-write-publishing-adapter";
 const DRY_RUN_FAILURE_MARKER = "[dry-run-fail]";
 
+// SCA-523 (S-17): named policy thresholds previously hard-coded inline.
+// Promoting them to module-scope const so a) the policy is greppable,
+// b) the audit trail of changes is per-constant, and c) reviewers don't
+// have to recognize "0.72" / "0.86" / "280" / "270" / "500" as
+// load-bearing values.
+const X_POST_CHARACTER_LIMIT = 280;
+const X_POST_CHARACTER_CLAMP = 270; // soft-clamp used by clampPostText
+const DUPLICATE_SIMILARITY_THRESHOLD = 0.72; // jaccard >= this flags a near-duplicate match
+const HIGH_SIMILARITY_THRESHOLD = 0.86; // jaccard >= this marks the draft as high_similarity (blocking)
+const SANITIZED_ERROR_MESSAGE_LIMIT = 500; // characters of sanitized error text persisted to publishing_failures / metadata
+
 type PublishingDraftUpdatePayload = Database["public"]["Tables"]["publishing_drafts"]["Update"];
 
 type PublishingDraftCreateServiceInput = Partial<PublishingDraftCreateInput> & {
@@ -446,8 +457,8 @@ function riskCheckForDraft(draft: Pick<PublishingDraft, "contentType" | "quotePo
       // which Intl.Segmenter does NOT model. Owners with mostly CJK content
       // should still get the heads-up; for ASCII/emoji it's tight.
       const graphemeCount = countGraphemes(item);
-      if (graphemeCount > 280) {
-        warnings.push(`Item ${index + 1} is over 280 characters.`);
+      if (graphemeCount > X_POST_CHARACTER_LIMIT) {
+        warnings.push(`Item ${index + 1} is over ${X_POST_CHARACTER_LIMIT} characters.`);
         blocking = true;
       }
     });
@@ -473,7 +484,7 @@ async function runDraftGuardrails(admin: AdminContext, draft: PublishingDraft, e
     .map((comparison) => ({ id: comparison.id, score: 1, type: comparison.type } satisfies Record<string, Json>));
   const similarityMatches = comparisons
     .map((comparison) => ({ id: comparison.id, score: Number(jaccardSimilarity(text, comparison.text).toFixed(3)), type: comparison.type } satisfies Record<string, Json>))
-    .filter((match) => typeof match.score === "number" && match.score >= 0.72)
+    .filter((match) => typeof match.score === "number" && match.score >= DUPLICATE_SIMILARITY_THRESHOLD)
     .sort((left, right) => Number(right.score) - Number(left.score))
     .slice(0, 5);
   const highestSimilarity = similarityMatches[0]?.score;
@@ -490,7 +501,7 @@ async function runDraftGuardrails(admin: AdminContext, draft: PublishingDraft, e
       checked_at: nowIso(),
       highest_score: typeof highestSimilarity === "number" ? highestSimilarity : 0,
       matches: similarityMatches,
-      status: typeof highestSimilarity === "number" && highestSimilarity >= 0.86 ? "high_similarity" : "clear",
+      status: typeof highestSimilarity === "number" && highestSimilarity >= HIGH_SIMILARITY_THRESHOLD ? "high_similarity" : "clear",
     } satisfies Record<string, Json>,
   };
 }
@@ -661,8 +672,9 @@ function sliceGraphemes(value: string, limit: number) {
 
 function clampPostText(value: string) {
   const trimmed = value.trim();
-  if (countGraphemes(trimmed) <= 270) return trimmed;
-  return `${sliceGraphemes(trimmed, 267).trim()}...`;
+  if (countGraphemes(trimmed) <= X_POST_CHARACTER_CLAMP) return trimmed;
+  // Leave 3 graphemes of headroom for the trailing ellipsis.
+  return `${sliceGraphemes(trimmed, X_POST_CHARACTER_CLAMP - 3).trim()}...`;
 }
 
 async function loadGeneratedOutputSource(admin: AdminContext, sourceId: string) {
@@ -1869,7 +1881,7 @@ function failureDetailsForError(error: unknown, partialPosts: XCreatedPost[]): X
   if (partialPosts.length > 0) {
     return {
       failureType: "thread_partial_failure",
-      message: error instanceof Error ? error.message.slice(0, 500) : "Thread publishing partially failed.",
+      message: error instanceof Error ? error.message.slice(0, SANITIZED_ERROR_MESSAGE_LIMIT) : "Thread publishing partially failed.",
       providerErrorCode: "thread_partial_failure",
       rawErrorRedacted: { partial_post_ids: partialPosts.map((post) => post.id) },
       retryAfter: null,
@@ -1880,7 +1892,7 @@ function failureDetailsForError(error: unknown, partialPosts: XCreatedPost[]): X
   if (error instanceof XPublishingGuardError) {
     return {
       failureType: error.code,
-      message: error.message.slice(0, 500),
+      message: error.message.slice(0, SANITIZED_ERROR_MESSAGE_LIMIT),
       providerErrorCode: error.code,
       rawErrorRedacted: { code: error.code },
       retryAfter: error.retryAfter,
@@ -1891,7 +1903,7 @@ function failureDetailsForError(error: unknown, partialPosts: XCreatedPost[]): X
   if (error instanceof XApiError) {
     return {
       failureType: error.details.code,
-      message: error.message.slice(0, 500),
+      message: error.message.slice(0, SANITIZED_ERROR_MESSAGE_LIMIT),
       providerErrorCode: error.details.code,
       rawErrorRedacted: { code: error.details.code, status: error.details.status },
       retryAfter: error.details.rateLimitResetAt ?? null,
@@ -1901,7 +1913,7 @@ function failureDetailsForError(error: unknown, partialPosts: XCreatedPost[]): X
 
   return {
     failureType: "x_api_error",
-    message: error instanceof Error ? error.message.slice(0, 500) : "Unknown X publishing failure.",
+    message: error instanceof Error ? error.message.slice(0, SANITIZED_ERROR_MESSAGE_LIMIT) : "Unknown X publishing failure.",
     providerErrorCode: "x_api_error",
     rawErrorRedacted: {},
     retryAfter: null,
@@ -2071,7 +2083,7 @@ export async function runXPublishingJob(admin: AdminContext, input: PublishingDr
         } catch (reconciliationError) {
           return recordFailure({
             failureType: "local_reconciliation_failed",
-            message: reconciliationError instanceof Error ? reconciliationError.message.slice(0, 500) : "X publish succeeded partially, but local reconciliation failed.",
+            message: reconciliationError instanceof Error ? reconciliationError.message.slice(0, SANITIZED_ERROR_MESSAGE_LIMIT) : "X publish succeeded partially, but local reconciliation failed.",
             providerErrorCode: "local_reconciliation_failed",
             rawErrorRedacted: { platform_post_ids: createdPosts.map((post) => post.id) },
             retryAfter: null,
@@ -2119,7 +2131,7 @@ export async function runXPublishingJob(admin: AdminContext, input: PublishingDr
     } catch (error) {
       return recordFailure({
         failureType: "local_reconciliation_failed",
-        message: error instanceof Error ? error.message.slice(0, 500) : "X publish succeeded, but local reconciliation failed.",
+        message: error instanceof Error ? error.message.slice(0, SANITIZED_ERROR_MESSAGE_LIMIT) : "X publish succeeded, but local reconciliation failed.",
         providerErrorCode: "local_reconciliation_failed",
         rawErrorRedacted: { platform_post_ids: createdPosts.map((post) => post.id) },
         retryAfter: null,
@@ -2458,7 +2470,7 @@ export async function runScheduledPublishingExecutor(admin: AdminContext, option
           lock_token: null,
           locked_at: null,
           metadata: metadataWithPhase(PHASE_17, {
-            error: error instanceof Error ? error.message.slice(0, 500) : "unknown scheduled publish failure",
+            error: error instanceof Error ? error.message.slice(0, SANITIZED_ERROR_MESSAGE_LIMIT) : "unknown scheduled publish failure",
           }),
           status: "failed",
         })

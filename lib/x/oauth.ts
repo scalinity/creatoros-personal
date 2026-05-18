@@ -76,6 +76,13 @@ const X_TOKEN_ENDPOINT = "https://api.x.com/2/oauth2/token";
 const X_REVOKE_ENDPOINT = "https://api.x.com/2/oauth2/revoke";
 const TOKEN_REFRESH_WINDOW_MS = 5 * 60 * 1_000;
 const X_OAUTH_FETCH_TIMEOUT_MS = 30_000;
+// SCA-523 (S-17): X's OAuth2 token response usually includes expires_in.
+// When it's absent or unparsable we fall back to 2h — that matches the
+// access-token lifetime X documents in the public OAuth2 docs and is the
+// conservative choice (we'll attempt refresh earlier than necessary
+// rather than later).
+const OAUTH_EXPIRES_IN_FALLBACK_S = 7_200;
+const SANITIZED_OAUTH_ERROR_LIMIT = 500;
 
 // Defend the request handler against a hung X token endpoint. Without an
 // explicit timeout the fetch will pin a Vercel function for the platform max,
@@ -136,7 +143,7 @@ function tokenExpiry(expiresInSeconds: unknown) {
       : typeof expiresInSeconds === "string"
         ? Number(expiresInSeconds.trim())
         : NaN;
-  const seconds = Number.isFinite(numeric) && numeric > 0 ? numeric : 7_200;
+  const seconds = Number.isFinite(numeric) && numeric > 0 ? numeric : OAUTH_EXPIRES_IN_FALLBACK_S;
   return new Date(Date.now() + seconds * 1_000).toISOString();
 }
 
@@ -573,7 +580,7 @@ export async function refreshStoredXConnection(
 }
 
 export async function markXConnectionRevoked(admin: AdminContext, message: string, client: StoreClient = createSupabaseServiceRoleClient()) {
-  const sanitized = scrubXMessage(message).slice(0, 500);
+  const sanitized = scrubXMessage(message).slice(0, SANITIZED_OAUTH_ERROR_LIMIT);
   const { error } = await client
     .from("x_connections")
     .update({
@@ -654,7 +661,7 @@ function scrubXMessage(message: string) {
 }
 
 export async function markXConnectionDegraded(admin: AdminContext, message: string, client: StoreClient = createSupabaseServiceRoleClient()) {
-  const sanitized = scrubXMessage(message).slice(0, 500);
+  const sanitized = scrubXMessage(message).slice(0, SANITIZED_OAUTH_ERROR_LIMIT);
   const { error } = await client
     .from("x_connections")
     .update({
