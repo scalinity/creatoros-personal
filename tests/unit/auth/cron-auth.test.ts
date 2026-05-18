@@ -119,4 +119,24 @@ describe("requireCronAuth (SCA-505 / W-26)", () => {
     }
     vi.unstubAllEnvs();
   });
+
+  it("SCA-492 (W-13) regression: rejects with a 500 when CRON_SECRET matches but ADMIN_EMAILS is unset", async () => {
+    // ADMIN_EMAILS unset is the trigger for the "no fallback to is_admin"
+    // path — the prior implementation silently elevated the first
+    // is_admin=true profile to the cron actor. The current
+    // loadCronAdminContext throws, surfacing as a 500 with the generic
+    // internal_error code. The audit row records the throw via the
+    // console.error inside the route handler; we just assert the
+    // response shape here.
+    const secret = "expected-secret-very-long-1234567890";
+    vi.stubEnv("CRON_SECRET", secret);
+    vi.stubEnv("ADMIN_EMAILS", "");
+    const result = await requireCronAuth(
+      makeRequest({ authorization: `Bearer ${secret}` }),
+      { route: "cron:test" },
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.response.status).toBe(500);
+    vi.unstubAllEnvs();
+  });
 });
