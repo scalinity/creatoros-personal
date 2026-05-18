@@ -1987,6 +1987,190 @@ async function insertXPublishingFailure(admin: AdminContext, job: PublishingJobR
   return rowToFailure(data);
 }
 
+// SCA-485 (W-6): atomically claim a draft for publishing. The CAS ensures
+// only one concurrent caller proceeds to the external X write — combined
+// with the deterministic retry idempotency key and the partial unique
+// index on published_posts(publishing_draft_id), duplicates are blocked
+// at three independent layers.
+async function claimDraftForPublishing(admin: AdminContext, draft: PublishingDraft, options: XPublishingJobOptions): Promise<void> {
+  const allowedFromStates = options.jobType === "retry" ? ["failed"] : ["approved", "scheduled", "failed"];
+  const { data: claimed, error: claimError } = await admin.supabase
+    .from("publishing_drafts")
+    .update({ status: "publishing" })
+    .eq("id", draft.id)
+    .eq("user_id", admin.userId)
+    .in("status", allowedFromStates)
+    .select("id")
+    .maybeSingle();
+
+  if (claimError) {
+    throw new Error(`Failed to claim publishing draft: ${claimError.message}`);
+  }
+  if (!claimed) {
+    throw new XPublishingGuardError("status_conflict", "Publishing draft is not in a publishable state. Refresh and try again.");
+  }
+}
+
+// SCA-485 (W-6): top-level failure recorder. The prior implementation
+// closed over `createdPosts`/`requestPayload` and was the source of the
+// historical C-1/H-2 fixes — a closure could read stale post lists across
+// async boundaries. Taking them as explicit arguments makes the
+// dependency graph obvious at every call site.
+type RecordFailureContext = {
+  admin: AdminContext;
+  createdPosts: readonly XCreatedPost[];
+  draft: PublishingDraft;
+  job: PublishingJobRow;
+  mode: XPublishingMode;
+  options: XPublishingJobOptions;
+  publishedPost?: null | PublishedPost;
+  requestPayload: ReturnType<typeof xRequestPayloadForDraft>;
+};
+
+async function recordPublishingFailure(ctx: RecordFailureContext, details: XPublishFailureDetails): Promise<XPublishingJobResult> {
+  const { admin, createdPosts, draft, job, mode, options, publishedPost, requestPayload } = ctx;
+  const completedAt = publishNowIso(options);
+  const updatedJob = await updatePublishingJob(admin, job, {
+    completed_at: completedAt,
+    error: details.message,
+    error_code: details.failureType,
+    rate_limit_reset_at: details.retryAfter,
+    status: "failed",
+    x_response_payload: {
+      error: details.rawErrorRedacted,
+      partial_post_ids: createdPosts.map((post) => post.id),
+    } as Json,
+  });
+
+  if (options.scheduledPostId && details.retryable && details.retryAfter) {
+    await deferScheduledPublish(admin, draft, options.scheduledPostId, details.retryAfter, details.message);
+  } else {
+    await markDraftAndSchedule(admin, draft, "failed", options.scheduledPostId);
+  }
+
+  const failure = await insertXPublishingFailure(admin, job, draft, details);
+
+  return {
+    failure,
+    job: rowToJob(updatedJob),
+    mode,
+    payload: requestPayload,
+    publishedPost: publishedPost ?? null,
+  };
+}
+
+// SCA-485 (W-6): the external-write + local-reconciliation half of the
+// live publishing flow. Pulled out of runXPublishingJob so the outer
+// function reads as: validate → claim → publishAndReconcile → record
+// failure on throw. Returns either a success XPublishingJobResult or
+// throws (caller catches and records failure).
+type PublishAndReconcileContext = {
+  admin: AdminContext;
+  connection: DecryptedXConnection;
+  draft: PublishingDraft;
+  job: PublishingJobRow;
+  mode: XPublishingMode;
+  options: XPublishingJobOptions;
+  payloadHash: string;
+};
+
+type PublishAndReconcileResult = {
+  failure: null;
+  job: PublishingJobRow;
+  payload: ReturnType<typeof xRequestPayloadForDraft>;
+  publishedPost: null | PublishedPost;
+};
+
+async function publishAndReconcile(ctx: PublishAndReconcileContext): Promise<PublishAndReconcileResult | { failureDetails: XPublishFailureDetails; partial: { createdPosts: XCreatedPost[]; publishedPost: null | PublishedPost; requestPayload: ReturnType<typeof xRequestPayloadForDraft> }; thrown: true }> {
+  const { admin, connection, draft, job, options, payloadHash } = ctx;
+  const client = options.client ?? createLiveXPublishingClient(connection.accessToken);
+  const mediaIds = await resolveMediaIds(admin, draft, client, connection);
+  const requestPayload = xRequestPayloadForDraft(draft, connection, mediaIds);
+  await updatePublishingJob(admin, job, { x_request_payload: requestPayload });
+
+  let createdPosts: XCreatedPost[] = [];
+  let partialPublishedPost: null | PublishedPost = null;
+  try {
+    createdPosts = await publishDraftToX(draft, client, mediaIds);
+  } catch (error) {
+    if (error instanceof XThreadPartialFailure) {
+      createdPosts = error.createdPosts;
+    }
+
+    if (createdPosts.length > 0) {
+      try {
+        partialPublishedPost = await insertPublishedPost(admin, draft, job, connection, createdPosts, payloadHash, true);
+      } catch (reconciliationError) {
+        return {
+          failureDetails: {
+            failureType: "local_reconciliation_failed",
+            message: reconciliationError instanceof Error ? reconciliationError.message.slice(0, SANITIZED_ERROR_MESSAGE_LIMIT) : "X publish succeeded partially, but local reconciliation failed.",
+            providerErrorCode: "local_reconciliation_failed",
+            rawErrorRedacted: { platform_post_ids: createdPosts.map((post) => post.id) },
+            retryAfter: null,
+            retryable: false,
+          },
+          partial: { createdPosts, publishedPost: partialPublishedPost, requestPayload },
+          thrown: true,
+        };
+      }
+    }
+
+    return {
+      failureDetails: failureDetailsForError(error, createdPosts),
+      partial: { createdPosts, publishedPost: partialPublishedPost, requestPayload },
+      thrown: true,
+    };
+  }
+
+  try {
+    const publishedPost = await insertPublishedPost(admin, draft, job, connection, createdPosts, payloadHash, false);
+    const completedAt = publishNowIso(options);
+    const updatedJob = await updatePublishingJob(admin, job, {
+      completed_at: completedAt,
+      rate_limit_reset_at: createdPosts.find((post) => post.rateLimitResetAt)?.rateLimitResetAt ?? null,
+      status: "succeeded",
+      x_response_payload: { posts: createdPosts.map((post) => post.raw) } as Json,
+    });
+    await markDraftAndSchedule(admin, draft, "published", options.scheduledPostId);
+    await logAuditEvent({
+      actorEmail: admin.email,
+      eventType: "x_publish_succeeded",
+      metadata: {
+        job_id: updatedJob.id,
+        payload_hash: payloadHash,
+        phase: PHASE_17,
+        platform_post_ids: createdPosts.map((post) => post.id),
+      },
+      request: options.request ?? undefined,
+      success: true,
+      targetId: draft.id,
+      targetType: "publishing_draft",
+      userId: admin.userId,
+    });
+
+    return {
+      failure: null,
+      job: updatedJob,
+      payload: requestPayload,
+      publishedPost,
+    };
+  } catch (error) {
+    return {
+      failureDetails: {
+        failureType: "local_reconciliation_failed",
+        message: error instanceof Error ? error.message.slice(0, SANITIZED_ERROR_MESSAGE_LIMIT) : "X publish succeeded, but local reconciliation failed.",
+        providerErrorCode: "local_reconciliation_failed",
+        rawErrorRedacted: { platform_post_ids: createdPosts.map((post) => post.id) },
+        retryAfter: null,
+        retryable: false,
+      },
+      partial: { createdPosts, publishedPost: partialPublishedPost, requestPayload },
+      thrown: true,
+    };
+  }
+}
+
 export async function runXPublishingJob(admin: AdminContext, input: PublishingDraftDryRunServiceInput, options: XPublishingJobOptions = {}): Promise<XPublishingJobResult> {
   const mode = options.mode ?? "dry_run";
 
@@ -2026,144 +2210,38 @@ export async function runXPublishingJob(admin: AdminContext, input: PublishingDr
   assertApprovalPayload(draft, input.payloadHash ?? null, connection);
   assertXPublishingCapabilities(draft, connection);
 
-  // C-1: claim the draft atomically before any external work. Two concurrent
-  // retries (or a retry that races with a deferred-scheduled rerun) collide
-  // here so only one proceeds to publish. Combined with the deterministic
-  // retry idempotency key and the partial unique index on
-  // published_posts(publishing_draft_id), duplicates are blocked at three
-  // independent layers.
-  const allowedFromStates = options.jobType === "retry" ? ["failed"] : ["approved", "scheduled", "failed"];
-  const { data: claimed, error: claimError } = await admin.supabase
-    .from("publishing_drafts")
-    .update({ status: "publishing" })
-    .eq("id", draft.id)
-    .eq("user_id", admin.userId)
-    .in("status", allowedFromStates)
-    .select("id")
-    .maybeSingle();
-
-  if (claimError) {
-    throw new Error(`Failed to claim publishing draft: ${claimError.message}`);
-  }
-  if (!claimed) {
-    throw new XPublishingGuardError("status_conflict", "Publishing draft is not in a publishable state. Refresh and try again.");
-  }
+  // SCA-485 (W-6): claim is its own function; the lookup of allowed-from
+  // states + the CAS itself are no longer interleaved with the failure
+  // closure.
+  await claimDraftForPublishing(admin, draft, options);
 
   const initialPayload = xRequestPayloadForDraft(draft, connection);
   const job = await createLivePublishingJob(admin, draft, initialPayload, payloadHash, options);
-  let createdPosts: XCreatedPost[] = [];
-  let publishedPost: null | PublishedPost = null;
+
+  let createdPosts: readonly XCreatedPost[] = [];
   let requestPayload = initialPayload;
-
-  const recordFailure = async (details: XPublishFailureDetails) => {
-    const completedAt = publishNowIso(options);
-    const updatedJob = await updatePublishingJob(admin, job, {
-      completed_at: completedAt,
-      error: details.message,
-      error_code: details.failureType,
-      rate_limit_reset_at: details.retryAfter,
-      status: "failed",
-      x_response_payload: {
-        error: details.rawErrorRedacted,
-        partial_post_ids: createdPosts.map((post) => post.id),
-      } as Json,
-    });
-
-    if (options.scheduledPostId && details.retryable && details.retryAfter) {
-      await deferScheduledPublish(admin, draft, options.scheduledPostId, details.retryAfter, details.message);
-    } else {
-      await markDraftAndSchedule(admin, draft, "failed", options.scheduledPostId);
-    }
-
-    const failure = await insertXPublishingFailure(admin, job, draft, details);
-
-    return {
-      failure,
-      job: rowToJob(updatedJob),
-      mode,
-      payload: requestPayload,
-      publishedPost,
-    };
-  };
-
   try {
-    // SCA-520 (S-14): assertApprovalPayload + assertXPublishingCapabilities
-    // now run before the CAS claim above; no need to repeat here.
-    const client = options.client ?? createLiveXPublishingClient(connection.accessToken);
-    const mediaIds = await resolveMediaIds(admin, draft, client, connection);
-    requestPayload = xRequestPayloadForDraft(draft, connection, mediaIds);
-    await updatePublishingJob(admin, job, { x_request_payload: requestPayload });
-
-    try {
-      createdPosts = await publishDraftToX(draft, client, mediaIds);
-    } catch (error) {
-      if (error instanceof XThreadPartialFailure) {
-        createdPosts = error.createdPosts;
-      }
-
-      if (createdPosts.length > 0) {
-        try {
-          publishedPost = await insertPublishedPost(admin, draft, job, connection, createdPosts, payloadHash, true);
-        } catch (reconciliationError) {
-          return recordFailure({
-            failureType: "local_reconciliation_failed",
-            message: reconciliationError instanceof Error ? reconciliationError.message.slice(0, SANITIZED_ERROR_MESSAGE_LIMIT) : "X publish succeeded partially, but local reconciliation failed.",
-            providerErrorCode: "local_reconciliation_failed",
-            rawErrorRedacted: { platform_post_ids: createdPosts.map((post) => post.id) },
-            retryAfter: null,
-            retryable: false,
-          });
-        }
-      }
-
-      return recordFailure(failureDetailsForError(error, createdPosts));
+    const reconciled = await publishAndReconcile({ admin, connection, draft, job, mode, options, payloadHash });
+    if ("thrown" in reconciled) {
+      createdPosts = reconciled.partial.createdPosts;
+      requestPayload = reconciled.partial.requestPayload;
+      return recordPublishingFailure(
+        { admin, createdPosts, draft, job, mode, options, publishedPost: reconciled.partial.publishedPost, requestPayload },
+        reconciled.failureDetails,
+      );
     }
-
-    try {
-      publishedPost = await insertPublishedPost(admin, draft, job, connection, createdPosts, payloadHash, false);
-      const completedAt = publishNowIso(options);
-      const updatedJob = await updatePublishingJob(admin, job, {
-        completed_at: completedAt,
-        rate_limit_reset_at: createdPosts.find((post) => post.rateLimitResetAt)?.rateLimitResetAt ?? null,
-        status: "succeeded",
-        x_response_payload: { posts: createdPosts.map((post) => post.raw) } as Json,
-      });
-      await markDraftAndSchedule(admin, draft, "published", options.scheduledPostId);
-      await logAuditEvent({
-        actorEmail: admin.email,
-        eventType: "x_publish_succeeded",
-        metadata: {
-          job_id: updatedJob.id,
-          payload_hash: payloadHash,
-          phase: PHASE_17,
-          platform_post_ids: createdPosts.map((post) => post.id),
-        },
-        request: options.request ?? undefined,
-        success: true,
-        targetId: draft.id,
-        targetType: "publishing_draft",
-        userId: admin.userId,
-      });
-
-      return {
-        failure: null,
-        job: rowToJob(updatedJob),
-        mode,
-        payload: requestPayload,
-        publishedPost,
-      };
-    } catch (error) {
-      return recordFailure({
-        failureType: "local_reconciliation_failed",
-        message: error instanceof Error ? error.message.slice(0, SANITIZED_ERROR_MESSAGE_LIMIT) : "X publish succeeded, but local reconciliation failed.",
-        providerErrorCode: "local_reconciliation_failed",
-        rawErrorRedacted: { platform_post_ids: createdPosts.map((post) => post.id) },
-        retryAfter: null,
-        retryable: false,
-      });
-    }
+    return {
+      failure: reconciled.failure,
+      job: rowToJob(reconciled.job),
+      mode,
+      payload: reconciled.payload,
+      publishedPost: reconciled.publishedPost,
+    };
   } catch (error) {
-    return recordFailure(failureDetailsForError(error, createdPosts));
+    return recordPublishingFailure(
+      { admin, createdPosts, draft, job, mode, options, requestPayload },
+      failureDetailsForError(error, [...createdPosts]),
+    );
   }
 }
 
