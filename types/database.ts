@@ -748,6 +748,26 @@ export type Database = {
         Args: { p_now?: Timestamp };
         Returns: number;
       };
+      creatoros_replace_active_voice_profile: {
+        Args: {
+          p_blog_count_used: number;
+          p_common_phrases: Json;
+          p_cta_patterns: Json;
+          p_examples: Json;
+          p_formatting_habits: Json;
+          p_hook_patterns: Json;
+          p_metadata: Json;
+          p_post_count_used: number;
+          p_sentence_patterns: Json;
+          p_source_blog_ids: string[];
+          p_source_post_ids: string[];
+          p_summary: string;
+          p_tone: Nullable<string>;
+          p_topic_clusters: Json;
+          p_user_id: Uuid;
+        };
+        Returns: VoiceProfileRow;
+      };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;

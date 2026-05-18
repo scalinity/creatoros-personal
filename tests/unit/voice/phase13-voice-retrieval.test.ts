@@ -26,6 +26,8 @@ function createSupabaseMock(seedRows: Record<string, TableRow[]> = {}) {
   const rows: Record<string, TableRow[]> = Object.fromEntries(Object.entries(seedRows).map(([table, seeded]) => [table, seeded.map((row) => ({ ...row }))]));
   const updates: Record<string, TableRow[]> = {};
   const upserts: Record<string, TableRow[]> = {};
+  // SCA-472: track RPC invocations so tests can assert atomic flows.
+  const rpcCalls: Array<{ args: Record<string, unknown>; name: string }> = [];
   let idSequence = 0;
 
   function rowFor(table: string, payload: TableRow) {
@@ -111,6 +113,7 @@ function createSupabaseMock(seedRows: Record<string, TableRow[]> = {}) {
   return {
     inserts,
     rows,
+    rpcCalls,
     supabase: {
       from(table: string) {
         return {
@@ -145,6 +148,41 @@ function createSupabaseMock(seedRows: Record<string, TableRow[]> = {}) {
             return Promise.resolve({ data: payloads, error: null });
           },
         };
+      },
+      // SCA-472: minimal rpc stub that records the call and synthesizes the
+      // returned row from the inserted payload. Atomicity isn't simulated —
+      // the real RPC's invariant (no zero-active window) is enforced by the
+      // partial unique index in production; tests only verify the call shape.
+      rpc(name: string, args: Record<string, unknown>) {
+        rpcCalls.push({ args, name });
+        if (name === "creatoros_replace_active_voice_profile") {
+          const inserted: TableRow = {
+            blog_count_used: args.p_blog_count_used as number,
+            common_phrases: args.p_common_phrases,
+            cta_patterns: args.p_cta_patterns,
+            examples: args.p_examples,
+            formatting_habits: args.p_formatting_habits,
+            hook_patterns: args.p_hook_patterns,
+            is_active: true,
+            metadata: args.p_metadata,
+            post_count_used: args.p_post_count_used as number,
+            sentence_patterns: args.p_sentence_patterns,
+            source_blog_ids: args.p_source_blog_ids,
+            source_post_ids: args.p_source_post_ids,
+            summary: args.p_summary,
+            tone: args.p_tone,
+            topic_clusters: args.p_topic_clusters,
+            user_id: args.p_user_id,
+          };
+          const row = rowFor("voice_profiles", inserted);
+          inserts.voice_profiles = [...(inserts.voice_profiles ?? []), inserted];
+          rows.voice_profiles = (rows.voice_profiles ?? []).map((existing) =>
+            existing.user_id === args.p_user_id && existing.is_active ? { ...existing, is_active: false } : existing,
+          );
+          rows.voice_profiles = [...rows.voice_profiles, row];
+          return Promise.resolve({ data: row, error: null });
+        }
+        return Promise.resolve({ data: null, error: { message: `unhandled rpc ${name}` } });
       },
     },
     updates,
@@ -282,7 +320,8 @@ describe("Phase 13 voice modeling", () => {
   it("generates an active voice profile from owner posts and owner blogs only", async () => {
     vi.stubEnv("AI_PROVIDER", "mock");
     vi.stubEnv("AI_MODEL", "mock-model");
-    const { inserts, supabase, updates } = createSupabaseMock(seedVoiceSources());
+    const mockHandles = createSupabaseMock(seedVoiceSources());
+    const { inserts, supabase } = mockHandles;
     const admin = createAdminContext(supabase);
     const providerPayload = {
       ...voicePayload,
@@ -316,9 +355,9 @@ describe("Phase 13 voice modeling", () => {
     expect(insertedExamples[0]?.text).not.toContain("Ignore previous instructions");
     expect(inserts.voice_profiles?.[0]).toMatchObject({
       blog_count_used: 1,
-      // Insert order changed: deactivate-then-insert-as-active so there is
-      // never a moment with zero active profiles. The replacement row is
-      // inserted with is_active=true.
+      // SCA-472 (C-2): the deactivate + insert pair is now a single atomic
+      // RPC, so the synthesized row reflects is_active=true and there is no
+      // separate "deactivate" UPDATE on voice_profiles.
       is_active: true,
       post_count_used: 1,
       source_blog_ids: ["blog-owner-1"],
@@ -327,7 +366,18 @@ describe("Phase 13 voice modeling", () => {
     });
     expect(JSON.stringify(inserts.prompt_runs?.[0]?.input_redacted)).toContain("post-owner-1");
     expect(JSON.stringify(inserts.prompt_runs?.[0]?.input_redacted)).not.toContain("target account phrase");
-    expect(updates.voice_profiles?.[0]).toMatchObject({ payload: { is_active: false } });
+    // SCA-472 (C-2) regression: assert atomic RPC invocation with the right
+    // shape. The old deactivate-then-insert dance is gone; there should be
+    // exactly one creatoros_replace_active_voice_profile call.
+    const rpcCalls = mockHandles.rpcCalls.filter((call) => call.name === "creatoros_replace_active_voice_profile");
+    expect(rpcCalls).toHaveLength(1);
+    expect(rpcCalls[0]?.args).toMatchObject({
+      p_blog_count_used: 1,
+      p_post_count_used: 1,
+      p_source_blog_ids: ["blog-owner-1"],
+      p_source_post_ids: ["post-owner-1"],
+      p_user_id: "user-1",
+    });
     expect(auditMock.logAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: "voice_profile_generated" }));
   });
 

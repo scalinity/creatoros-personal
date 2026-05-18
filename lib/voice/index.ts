@@ -338,85 +338,55 @@ function promptInputForVoiceProfile(sources: VoiceSourceBundle) {
   };
 }
 
-async function deactivateCurrentProfiles(admin: AdminContext) {
-  const { data, error: readError } = await admin.supabase
-    .from("voice_profiles")
-    .select("id")
-    .eq("user_id", admin.userId)
-    .eq("is_active", true)
-    .is("deleted_at", null);
+// SCA-472 (C-2): atomic replace via creatoros_replace_active_voice_profile.
+// Deactivate-then-insert runs in a single transaction so concurrent readers
+// never see zero active profiles. The partial unique index
+// voice_profiles_active_uidx is the consistency anchor: if a racing writer
+// would produce two active rows, the INSERT fails and the entire txn rolls
+// back, leaving the prior active row intact.
+async function atomicReplaceActiveVoiceProfile(
+  admin: AdminContext,
+  sources: VoiceSourceBundle,
+  output: VoiceProfileOutput,
+  response: { model: string; provider: string },
+) {
+  const metadata = {
+    length_distribution: output.length_distribution,
+    model: response.model,
+    phase: PHASE,
+    prompt_id: PROMPT_ID,
+    prompt_version: PROMPT_ID,
+    provider: response.provider,
+  };
 
-  if (readError) {
-    throw new Error(`Failed to load current voice profiles: ${readError.message}`);
-  }
-
-  const activeIds = (data ?? []).map((row) => row.id).filter((id): id is string => typeof id === "string");
-
-  const { error } = await admin.supabase
-    .from("voice_profiles")
-    .update({ is_active: false })
-    .eq("user_id", admin.userId)
-    .eq("is_active", true)
-    .is("deleted_at", null);
-
-  if (error) {
-    throw new Error(`Failed to deactivate current voice profiles: ${error.message}`);
-  }
-
-  return activeIds;
-}
-
-async function reactivateProfiles(admin: AdminContext, profileIds: string[]) {
-  for (const profileId of profileIds) {
-    const { error } = await admin.supabase
-      .from("voice_profiles")
-      .update({ is_active: true })
-      .eq("user_id", admin.userId)
-      .eq("id", profileId)
-      .is("deleted_at", null);
-
-    if (error) {
-      console.error("Failed to restore previous voice profile after activation failure", { profileId, reason: error.message });
-    }
-  }
-}
-
-async function insertVoiceProfile(admin: AdminContext, sources: VoiceSourceBundle, output: VoiceProfileOutput, response: { model: string; provider: string }, options: { isActive: boolean } = { isActive: false }) {
-  const { data, error } = await admin.supabase
-    .from("voice_profiles")
-    .insert({
-      blog_count_used: sources.blogs.length,
-      common_phrases: output.common_phrases as Json,
-      cta_patterns: output.cta_patterns as Json,
-      examples: output.examples as unknown as Json,
-      formatting_habits: output.formatting_habits as unknown as Json,
-      hook_patterns: output.hook_patterns as Json,
-      is_active: options.isActive,
-      metadata: {
-        length_distribution: output.length_distribution,
-        model: response.model,
-        phase: PHASE,
-        prompt_id: PROMPT_ID,
-        prompt_version: PROMPT_ID,
-        provider: response.provider,
-      },
-      post_count_used: sources.posts.length,
-      sentence_patterns: output.sentence_patterns as Json,
-      source_blog_ids: sources.blogs.map((blog) => blog.id),
-      source_post_ids: sources.posts.map((post) => post.id),
-      summary: output.summary,
-      tone: output.tone,
-      topic_clusters: output.topic_clusters as Json,
-      user_id: admin.userId,
-    })
-    .select()
-    .single();
+  const { data, error } = await admin.supabase.rpc("creatoros_replace_active_voice_profile", {
+    p_blog_count_used: sources.blogs.length,
+    p_common_phrases: output.common_phrases as unknown as Json,
+    p_cta_patterns: output.cta_patterns as unknown as Json,
+    p_examples: output.examples as unknown as Json,
+    p_formatting_habits: output.formatting_habits as unknown as Json,
+    p_hook_patterns: output.hook_patterns as unknown as Json,
+    p_metadata: metadata as unknown as Json,
+    p_post_count_used: sources.posts.length,
+    p_sentence_patterns: output.sentence_patterns as unknown as Json,
+    p_source_blog_ids: sources.blogs.map((blog) => blog.id),
+    p_source_post_ids: sources.posts.map((post) => post.id),
+    p_summary: output.summary,
+    p_tone: output.tone,
+    p_topic_clusters: output.topic_clusters as unknown as Json,
+    p_user_id: admin.userId,
+  });
 
   if (error || !data) {
-    throw new Error(`Failed to persist voice profile: ${error?.message ?? "missing row"}`);
+    throw new Error(`Failed to atomically replace active voice profile: ${error?.message ?? "missing row"}`);
   }
 
-  return rowToVoiceProfile(data);
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row) {
+    throw new Error("Failed to atomically replace active voice profile: missing row");
+  }
+
+  return rowToVoiceProfile(row);
 }
 
 export async function generateVoiceProfile(admin: AdminContext, options: VoiceProfileRunOptions = {}) {
@@ -435,19 +405,12 @@ export async function generateVoiceProfile(admin: AdminContext, options: VoicePr
   });
   const output = sanitizeVoiceProfileOutput(sources, validateAiStructuredOutput(response.structured, voiceProfileOutputSchema));
 
-  // Activation order matters: deactivate prior profiles first, then insert the
-  // replacement with is_active=true so there is never a moment with zero or two
-  // active profiles. If insertion fails we restore the previous active set; we
-  // also never leak an orphaned inactive row from a failed activation step.
-  const previousActiveProfileIds = await deactivateCurrentProfiles(admin);
-
-  let profile;
-  try {
-    profile = await insertVoiceProfile(admin, sources, output, response, { isActive: true });
-  } catch (error) {
-    await reactivateProfiles(admin, previousActiveProfileIds);
-    throw error;
-  }
+  // SCA-472 (C-2): atomic single-transaction replacement. Closes the zero-active
+  // window the previous deactivate-then-insert flow allowed (especially during
+  // AI prompt latency that preceded deactivation in the old order). Replaces
+  // the silently-best-effort reactivateProfiles rollback with DB-level
+  // serialization guaranteed by the partial unique index.
+  const profile = await atomicReplaceActiveVoiceProfile(admin, sources, output, response);
 
   await logAuditEvent({
     actorEmail: admin.email,
