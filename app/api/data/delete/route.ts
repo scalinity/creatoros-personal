@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 
-import { redactAuditString } from "@/lib/audit/redaction";
+import { redactAuditString } from "@/lib/audit";
 import { requireAdminForRoute } from "@/lib/auth/admin";
 import { deleteOwnerData } from "@/lib/exports";
 import { createFixedWindowRateLimiter, rateLimitHeaders } from "@/lib/rate-limit";

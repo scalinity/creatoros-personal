@@ -15,6 +15,10 @@ const secretValuePatterns = [
   /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/,
   /\b(?:ya29\.|xox[baprs]-|cos_live_)[A-Za-z0-9._~+/-]{8,}\b/i,
   /\bpst_v1\$[A-Za-z0-9_-]{8,}\b/,
+  // SCA-521 (S-15): coverage gaps surfaced in the SA1 review.
+  /\bgithub_pat_[A-Za-z0-9_]{22,}\b/,
+  /\bglpat-[A-Za-z0-9\-_]{20,}\b/,
+  /\bxapp-[A-Za-z0-9-]{10,}\b/,
 ];
 const maxDepth = 6;
 const maxStringLength = 500;

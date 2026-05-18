@@ -114,10 +114,12 @@ export async function logAuditEvent(input: AuditEventInput) {
 
     return { ok: true as const };
   } catch (error) {
-    console.error("Failed to write audit event", {
-      eventType: input.eventType,
-      reason: error instanceof Error ? error.message : "unknown",
-    });
+    // SCA-481 (W-2): inline scrub (cannot import logSafeError from the barrel
+    // here because lib/audit/log-safe.ts imports redaction which is fine, but
+    // logger.ts is itself one of the things the barrel re-exports — keeping
+    // this direct to avoid the cycle).
+    const safeReason = error instanceof Error ? redactAuditString(error.message).slice(0, 500) : "unknown";
+    console.error("Failed to write audit event", { eventType: input.eventType, reason: safeReason });
 
     return { ok: false as const };
   }

@@ -2,6 +2,7 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 
+import { logSafeError } from "@/lib/audit";
 import { redactAuditMetadata, redactAuditString } from "@/lib/audit/redaction";
 import type { AdminContext } from "@/lib/auth/admin";
 import type { Json } from "@/types/database";
@@ -158,10 +159,9 @@ export async function createAiJob(admin: null | RunLoggerContext | undefined, in
 
     return { jobId: data.id, ok: true, persisted: true };
   } catch (error) {
-    console.error("Failed to persist AI job", {
-      jobType: input.jobType,
-      reason: error instanceof Error ? error.message : "unknown",
-    });
+    // SCA-481 (W-2): logSafeError scrubs upstream provider message before
+    // forwarding to the platform log stream.
+    logSafeError("Failed to persist AI job", error, { jobType: input.jobType });
 
     return { jobId: null, ok: false, persisted: false, reason: "database_error" };
   }
@@ -197,10 +197,7 @@ export async function completeAiJob(
 
     return { jobId: input.jobId, ok: true, persisted: true };
   } catch (error) {
-    console.error("Failed to complete AI job", {
-      jobId: input.jobId,
-      reason: error instanceof Error ? error.message : "unknown",
-    });
+    logSafeError("Failed to complete AI job", error, { jobId: input.jobId });
 
     return { jobId: input.jobId, ok: false, persisted: false, reason: "database_error" };
   }
@@ -274,10 +271,9 @@ export async function recordPromptRun(
       redacted,
     };
   } catch (error) {
-    console.error("Failed to persist prompt run", {
+    logSafeError("Failed to persist prompt run", error, {
       promptName: input.promptName,
       promptVersion: input.promptVersion,
-      reason: error instanceof Error ? error.message : "unknown",
     });
 
     return {

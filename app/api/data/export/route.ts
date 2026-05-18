@@ -4,7 +4,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 
 import { logAuditEvent } from "@/lib/audit";
-import { redactAuditString } from "@/lib/audit/redaction";
+import { redactAuditString } from "@/lib/audit";
 import { requireAdminForRoute } from "@/lib/auth/admin";
 import { buildDataExportCsv, createDataExportArchive } from "@/lib/exports";
 import { createFixedWindowRateLimiter, rateLimitHeaders } from "@/lib/rate-limit";

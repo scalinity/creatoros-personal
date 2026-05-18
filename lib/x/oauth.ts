@@ -4,7 +4,7 @@ import { createHash, randomBytes } from "node:crypto";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { logAuditEvent } from "@/lib/audit";
+import { logAuditEvent, logSafeError } from "@/lib/audit";
 import type { AdminContext } from "@/lib/auth/admin";
 import { createSupabaseServiceRoleClient } from "@/lib/db/service-role";
 import { decryptToken, encryptToken } from "@/lib/security/encryption";
@@ -664,7 +664,8 @@ export async function disconnectXConnection(
     }
   } catch (error) {
     // Log but don't abort: we still want to wipe the local row on hard failure.
-    console.error("X disconnect: revoke step failed", { reason: error instanceof Error ? error.message : "unknown" });
+    // SCA-481 (W-2): scrub upstream X error string before it lands on stdout.
+    logSafeError("X disconnect: revoke step failed", error);
   }
 
   const { data, error } = await client

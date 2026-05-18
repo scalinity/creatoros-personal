@@ -4,7 +4,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
-import { redactAuditString } from "@/lib/audit/redaction";
+import { redactAuditString } from "@/lib/audit";
 import { requireAdmin } from "@/lib/auth/admin";
 import { rethrowIfRedirect } from "@/lib/server-only/action-redirect";
 import { deleteOwnerData } from "@/lib/exports";

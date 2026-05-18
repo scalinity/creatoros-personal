@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-import { logAuditEvent } from "@/lib/audit";
+import { logAuditEvent, logSafeError } from "@/lib/audit";
 import { requireAdminForRoute } from "@/lib/auth/admin";
 import { createFixedWindowRateLimiter, rateLimitHeaders } from "@/lib/rate-limit";
 import { createLiveXApiClient } from "@/lib/x/client";
@@ -84,7 +84,8 @@ export async function GET(request: NextRequest) {
   try {
     stored = await consumeOAuthState(parsed.data.state, guard.admin.userId);
   } catch (error) {
-    console.error("X OAuth state consume failed", { reason: error instanceof Error ? error.message : "unknown" });
+    // SCA-481 (W-2): scrub before forwarding to platform log stream.
+    logSafeError("X OAuth state consume failed", error);
     await logAuditEvent({
       actorEmail: guard.admin.email,
       error: "state_consume_failed",
@@ -145,7 +146,7 @@ export async function GET(request: NextRequest) {
     return redirectWithNotice(request, returnTo, connection.status === "connected" ? "x_connected" : "x_connect_degraded", headers);
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown X OAuth callback failure";
-    console.error("X OAuth callback failed", { reason: message });
+    logSafeError("X OAuth callback failed", error);
     await logAuditEvent({
       actorEmail: guard.admin.email,
       error: message.slice(0, 500),

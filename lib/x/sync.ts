@@ -2,7 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { logAuditEvent } from "@/lib/audit";
+import { logAuditEvent, logSafeError } from "@/lib/audit";
 import type { AdminContext } from "@/lib/auth/admin";
 import { createSupabaseServiceRoleClient } from "@/lib/db/service-role";
 import type { Database, Json, PostRow } from "@/types/database";
@@ -425,10 +425,9 @@ export async function runXReadSync(admin: AdminContext, input: XReadSyncInput, o
         }
       } catch (error) {
         accumulator.failed += 1;
-        console.error("Failed to persist X sync post", {
-          platformPostId: post.id,
-          reason: safeError(error),
-        });
+        // SCA-481 (W-2): safeError already scrubs token-shaped substrings;
+        // logSafeError adds the broader redaction pass for any provider noise.
+        logSafeError("Failed to persist X sync post", error, { platformPostId: post.id });
       }
     }
 
@@ -477,9 +476,7 @@ export async function runXReadSync(admin: AdminContext, input: XReadSyncInput, o
       try {
         await markXConnectionDegraded(admin, errorMessage, options.serviceClient ?? createSupabaseServiceRoleClient());
       } catch (degradeError) {
-        console.error("Failed to mark X connection degraded after sync failure", {
-          reason: safeError(degradeError),
-        });
+        logSafeError("Failed to mark X connection degraded after sync failure", degradeError);
       }
     }
 
