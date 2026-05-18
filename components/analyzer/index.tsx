@@ -6,6 +6,7 @@ import {
   AssumptionFlag,
   Badge,
   Card,
+  Checkbox,
   EmptyState,
   MetricBlock,
   RewriteCard,
@@ -70,14 +71,7 @@ function noticeTone(notice?: string) {
 }
 
 function checkbox(name: string, label: string, defaultChecked = false) {
-  return (
-    <label className="checkbox-row">
-      <input name={name} type="hidden" value="false" />
-      <input className="checkbox-native" defaultChecked={defaultChecked} name={name} type="checkbox" value="true" />
-      <span aria-hidden="true" className="checkbox-box" />
-      <span className="checkbox-label">{label}</span>
-    </label>
-  );
+  return <Checkbox defaultChecked={defaultChecked} defaultFalse label={label} name={name} />;
 }
 
 function RecentReports({ reports, selectedId }: { reports: AlgoAnalysisReport[]; selectedId?: string }) {

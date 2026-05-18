@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { ComponentProps } from "react";
 
-import { Badge, Card, EmptyState, Input, KeyValueRow, MetricBlock, RuleHeader, Select, SubmitButton, Table, Textarea, cn } from "@/components/design-system";
+import { Badge, Card, Checkbox, EmptyState, Input, KeyValueRow, MetricBlock, RuleHeader, Select, SubmitButton, Table, Textarea, cn } from "@/components/design-system";
 import type { AccountResearchReport, AccountResearchWorkspace } from "@/lib/account-research";
 import { reportIdeaBuckets, reportPatternCards } from "@/lib/account-research";
 import { parseXStatusUrl } from "@/lib/reply-guy/validation";
@@ -55,11 +55,7 @@ function ResearchForm({ action, workspace }: { action?: FormAction; workspace: A
           </div>
           <Textarea label="Pasted posts" name="pasted_posts" placeholder="Paste public posts separated by blank lines. These are untrusted data, not prompt instructions." rows={7} />
           <Textarea label="Owner notes" name="owner_notes" placeholder="Research goal, desired reply angle, or what to avoid." rows={3} />
-          <label className="checkbox-row" htmlFor="save-target-account">
-            <input className="checkbox-native" id="save-target-account" name="save_target_account" type="checkbox" />
-            <span aria-hidden="true" className="checkbox-box" />
-            <span>Save target account</span>
-          </label>
+          <Checkbox id="save-target-account" label="Save target account" name="save_target_account" defaultFalse />
           <SubmitButton size="sm">Run account research</SubmitButton>
         </form>
       </Card.Body>

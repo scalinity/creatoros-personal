@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   Badge,
   Card,
+  Checkbox,
   EmptyState,
   Input,
   KeyValueRow,
@@ -178,24 +179,9 @@ function ManualPostForm({ action }: { action?: FormAction }) {
         <MetricInput defaultValue={0} label="Bookmarks" name="bookmark_count" />
       </div>
       <div className="post-history-checks">
-        <label className="checkbox-row">
-          <input name="is_owner_post" type="hidden" value="false" />
-          <input className="checkbox-native" defaultChecked name="is_owner_post" type="checkbox" value="true" />
-          <span className="checkbox-box" aria-hidden="true" />
-          <span className="checkbox-label">Owner post</span>
-        </label>
-        <label className="checkbox-row">
-          <input name="has_media" type="hidden" value="false" />
-          <input className="checkbox-native" name="has_media" type="checkbox" value="true" />
-          <span className="checkbox-box" aria-hidden="true" />
-          <span className="checkbox-label">Contains media</span>
-        </label>
-        <label className="checkbox-row">
-          <input name="has_link" type="hidden" value="false" />
-          <input className="checkbox-native" name="has_link" type="checkbox" value="true" />
-          <span className="checkbox-box" aria-hidden="true" />
-          <span className="checkbox-label">Contains link</span>
-        </label>
+        <Checkbox defaultChecked defaultFalse label="Owner post" name="is_owner_post" />
+        <Checkbox defaultFalse label="Contains media" name="has_media" />
+        <Checkbox defaultFalse label="Contains link" name="has_link" />
       </div>
       <SubmitButton size="sm">Save post</SubmitButton>
     </form>

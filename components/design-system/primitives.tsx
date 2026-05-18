@@ -28,15 +28,24 @@ import { cn } from "./index";
 // ---------- Checkbox (replaces raw <input type="checkbox">) ----------
 
 export type CheckboxProps = Omit<InputHTMLAttributes<HTMLInputElement>, "type" | "size"> & {
+  // SCA-504 (W-25): when set, renders a hidden `<input type="hidden" value="">`
+  // alongside the checkbox so a form submitted with the checkbox UNCHECKED
+  // still includes the field name in the FormData (as ""). Without this,
+  // server actions receive the field as `null` and can't distinguish
+  // "user unchecked it" from "user never saw it". The pattern was
+  // reimplemented inline across 5+ components; centralizing it here so
+  // every checkbox-in-form site gets it for free.
+  defaultFalse?: boolean;
   label?: ReactNode;
 };
 
-export function Checkbox({ checked, className, id, label, name, ...props }: CheckboxProps) {
+export function Checkbox({ checked, className, defaultFalse = false, id, label, name, ...props }: CheckboxProps) {
   const generatedId = useId();
   const inputId = id ?? (name ? `checkbox-${name}` : generatedId);
 
   return (
     <label className={cn("checkbox-row", className)} htmlFor={inputId}>
+      {defaultFalse && name ? <input name={name} type="hidden" value="" /> : null}
       <input
         aria-checked={Boolean(checked)}
         checked={checked}
@@ -44,6 +53,7 @@ export function Checkbox({ checked, className, id, label, name, ...props }: Chec
         id={inputId}
         name={name}
         type="checkbox"
+        value="true"
         {...props}
       />
       <span aria-hidden="true" className="checkbox-box">
@@ -226,19 +236,74 @@ export type DialogProps = {
   open: boolean;
 };
 
-export function Dialog({ ariaDescribedBy, ariaLabel, ariaLabelledBy, children, initialFocusRef, onClose, open }: DialogProps) {
-  const dialogRef = useRef<HTMLDivElement>(null);
+// SCA-503 (W-24): shared Dialog/Sheet chrome — focus restoration + Escape +
+// Tab focus-trap. Prior implementation gave Dialog the Escape binding but
+// no trap, so Tab escaped the modal onto background-page widgets and back
+// in via the URL bar. Sheet had neither, missing aria-modal entirely.
+// WAI-ARIA dialog contract requires: focus enters on open, Tab cycles
+// inside the dialog, Escape closes, focus returns to the previously-
+// focused element on close.
 
+const FOCUSABLE_SELECTOR = [
+  "a[href]",
+  "area[href]",
+  "button:not([disabled])",
+  "input:not([disabled]):not([type=\"hidden\"])",
+  "select:not([disabled])",
+  "textarea:not([disabled])",
+  "iframe",
+  "object",
+  "embed",
+  "[contenteditable=\"true\"]",
+  "[tabindex]:not([tabindex^=\"-\"])",
+].join(",");
+
+function focusableTargets(container: HTMLElement): HTMLElement[] {
+  return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
+    (el) => !el.hasAttribute("disabled") && el.tabIndex !== -1 && !el.getAttribute("aria-hidden"),
+  );
+}
+
+function useDialogChrome(
+  open: boolean,
+  onClose: () => void,
+  initialFocusRef: React.RefObject<HTMLElement | null> | undefined,
+  containerRef: React.RefObject<HTMLElement | null>,
+) {
   useEffect(() => {
     if (!open) return;
     const previouslyFocused = document.activeElement as HTMLElement | null;
-    const target = initialFocusRef?.current ?? dialogRef.current;
+    const target = initialFocusRef?.current ?? containerRef.current;
     target?.focus({ preventScroll: true });
 
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
         onClose();
+        return;
+      }
+      if (event.key === "Tab" && containerRef.current) {
+        const targets = focusableTargets(containerRef.current);
+        if (targets.length === 0) {
+          event.preventDefault();
+          containerRef.current.focus({ preventScroll: true });
+          return;
+        }
+        const first = targets[0];
+        const last = targets[targets.length - 1];
+        if (!first || !last) return;
+        const active = document.activeElement as HTMLElement | null;
+        if (event.shiftKey && active === first) {
+          event.preventDefault();
+          last.focus({ preventScroll: true });
+        } else if (!event.shiftKey && active === last) {
+          event.preventDefault();
+          first.focus({ preventScroll: true });
+        } else if (active && containerRef.current && !containerRef.current.contains(active)) {
+          // Background got focus somehow (e.g. extension); pull back into the dialog.
+          event.preventDefault();
+          first.focus({ preventScroll: true });
+        }
       }
     };
     document.addEventListener("keydown", onKey);
@@ -246,7 +311,12 @@ export function Dialog({ ariaDescribedBy, ariaLabel, ariaLabelledBy, children, i
       document.removeEventListener("keydown", onKey);
       previouslyFocused?.focus({ preventScroll: true });
     };
-  }, [open, onClose, initialFocusRef]);
+  }, [open, onClose, initialFocusRef, containerRef]);
+}
+
+export function Dialog({ ariaDescribedBy, ariaLabel, ariaLabelledBy, children, initialFocusRef, onClose, open }: DialogProps) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useDialogChrome(open, onClose, initialFocusRef, dialogRef);
 
   if (!open) return null;
 
@@ -275,17 +345,29 @@ export type SheetProps = DialogProps & {
   side?: "left" | "right";
 };
 
-export function Sheet({ children, side = "right", ...dialogProps }: SheetProps) {
-  if (!dialogProps.open) return null;
+export function Sheet({ children, side = "right", ariaDescribedBy, ariaLabel, ariaLabelledBy, initialFocusRef, onClose, open }: SheetProps) {
+  const sheetRef = useRef<HTMLElement>(null);
+  // SCA-503 (W-24): Sheet now shares useDialogChrome with Dialog (focus
+  // trap + restoration + Escape) and gains the aria-modal="true" attribute
+  // that the WAI-ARIA dialog contract requires. Prior Sheet had none of
+  // these — it was a styled <aside> with role="dialog" and an onClick
+  // backdrop.
+  useDialogChrome(open, onClose, initialFocusRef, sheetRef);
+
+  if (!open) return null;
 
   return (
-    <div className="sheet-backdrop" onClick={dialogProps.onClose} role="presentation">
+    <div className="sheet-backdrop" onClick={onClose} role="presentation">
       <aside
-        aria-label={dialogProps.ariaLabel}
-        aria-labelledby={dialogProps.ariaLabelledBy}
+        aria-describedby={ariaDescribedBy}
+        aria-label={ariaLabel}
+        aria-labelledby={ariaLabelledBy}
+        aria-modal="true"
         className={cn("sheet", side === "left" ? "sheet-left" : "sheet-right")}
         onClick={(event) => event.stopPropagation()}
+        ref={sheetRef}
         role="dialog"
+        tabIndex={-1}
       >
         {children}
       </aside>

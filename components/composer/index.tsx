@@ -1,7 +1,7 @@
 import type { ComponentProps, ReactNode } from "react";
 import Link from "next/link";
 
-import { Badge, Card, EmptyState, Input, KeyValueRow, MetricBlock, RuleHeader, Select, SubmitButton, Textarea, cn } from "@/components/design-system";
+import { Badge, Card, Checkbox, EmptyState, Input, KeyValueRow, MetricBlock, RuleHeader, Select, SubmitButton, Textarea, cn } from "@/components/design-system";
 import type { ComposerFilters, ComposerIdea, ComposerOutput } from "@/lib/content";
 
 type FormAction = ComponentProps<"form">["action"];
@@ -114,14 +114,7 @@ function TagList({ tags }: { tags: string[] }) {
 }
 
 function checkbox(name: string, label: ReactNode, defaultChecked?: boolean) {
-  return (
-    <label className="checkbox-row">
-      <input name={name} type="hidden" value="false" />
-      <input className="checkbox-native" defaultChecked={defaultChecked} name={name} type="checkbox" value="true" />
-      <span className="checkbox-box" aria-hidden="true" />
-      <span className="checkbox-label">{label}</span>
-    </label>
-  );
+  return <Checkbox defaultChecked={defaultChecked} defaultFalse label={label} name={name} />;
 }
 
 function IdeaFilters({ filters }: { filters: ComposerFilters }) {

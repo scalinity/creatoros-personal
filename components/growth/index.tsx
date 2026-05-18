@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { ComponentProps } from "react";
 
-import { AssumptionFlag, Badge, Card, EmptyState, Input, KeyValueRow, LinkButton, MetricBlock, RuleHeader, ScoreGauge, Select, SubmitButton, Table, Textarea, cn } from "@/components/design-system";
+import { AssumptionFlag, Badge, Card, Checkbox, EmptyState, Input, KeyValueRow, LinkButton, MetricBlock, RuleHeader, ScoreGauge, Select, SubmitButton, Table, Textarea, cn } from "@/components/design-system";
 import type { Campaign, CampaignItem, Experiment, GrowthReview, GrowthWorkspace, ProfileAudit } from "@/lib/growth";
 
 export type FormAction = ComponentProps<"form">["action"];
@@ -140,11 +140,7 @@ function PillarForm({ action }: { action?: FormAction }) {
           </div>
           <Textarea label="Description" name="description" rows={3} />
           <Textarea helper="Comma or line separated." label="Examples" name="examples" rows={3} />
-          <label className="checkbox-row" htmlFor="pillar-active">
-            <input className="checkbox-native" defaultChecked id="pillar-active" name="active" type="checkbox" />
-            <span aria-hidden="true" className="checkbox-box" />
-            <span>Active</span>
-          </label>
+          <Checkbox defaultChecked id="pillar-active" label="Active" name="active" />
           <SubmitButton size="sm">Save pillar</SubmitButton>
         </form>
       </Card.Body>
