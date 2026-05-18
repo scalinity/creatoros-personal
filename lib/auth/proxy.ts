@@ -77,6 +77,14 @@ export async function updateSupabaseSession(request: NextRequest) {
     return redirect(request, `/login?${params.toString()}`);
   }
 
+  // SCA-491 (W-12): defense-in-depth — page-level requireAdmin() still catches
+  // this at the RSC boundary, but the proxy is the intended first gate.
+  // Authenticated but non-allowlisted users hitting any private path now get
+  // bounced to /login?error=not_allowlisted instead of falling through.
+  if (isPrivateAppPath(pathname) && user && !isAdmin) {
+    return redirect(request, "/login?error=not_allowlisted");
+  }
+
   return response;
 }
 
