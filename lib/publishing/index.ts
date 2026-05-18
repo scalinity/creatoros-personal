@@ -1221,7 +1221,20 @@ export async function runDryRunPublishingJob(admin: AdminContext, input: Publish
 
   let failure: null | PublishingFailure = null;
   if (failed) {
-    failure = await insertPublishingFailure(admin, jobRow, draft, "Dry run failed before external write.");
+    try {
+      failure = await insertPublishingFailure(admin, jobRow, draft, "Dry run failed before external write.");
+    } catch (failureError) {
+      // SCA-483 (W-4): without cleanup, the publishing_jobs row sits in status
+      // 'failed' with no matching publishing_failures row. retryPublishingJob
+      // then throws "Publishing failure not found for retry" and the draft is
+      // unrecoverable via UI. Compensate by deleting the orphan job row before
+      // surfacing the original error.
+      const cleanup = await admin.supabase.from("publishing_jobs").delete().eq("id", jobRow.id).eq("user_id", admin.userId);
+      if (cleanup.error) {
+        console.error("runDryRunPublishingJob: failed to compensate orphan job row", { jobId: jobRow.id, reason: cleanup.error.message });
+      }
+      throw failureError;
+    }
   } else {
     await logAuditEvent({
       actorEmail: admin.email,

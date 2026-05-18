@@ -825,9 +825,27 @@ function e2eUser() {
   } as User;
 }
 
+// SCA-490 (W-11): Host header is attacker-controllable, so it cannot prove
+// the request is loopback. Reject as soon as any proxy header is present,
+// since loopback connections cannot traverse a proxy. The remaining env
+// gates (NODE_ENV !== 'production', !VERCEL_ENV, NEXT_PUBLIC_APP_URL loopback,
+// and the long random secret) make this hard to reach in practice, but
+// closing the Host-spoof path removes the last single-header exploit vector.
+const PROXY_HEADERS = ["x-forwarded-for", "x-forwarded-host", "x-real-ip", "cf-connecting-ip", "true-client-ip"] as const;
+
+function requestCrossedProxy(getHeader: (name: string) => null | string) {
+  return PROXY_HEADERS.some((name) => {
+    const value = getHeader(name);
+    return Boolean(value && value.trim());
+  });
+}
+
 function requestHasE2eAuth(request: NextRequest) {
   const secret = e2eAuthSecret();
-  if (!secret || !isLoopbackHost(request.nextUrl.host)) return false;
+  if (!secret) return false;
+  if (!isLoopbackHost(request.nextUrl.host)) return false;
+  // Any proxy header → not actually loopback; refuse the bypass.
+  if (requestCrossedProxy((name) => request.headers.get(name))) return false;
 
   return request.headers.get(E2E_AUTH_HEADER) === secret || request.cookies.get(E2E_AUTH_COOKIE)?.value === secret;
 }
@@ -839,6 +857,7 @@ async function cookiesHaveE2eAuth() {
   try {
     const headerStore = await headers();
     if (!isLoopbackHost(headerStore.get("host"))) return false;
+    if (requestCrossedProxy((name) => headerStore.get(name))) return false;
 
     const cookieStore = await cookies();
     return cookieStore.get(E2E_AUTH_COOKIE)?.value === secret;
