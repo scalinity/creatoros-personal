@@ -53,9 +53,23 @@ function createSupabaseMock(seedRows: Record<string, TableRow[]> = {}) {
 
   function selectChain(table: string) {
     const filters: SelectFilter[] = [];
+    // SCA-499 (W-20): in-clause holder so the bulk existence lookup
+    // (`select … in('platform_post_id', ids)`) works against the mock.
+    let inFilter: null | { key: string; values: unknown[] } = null;
+    const applyAllFilters = () => {
+      const rowsForTable = (rows[table] ?? []).filter((row) =>
+        filters.every((filter) => row[filter.key] === filter.value),
+      );
+      if (!inFilter) return rowsForTable;
+      return rowsForTable.filter((row) => inFilter!.values.includes(row[inFilter!.key]));
+    };
     const chain = {
       eq(key: string, value: unknown) {
         filters.push({ key, op: "eq", value });
+        return chain;
+      },
+      in(key: string, values: unknown[]) {
+        inFilter = { key, values };
         return chain;
       },
       is(key: string, value: unknown) {
@@ -63,23 +77,23 @@ function createSupabaseMock(seedRows: Record<string, TableRow[]> = {}) {
         return chain;
       },
       limit(count: number) {
-        return Promise.resolve({ data: filteredRows(table, filters).slice(0, count), error: null });
+        return Promise.resolve({ data: applyAllFilters().slice(0, count), error: null });
       },
       maybeSingle() {
-        return Promise.resolve({ data: filteredRows(table, filters)[0] ?? null, error: null });
+        return Promise.resolve({ data: applyAllFilters()[0] ?? null, error: null });
       },
       order() {
         return chain;
       },
       single() {
-        const data = filteredRows(table, filters)[0] ?? null;
+        const data = applyAllFilters()[0] ?? null;
         return Promise.resolve({ data, error: data ? null : { message: "not found" } });
       },
       then<TResult1 = { data: TableRow[]; error: null }, TResult2 = never>(
         onfulfilled?: ((value: { data: TableRow[]; error: null }) => TResult1 | PromiseLike<TResult1>) | null,
         onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
       ) {
-        return Promise.resolve({ data: filteredRows(table, filters), error: null }).then(onfulfilled, onrejected);
+        return Promise.resolve({ data: applyAllFilters(), error: null }).then(onfulfilled, onrejected);
       },
     };
 
@@ -138,9 +152,12 @@ function createSupabaseMock(seedRows: Record<string, TableRow[]> = {}) {
     supabase: {
       from(table: string) {
         return {
-          insert(payload: TableRow) {
-            inserts[table] = [...(inserts[table] ?? []), payload];
-            return mutationResult(table, payload);
+          insert(payload: TableRow | TableRow[]) {
+            // SCA-499 (W-20): bulk inserts pass an array; flatten so test
+            // assertions on per-row counts still work.
+            const payloads = Array.isArray(payload) ? (payload as TableRow[]) : [payload];
+            inserts[table] = [...(inserts[table] ?? []), ...payloads];
+            return mutationResult(table, payloads[0] ?? {});
           },
           select() {
             return selectChain(table);

@@ -180,9 +180,12 @@ export function createSupabaseMock(
     supabase: {
       from(table: string) {
         return {
-          insert(payload: SupabaseMockRow) {
-            inserts[table] = [...(inserts[table] ?? []), payload];
-            return mutationResult(table, payload);
+          insert(payload: SupabaseMockRow | SupabaseMockRow[]) {
+            // SCA-499 (W-20): bulk inserts pass an array; flatten so
+            // assertions on per-row counts still work.
+            const payloads = Array.isArray(payload) ? payload : [payload];
+            inserts[table] = [...(inserts[table] ?? []), ...payloads];
+            return mutationResult(table, payloads[0] ?? {});
           },
           select() {
             return selectChain(table);

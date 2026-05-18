@@ -276,24 +276,37 @@ async function finalizeSyncJob(admin: AdminContext, jobId: string, accumulator: 
   }
 }
 
-async function findExistingPost(admin: AdminContext, post: XSyncPost) {
+// SCA-499 (W-20): batch existence lookup. For a 25-post cron pull this
+// replaces 25 serial round-trips with ONE `select ... in (...)`. The
+// returned Map is keyed by platform_post_id so the per-post loop is a
+// pure in-memory lookup.
+async function findExistingPostsByPlatformId(
+  admin: AdminContext,
+  platformPostIds: readonly string[],
+): Promise<Map<string, PostRow>> {
+  if (platformPostIds.length === 0) return new Map();
   const { data, error } = await admin.supabase
     .from("posts")
     .select("*")
     .eq("user_id", admin.userId)
     .eq("platform", "x")
-    .eq("platform_post_id", post.id)
-    .maybeSingle();
+    .in("platform_post_id", platformPostIds as string[]);
 
   if (error) {
-    throw new Error(`Failed to find existing X post: ${error.message}`);
+    throw new Error(`Failed to load existing X posts: ${error.message}`);
   }
 
-  return data as null | PostRow;
+  const map = new Map<string, PostRow>();
+  for (const row of (data ?? []) as PostRow[]) {
+    if (row.platform_post_id) map.set(row.platform_post_id, row);
+  }
+  return map;
 }
 
-async function insertSnapshot(admin: AdminContext, postId: string, post: XSyncPost) {
-  const { error } = await admin.supabase.from("post_metric_snapshots").insert({
+// SCA-499 (W-20): factored out so the snapshot insert can be batched
+// across the whole sync rather than happening one row at a time.
+function buildSnapshotPayload(admin: AdminContext, postId: string, post: XSyncPost) {
+  return {
     ...dbMetrics(post),
     engagement_rate: engagementRate(post),
     heuristic_score: null,
@@ -305,25 +318,20 @@ async function insertSnapshot(admin: AdminContext, postId: string, post: XSyncPo
     source: "x_api",
     user_id: admin.userId,
     virality_score: null,
-  });
-
-  if (error) {
-    throw new Error(`Failed to insert X metric snapshot: ${error.message}`);
-  }
+  };
 }
 
-async function insertPost(admin: AdminContext, profile: XAuthenticatedUser, post: XSyncPost) {
+async function insertPostAndReturnRow(admin: AdminContext, profile: XAuthenticatedUser, post: XSyncPost): Promise<PostRow> {
   const payload = payloadForPost(admin, profile, post);
   const { data, error } = await admin.supabase.from("posts").insert(payload).select().single();
 
   if (error || !data) {
     throw new Error(`Failed to insert X post: ${error?.message ?? "missing row"}`);
   }
-
-  await insertSnapshot(admin, data.id, post);
+  return data as PostRow;
 }
 
-async function updatePost(admin: AdminContext, profile: XAuthenticatedUser, existing: PostRow, post: XSyncPost) {
+async function updatePostAndReturnRow(admin: AdminContext, profile: XAuthenticatedUser, existing: PostRow, post: XSyncPost): Promise<PostRow> {
   const payload = updatePayloadWithoutUserId(payloadForPost(admin, profile, post), existing);
   const { data, error } = await admin.supabase
     .from("posts")
@@ -336,8 +344,7 @@ async function updatePost(admin: AdminContext, profile: XAuthenticatedUser, exis
   if (error || !data) {
     throw new Error(`Failed to update X post: ${error?.message ?? "missing row"}`);
   }
-
-  await insertSnapshot(admin, data.id, post);
+  return data as PostRow;
 }
 
 async function getSyncClient(admin: AdminContext, input: XReadSyncInput, options: SyncOptions) {
@@ -428,21 +435,66 @@ export async function runXReadSync(admin: AdminContext, input: XReadSyncInput, o
     accumulator.rateLimitResetAt = listResult.rateLimitResetAt;
     accumulator.seen = listResult.posts.length;
 
+    // SCA-499 (W-20): batch existence lookup ONCE, then upsert + bulk-
+    // insert snapshots. Prior implementation did up to 3 sequential DB
+    // round-trips per post (find + insert/update + snapshot insert) for
+    // a 25-post pull = ~75 round-trips, which could exceed the platform
+    // wall-clock on a slow Postgres window and leave sync_jobs stuck in
+    // \`running\`. We still iterate the upsert per post because each row
+    // needs distinct error handling for the failed-count, but the
+    // existence lookup is now O(1) per post.
+    const existingByPlatformId = await findExistingPostsByPlatformId(
+      admin,
+      listResult.posts.map((post) => post.id),
+    );
+
+    // Per-tick wall-clock safety. The X API call upstream is bounded by
+    // its own X_API_FETCH_TIMEOUT; this guards the DB-write loop.
+    const dbTimeoutMs = 60_000;
+    const startedAt = Date.now();
+
+    const snapshotPayloads: Json[] = [];
+
     for (const post of listResult.posts) {
+      if (Date.now() - startedAt > dbTimeoutMs) {
+        accumulator.failed += listResult.posts.length - accumulator.created - accumulator.updated - accumulator.failed;
+        logSafeError(
+          "X sync DB-write loop exceeded wall-clock budget",
+          new Error(`elapsed=${Date.now() - startedAt}ms limit=${dbTimeoutMs}ms`),
+        );
+        break;
+      }
       try {
-        const existing = await findExistingPost(admin, post);
+        const existing = existingByPlatformId.get(post.id) ?? null;
+        let persistedPostId: string;
         if (existing) {
-          await updatePost(admin, profile, existing, post);
+          const updated = await updatePostAndReturnRow(admin, profile, existing, post);
+          persistedPostId = updated.id;
           accumulator.updated += 1;
         } else {
-          await insertPost(admin, profile, post);
+          const inserted = await insertPostAndReturnRow(admin, profile, post);
+          persistedPostId = inserted.id;
           accumulator.created += 1;
         }
+        snapshotPayloads.push(buildSnapshotPayload(admin, persistedPostId, post) as Json);
       } catch (error) {
         accumulator.failed += 1;
         // SCA-481 (W-2): safeError already scrubs token-shaped substrings;
         // logSafeError adds the broader redaction pass for any provider noise.
         logSafeError("Failed to persist X sync post", error, { platformPostId: post.id });
+      }
+    }
+
+    // SCA-499 (W-20): single bulk insert of every snapshot. ~25 rows
+    // shipped in one round-trip instead of 25.
+    if (snapshotPayloads.length > 0) {
+      const { error: snapshotError } = await admin.supabase
+        .from("post_metric_snapshots")
+        .insert(snapshotPayloads as never);
+      if (snapshotError) {
+        // Don't fail the whole sync — the posts ARE persisted. Snapshots
+        // can be regenerated on the next tick. But surface the failure.
+        logSafeError("Bulk snapshot insert failed during X sync", snapshotError);
       }
     }
 
