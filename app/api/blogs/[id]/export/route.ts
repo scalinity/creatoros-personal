@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { requireAdminForRoute } from "@/lib/auth/admin";
 import { exportBlog } from "@/lib/blogs";
 import { blogExportSchema } from "@/lib/blogs/validation";
-import { errorResponse, getRequestId } from "@/lib/http/envelope";
+import { errorResponse, getRequestId, readBoundedJsonBody } from "@/lib/http/envelope";
 import { createFixedWindowRateLimiter, rateLimitHeaders } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
@@ -13,20 +13,22 @@ const blogExportLimiter = createFixedWindowRateLimiter({
   windowMs: 60 * 60 * 1_000,
 });
 
-async function readPayload(request: NextRequest) {
+async function readPayload(
+  request: NextRequest,
+  requestId: string,
+  headers: Record<string, string>,
+): Promise<{ ok: true; value: unknown } | { ok: false; response: ReturnType<typeof errorResponse> }> {
   const contentType = request.headers.get("content-type") ?? "";
   if (contentType.includes("application/json")) {
-    try {
-      return await request.json();
-    } catch {
-      return null;
-    }
+    const bounded = await readBoundedJsonBody(request, requestId, { headers, limitBytes: 1_000_000 });
+    if (!bounded.ok) return { ok: false, response: bounded.response };
+    return { ok: true, value: bounded.value };
   }
 
   try {
-    return Object.fromEntries((await request.formData()).entries());
+    return { ok: true, value: Object.fromEntries((await request.formData()).entries()) };
   } catch {
-    return Object.fromEntries(request.nextUrl.searchParams);
+    return { ok: true, value: Object.fromEntries(request.nextUrl.searchParams) };
   }
 }
 
@@ -46,7 +48,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   }
 
   const { id } = await context.params;
-  const parsed = blogExportSchema.safeParse(await readPayload(request));
+  const payload = await readPayload(request, requestId, headers);
+  if (!payload.ok) return payload.response;
+  const parsed = blogExportSchema.safeParse(payload.value);
 
   if (!parsed.success) {
     return errorResponse(requestId, "validation_error", "Blog export payload failed validation.", 400, headers);

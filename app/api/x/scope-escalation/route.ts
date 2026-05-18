@@ -6,7 +6,7 @@ import { createFixedWindowRateLimiter, rateLimitHeaders } from "@/lib/rate-limit
 import { buildXAuthorizationUrl, createXCodeChallenge, createXCodeVerifier, createXOAuthState, getOptionalXOAuthConfig } from "@/lib/x/oauth";
 import { xScopeEscalationSchema } from "@/lib/x/validation";
 
-import { errorResponse, getRequestId, readJsonBody } from "../_utils";
+import { errorResponse, getRequestId, readBoundedJsonBody } from "../_utils";
 
 export const dynamic = "force-dynamic";
 
@@ -36,7 +36,9 @@ export async function POST(request: NextRequest) {
     return errorResponse(requestId, "rate_limited", "Too many X scope escalation requests.", 429, headers);
   }
 
-  const parsed = xScopeEscalationSchema.safeParse(await readJsonBody(request));
+  const body = await readBoundedJsonBody(request, requestId, { headers, limitBytes: 1_000_000 });
+  if (!body.ok) return body.response;
+  const parsed = xScopeEscalationSchema.safeParse(body.value);
 
   if (!parsed.success) {
     return errorResponse(requestId, "validation_error", "X scope escalation payload failed validation.", 400, headers);

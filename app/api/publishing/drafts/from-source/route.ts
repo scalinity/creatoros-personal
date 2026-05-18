@@ -5,7 +5,7 @@ import { createPublishingDraftFromSource } from "@/lib/publishing";
 import { publishingDraftFromSourceSchema } from "@/lib/publishing/validation";
 import { createFixedWindowRateLimiter, rateLimitHeaders } from "@/lib/rate-limit";
 
-import { envelope, errorResponse, getRequestId, publishingErrorResponse, readJsonBody } from "../../_utils";
+import { envelope, errorResponse, getRequestId, publishingErrorResponse, readBoundedJsonBody } from "../../_utils";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +27,9 @@ export async function POST(request: NextRequest) {
     return errorResponse(requestId, "rate_limited", "Too many publishing source handoff requests.", 429, headers);
   }
 
-  const parsed = publishingDraftFromSourceSchema.safeParse(await readJsonBody(request));
+  const bounded = await readBoundedJsonBody(request, requestId, { headers, limitBytes: 1_000_000 });
+  if (!bounded.ok) return bounded.response;
+  const parsed = publishingDraftFromSourceSchema.safeParse(bounded.value);
 
   if (!parsed.success) {
     return errorResponse(requestId, "validation_error", "Publishing source handoff payload failed validation.", 400, headers);

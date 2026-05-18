@@ -1,7 +1,7 @@
 import { type NextRequest } from "next/server";
 
 import { requireAdminForRoute } from "@/lib/auth/admin";
-import { envelope, errorResponse, getRequestId, readJsonBody } from "@/lib/http/envelope";
+import { envelope, errorResponse, getRequestId, readBoundedJsonBody } from "@/lib/http/envelope";
 import { transformInspiration } from "@/lib/inspiration";
 import { inspirationTransformSchema } from "@/lib/inspiration/validation";
 import { createFixedWindowRateLimiter, rateLimitHeaders } from "@/lib/rate-limit";
@@ -25,7 +25,9 @@ export async function POST(request: NextRequest) {
     return errorResponse(requestId, "rate_limited", "Too many inspiration transform requests.", 429, headers);
   }
 
-  const parsed = inspirationTransformSchema.safeParse(await readJsonBody(request));
+  const body = await readBoundedJsonBody(request, requestId, { headers, limitBytes: 1_000_000 });
+  if (!body.ok) return body.response;
+  const parsed = inspirationTransformSchema.safeParse(body.value);
   if (!parsed.success) {
     return errorResponse(requestId, "validation_error", "Inspiration transform payload failed validation.", 400, headers);
   }

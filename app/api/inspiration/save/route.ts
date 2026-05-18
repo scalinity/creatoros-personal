@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { requireAdminForRoute } from "@/lib/auth/admin";
-import { envelope, errorResponse, getRequestId, readJsonBody } from "@/lib/http/envelope";
+import { envelope, errorResponse, getRequestId, readBoundedJsonBody } from "@/lib/http/envelope";
 import { createInspiration, saveInspirationWithExtensionToken } from "@/lib/inspiration";
 import { inspirationSaveSchema } from "@/lib/inspiration/validation";
 import { createFixedWindowRateLimiter, rateLimitHeaders } from "@/lib/rate-limit";
@@ -66,9 +66,11 @@ export async function OPTIONS(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const requestId = getRequestId(request);
-  const body = await readJsonBody(request);
-  const token = bearerToken(request);
   const cors = corsHeaders(request);
+  const bounded = await readBoundedJsonBody(request, requestId, { headers: cors, limitBytes: 1_000_000 });
+  if (!bounded.ok) return bounded.response;
+  const body = bounded.value;
+  const token = bearerToken(request);
   const extensionOrigin = chromeExtensionOrigin(request);
 
   if (extensionOrigin && !isAllowedExtensionOrigin(extensionOrigin)) {

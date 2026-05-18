@@ -1,7 +1,7 @@
 import { type NextRequest } from "next/server";
 
 import { requireAdminForRoute } from "@/lib/auth/admin";
-import { envelope, errorResponse, getRequestId, readJsonBody } from "@/lib/http/envelope";
+import { envelope, errorResponse, getRequestId, readBoundedJsonBody } from "@/lib/http/envelope";
 import { parseManualPostInput, parsePostsCsv, parsePostsJson } from "@/lib/imports";
 import { createManualPost, persistImportedPosts } from "@/lib/posts";
 import { postsImportRouteSchema } from "@/lib/posts/validation";
@@ -33,7 +33,9 @@ export async function POST(request: NextRequest) {
     return errorResponse(requestId, "rate_limited", "Too many post import requests.", 429, headers);
   }
 
-  const body = postsImportRouteSchema.safeParse(await readJsonBody(request));
+  const bounded = await readBoundedJsonBody(request, requestId, { headers, limitBytes: 10_000_000 });
+  if (!bounded.ok) return bounded.response;
+  const body = postsImportRouteSchema.safeParse(bounded.value);
 
   if (!body.success) {
     return errorResponse(requestId, "validation_error", "Import payload must include mode and payload.", 400, headers);

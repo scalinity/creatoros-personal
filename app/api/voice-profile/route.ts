@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { loadEmbeddingStatus } from "@/lib/embeddings";
 import { requireAdminForRoute } from "@/lib/auth/admin";
-import { envelope, errorResponse, getRequestId, readJsonBody } from "@/lib/http/envelope";
+import { envelope, errorResponse, getRequestId, readBoundedJsonBody } from "@/lib/http/envelope";
 import { createFixedWindowRateLimiter, rateLimitHeaders } from "@/lib/rate-limit";
 import { generateVoiceProfile, loadVoiceProfileStatus } from "@/lib/voice";
 
@@ -47,7 +47,9 @@ export async function POST(request: NextRequest) {
 
   if (!guard.ok) return guard.response;
 
-  const body = recomputeSchema.safeParse(await readJsonBody(request));
+  const bounded = await readBoundedJsonBody(request, requestId, { limitBytes: 1_000_000 });
+  if (!bounded.ok) return bounded.response;
+  const body = recomputeSchema.safeParse(bounded.value);
 
   if (!body.success) {
     return errorResponse(requestId, "validation_error", "Invalid voice profile recompute payload.", 400);

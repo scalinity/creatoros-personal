@@ -4,7 +4,7 @@ import { z } from "zod";
 import { redactAuditString } from "@/lib/audit";
 import { requireAdminForRoute } from "@/lib/auth/admin";
 import { deleteOwnerData } from "@/lib/exports";
-import { envelope, errorResponse, getRequestId, readJsonBody } from "@/lib/http/envelope";
+import { envelope, errorResponse, getRequestId, readBoundedJsonBody } from "@/lib/http/envelope";
 import { createFixedWindowRateLimiter, rateLimitHeaders } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
@@ -27,7 +27,9 @@ export async function DELETE(request: NextRequest) {
     return guard.response;
   }
 
-  const body = deleteBodySchema.safeParse(await readJsonBody(request));
+  const bounded = await readBoundedJsonBody(request, requestId, { limitBytes: 1_000_000 });
+  if (!bounded.ok) return bounded.response;
+  const body = deleteBodySchema.safeParse(bounded.value);
 
   if (!body.success) {
     return errorResponse(

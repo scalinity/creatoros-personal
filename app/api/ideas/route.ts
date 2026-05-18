@@ -3,7 +3,7 @@ import { type NextRequest } from "next/server";
 import { requireAdminForRoute } from "@/lib/auth/admin";
 import { createContentIdea } from "@/lib/content";
 import { contentIdeaCreateSchema } from "@/lib/content/validation";
-import { envelope, errorResponse, getRequestId, readJsonBody } from "@/lib/http/envelope";
+import { envelope, errorResponse, getRequestId, readBoundedJsonBody } from "@/lib/http/envelope";
 import { createFixedWindowRateLimiter, rateLimitHeaders } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
@@ -28,7 +28,9 @@ export async function POST(request: NextRequest) {
     return errorResponse(requestId, "rate_limited", "Too many idea requests.", 429, headers);
   }
 
-  const body = contentIdeaCreateSchema.safeParse(await readJsonBody(request));
+  const bounded = await readBoundedJsonBody(request, requestId, { headers, limitBytes: 1_000_000 });
+  if (!bounded.ok) return bounded.response;
+  const body = contentIdeaCreateSchema.safeParse(bounded.value);
 
   if (!body.success) {
     return errorResponse(requestId, "validation_error", "Idea payload failed validation.", 400, headers);

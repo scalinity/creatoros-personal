@@ -5,7 +5,7 @@ import { createFixedWindowRateLimiter, rateLimitHeaders } from "@/lib/rate-limit
 import { disconnectXConnection } from "@/lib/x/oauth";
 import { xDisconnectSchema } from "@/lib/x/validation";
 
-import { envelope, errorResponse, getRequestId, readJsonBody } from "../_utils";
+import { envelope, errorResponse, getRequestId, readBoundedJsonBody } from "../_utils";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +29,9 @@ export async function POST(request: NextRequest) {
     return errorResponse(requestId, "rate_limited", "Too many X disconnect requests.", 429, headers);
   }
 
-  const parsed = xDisconnectSchema.safeParse(await readJsonBody(request));
+  const body = await readBoundedJsonBody(request, requestId, { headers, limitBytes: 1_000_000 });
+  if (!body.ok) return body.response;
+  const parsed = xDisconnectSchema.safeParse(body.value);
 
   if (!parsed.success) {
     return errorResponse(requestId, "validation_error", "X disconnect payload failed validation.", 400, headers);

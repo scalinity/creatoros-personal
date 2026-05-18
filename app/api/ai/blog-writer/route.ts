@@ -5,7 +5,7 @@ import { generateBlogDraft, generateBlogOutline, generateBlogSeo, repurposeBlogT
 import { blogAiActionSchema } from "@/lib/blogs/validation";
 import { AiStructuredOutputError } from "@/lib/ai";
 import { AiProviderTimeoutError } from "@/lib/ai/retry";
-import { envelope, errorResponse, getRequestId, readJsonBody } from "@/lib/http/envelope";
+import { envelope, errorResponse, getRequestId, readBoundedJsonBody } from "@/lib/http/envelope";
 import { createFixedWindowRateLimiter, rateLimitHeaders } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
@@ -62,7 +62,9 @@ export async function POST(request: NextRequest) {
     return errorResponse(requestId, "rate_limited", "Too many blog AI requests.", 429, headers);
   }
 
-  const parsed = blogAiActionSchema.safeParse(await readJsonBody(request));
+  const bounded = await readBoundedJsonBody(request, requestId, { headers, limitBytes: 2_000_000 });
+  if (!bounded.ok) return bounded.response;
+  const parsed = blogAiActionSchema.safeParse(bounded.value);
 
   if (!parsed.success) {
     return errorResponse(requestId, "validation_error", "Blog AI payload failed validation.", 400, headers);

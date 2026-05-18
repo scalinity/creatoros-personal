@@ -5,7 +5,7 @@ import { PublishingNotFoundError, runXPublishingJob, XPublishingGuardError } fro
 import { createFixedWindowRateLimiter, rateLimitHeaders } from "@/lib/rate-limit";
 import { xPublishSchema } from "@/lib/x/validation";
 
-import { envelope, errorResponse, getRequestId, readJsonBody } from "../_utils";
+import { envelope, errorResponse, getRequestId, readBoundedJsonBody } from "../_utils";
 
 const publishLimiter = createFixedWindowRateLimiter({
   limit: 10,
@@ -61,7 +61,9 @@ export async function handleXPublishRoute(request: NextRequest, expectedContentT
     return errorResponse(requestId, "rate_limited", "Too many X publish requests.", 429, headers);
   }
 
-  const parsed = xPublishSchema.safeParse(await readJsonBody(request));
+  const body = await readBoundedJsonBody(request, requestId, { headers, limitBytes: 1_000_000 });
+  if (!body.ok) return body.response;
+  const parsed = xPublishSchema.safeParse(body.value);
 
   if (!parsed.success) {
     return errorResponse(requestId, "validation_error", "X publish payload failed validation.", 400, headers);

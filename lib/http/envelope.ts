@@ -94,4 +94,46 @@ export async function readJsonBody<T = unknown>(request: NextRequest | Request):
   }
 }
 
+// SCA-493 (W-14): every JSON-accepting route handler MUST go through this
+// helper so the request body is bounded before being parsed. CWE-770. The
+// public extension save endpoint is reachable via bearer token without an
+// admin session — an attacker with a stolen token previously could pin server
+// memory by streaming a multi-GB body into bare `request.json()`.
+//
+// Returns a discriminated union so callers can early-return the response
+// without scattering try/catch through every route. Malformed JSON falls
+// through as `value: null` to preserve the existing Zod-validation pattern
+// (the schema parse surfaces a 400 validation_error). Only an oversize
+// payload short-circuits to a 413.
+import { readJsonBodyWithLimit, RequestBodyTooLargeError } from "@/lib/server-only/request-body";
+
+export type JsonBodyResult<T> =
+  | { ok: false; response: NextResponse }
+  | { ok: true; value: null | T };
+
+export async function readBoundedJsonBody<T = unknown>(
+  request: NextRequest | Request,
+  requestId: string,
+  options?: { headers?: Record<string, string>; limitBytes?: number },
+): Promise<JsonBodyResult<T>> {
+  try {
+    const value = await readJsonBodyWithLimit<T>(request, options?.limitBytes);
+    return { ok: true, value };
+  } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) {
+      return {
+        ok: false,
+        response: errorResponse(
+          requestId,
+          "request_too_large",
+          `Request body exceeds the configured limit of ${error.limit} bytes.`,
+          413,
+          options?.headers,
+        ),
+      };
+    }
+    return { ok: true, value: null };
+  }
+}
+
 export { REQUEST_ID_HEADER };

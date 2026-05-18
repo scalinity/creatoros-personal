@@ -9,6 +9,7 @@ export {
   errorEnvelope,
   errorResponse,
   getRequestId,
+  readBoundedJsonBody,
   readJsonBody,
   REQUEST_ID_HEADER,
 } from "@/lib/http/envelope";

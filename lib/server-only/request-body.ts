@@ -20,6 +20,10 @@ export class RequestBodyTooLargeError extends Error {
 // Reading as text first lets us reject oversize payloads before allocating a
 // nested object structure — `request.json()` does not honour Next.js body-
 // parser limits for route handlers.
+//
+// SCA-493 (W-14): byte count uses `Buffer.byteLength(text, "utf8")` so the
+// limit is the wire-size, not the UTF-16 code-unit count. A 1 MB cap was
+// previously off by up to 3× for non-ASCII payloads (CJK, emoji).
 export async function readJsonBodyWithLimit<T = unknown>(
   request: NextRequest | Request,
   limit: number = DEFAULT_JSON_BODY_LIMIT_BYTES,
@@ -35,7 +39,7 @@ export async function readJsonBodyWithLimit<T = unknown>(
 
   const text = await request.text();
 
-  if (text.length > limit) {
+  if (Buffer.byteLength(text, "utf8") > limit) {
     throw new RequestBodyTooLargeError(limit);
   }
 

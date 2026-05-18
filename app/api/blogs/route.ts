@@ -3,7 +3,7 @@ import { type NextRequest } from "next/server";
 import { requireAdminForRoute } from "@/lib/auth/admin";
 import { createBlog } from "@/lib/blogs";
 import { blogCreateSchema } from "@/lib/blogs/validation";
-import { envelope, errorResponse, getRequestId, readJsonBody } from "@/lib/http/envelope";
+import { envelope, errorResponse, getRequestId, readBoundedJsonBody } from "@/lib/http/envelope";
 import { createFixedWindowRateLimiter, rateLimitHeaders } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
@@ -28,7 +28,9 @@ export async function POST(request: NextRequest) {
     return errorResponse(requestId, "rate_limited", "Too many blog create requests.", 429, headers);
   }
 
-  const parsed = blogCreateSchema.safeParse(await readJsonBody(request));
+  const bounded = await readBoundedJsonBody(request, requestId, { headers, limitBytes: 2_000_000 });
+  if (!bounded.ok) return bounded.response;
+  const parsed = blogCreateSchema.safeParse(bounded.value);
 
   if (!parsed.success) {
     return errorResponse(requestId, "validation_error", "Blog payload failed validation.", 400, headers);

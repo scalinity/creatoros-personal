@@ -5,7 +5,7 @@ import { updatePublishingDraft } from "@/lib/publishing";
 import { publishingDraftUpdateSchema } from "@/lib/publishing/validation";
 import { createFixedWindowRateLimiter, rateLimitHeaders } from "@/lib/rate-limit";
 
-import { envelope, errorResponse, getRequestId, publishingErrorResponse, readJsonBody } from "../../_utils";
+import { envelope, errorResponse, getRequestId, publishingErrorResponse, readBoundedJsonBody } from "../../_utils";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +28,9 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   }
 
   const { id } = await context.params;
-  const body = await readJsonBody(request);
+  const bounded = await readBoundedJsonBody(request, requestId, { headers, limitBytes: 1_000_000 });
+  if (!bounded.ok) return bounded.response;
+  const body = bounded.value;
   const parsed = publishingDraftUpdateSchema.safeParse({
     ...(body && typeof body === "object" && !Array.isArray(body) ? body : {}),
     id,

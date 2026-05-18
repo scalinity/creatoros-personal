@@ -7,12 +7,21 @@ import {
   errorEnvelope,
   errorResponse,
   getRequestId,
+  readBoundedJsonBody,
   readJsonBody,
   REQUEST_ID_HEADER,
 } from "@/lib/http/envelope";
 import { PublishingNotFoundError, XPublishingGuardError } from "@/lib/publishing";
 
-export { envelope, errorEnvelope, errorResponse, getRequestId, readJsonBody, REQUEST_ID_HEADER };
+export {
+  envelope,
+  errorEnvelope,
+  errorResponse,
+  getRequestId,
+  readBoundedJsonBody,
+  readJsonBody,
+  REQUEST_ID_HEADER,
+};
 
 // L-2: classify by structured error type / `code`, not by substring matching
 // on `error.message`. The prior approach broke on i18n / message rewording.
