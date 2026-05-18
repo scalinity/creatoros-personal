@@ -1757,13 +1757,21 @@ async function markDraftAndSchedule(admin: AdminContext, draft: PublishingDraft,
 }
 
 async function deferScheduledPublish(admin: AdminContext, draft: PublishingDraft, scheduledPostId: string, retryAfter: string, message: string) {
-  await admin.supabase
+  // SCA-482 (W-3): each of the three sequential UPDATEs now captures + throws
+  // on error so a silent partial failure cannot leave the row in mixed state
+  // (e.g. publishing_drafts says scheduled but scheduled_posts still shows
+  // publishing, blocking the next cron tick).
+  const draftResult = await admin.supabase
     .from("publishing_drafts")
     .update({ scheduled_at: retryAfter, status: "scheduled" })
     .eq("id", draft.id)
     .eq("user_id", admin.userId);
+  if (draftResult.error) {
+    console.error("deferScheduledPublish: publishing_drafts update failed", { draftId: draft.id, reason: draftResult.error.message, scheduledPostId });
+    throw new Error(`Failed to defer publishing_drafts: ${draftResult.error.message}`);
+  }
 
-  await admin.supabase
+  const scheduledResult = await admin.supabase
     .from("scheduled_posts")
     .update({
       lock_token: null,
@@ -1774,8 +1782,12 @@ async function deferScheduledPublish(admin: AdminContext, draft: PublishingDraft
     })
     .eq("id", scheduledPostId)
     .eq("user_id", admin.userId);
+  if (scheduledResult.error) {
+    console.error("deferScheduledPublish: scheduled_posts update failed", { reason: scheduledResult.error.message, scheduledPostId });
+    throw new Error(`Failed to defer scheduled_posts: ${scheduledResult.error.message}`);
+  }
 
-  await admin.supabase
+  const calendarResult = await admin.supabase
     .from("content_calendar_items")
     .update({
       starts_at: retryAfter,
@@ -1783,6 +1795,10 @@ async function deferScheduledPublish(admin: AdminContext, draft: PublishingDraft
     })
     .eq("entity_id", draft.id)
     .eq("user_id", admin.userId);
+  if (calendarResult.error) {
+    console.error("deferScheduledPublish: content_calendar_items update failed", { draftId: draft.id, reason: calendarResult.error.message });
+    throw new Error(`Failed to defer content_calendar_items: ${calendarResult.error.message}`);
+  }
 }
 
 function failureDetailsForError(error: unknown, partialPosts: XCreatedPost[]): XPublishFailureDetails {
@@ -2167,17 +2183,27 @@ export async function cancelPublishingDraft(admin: AdminContext, input: Publishi
     throw new Error(`Failed to cancel publishing draft: ${error?.message ?? "missing row"}`);
   }
 
-  await admin.supabase
+  // SCA-482 (W-3): capture + log secondary update errors. We don't throw here
+  // because the primary publishing_drafts.canceled flip already landed — the
+  // owner-visible state is correct. Log the scheduled_posts / calendar drift
+  // so an operator can reconcile if it ever happens.
+  const cancelScheduledResult = await admin.supabase
     .from("scheduled_posts")
-    .update({ canceled_audit_log_id: null, metadata: metadataWithPhase({ canceled_at: timestamp, reason: input.reason }), status: "canceled" })
+    .update({ canceled_audit_log_id: null, lock_token: null, locked_at: null, metadata: metadataWithPhase({ canceled_at: timestamp, reason: input.reason }), status: "canceled" })
     .eq("publishing_draft_id", draft.id)
     .eq("user_id", admin.userId);
+  if (cancelScheduledResult.error) {
+    console.error("cancelPublishingDraft: scheduled_posts cancel failed", { draftId: draft.id, reason: cancelScheduledResult.error.message });
+  }
 
-  await admin.supabase
+  const cancelCalendarResult = await admin.supabase
     .from("content_calendar_items")
     .update({ metadata: metadataWithPhase({ canceled_at: timestamp, reason: input.reason }), status: "canceled" })
     .eq("entity_id", draft.id)
     .eq("user_id", admin.userId);
+  if (cancelCalendarResult.error) {
+    console.error("cancelPublishingDraft: content_calendar_items cancel failed", { draftId: draft.id, reason: cancelCalendarResult.error.message });
+  }
 
   await logAuditEvent({
     actorEmail: admin.email,
