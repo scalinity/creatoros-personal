@@ -1362,7 +1362,14 @@ function publishableItems(draft: PublishingDraft) {
 // WITH "confirm" or "approve" followed by a word boundary, after trim+lowercase.
 const liveConfirmationPattern = /^(?:confirm|approve)\b/;
 function assertLivePublishConfirmation(input: PublishingDraftDryRunServiceInput, options: XPublishingJobOptions) {
-  if (options.scheduledPostId || options.jobType === "retry") return;
+  // SCA-518 (S-12): scheduled-runs already passed approval+confirmation at
+  // schedule time, so the cron executor is exempt. Retries are NO LONGER
+  // exempt — every retry requires its own fresh confirmation from the
+  // owner, because the failed job's original confirmation may have been
+  // for a stale payload (the draft can be edited after failure, which
+  // invalidates the original approval anyway). The UI passes
+  // `confirmation: "confirm retry"` from the retry button form.
+  if (options.scheduledPostId) return;
 
   const confirmation = input.confirmation?.trim().toLowerCase() ?? "";
   if (!liveConfirmationPattern.test(confirmation)) {
@@ -1973,6 +1980,16 @@ export async function runXPublishingJob(admin: AdminContext, input: PublishingDr
     throw new XPublishingGuardError("approval_required", "Publishing draft must be approved before live X publishing.");
   }
 
+  // SCA-520 (S-14): load connection + verify hash freshness BEFORE the CAS
+  // claim. The prior order ran assertApprovalPayload after the status had
+  // already flipped to `publishing`, so a stale hash burned the
+  // approved→publishing transition: the draft was stuck in `publishing`
+  // without ever publishing, and could not be re-approved from that state.
+  // Now a stale hash throws before the CAS, leaving the draft on `approved`.
+  const connection = await loadXPublishingConnection(admin, options);
+  assertApprovalPayload(draft, input.payloadHash ?? null, connection);
+  assertXPublishingCapabilities(draft, connection);
+
   // C-1: claim the draft atomically before any external work. Two concurrent
   // retries (or a retry that races with a deferred-scheduled rerun) collide
   // here so only one proceeds to publish. Combined with the deterministic
@@ -1996,7 +2013,6 @@ export async function runXPublishingJob(admin: AdminContext, input: PublishingDr
     throw new XPublishingGuardError("status_conflict", "Publishing draft is not in a publishable state. Refresh and try again.");
   }
 
-  const connection = await loadXPublishingConnection(admin, options);
   const initialPayload = xRequestPayloadForDraft(draft, connection);
   const job = await createLivePublishingJob(admin, draft, initialPayload, payloadHash, options);
   let createdPosts: XCreatedPost[] = [];
@@ -2035,8 +2051,8 @@ export async function runXPublishingJob(admin: AdminContext, input: PublishingDr
   };
 
   try {
-    assertApprovalPayload(draft, input.payloadHash ?? null, connection);
-    assertXPublishingCapabilities(draft, connection);
+    // SCA-520 (S-14): assertApprovalPayload + assertXPublishingCapabilities
+    // now run before the CAS claim above; no need to repeat here.
     const client = options.client ?? createLiveXPublishingClient(connection.accessToken);
     const mediaIds = await resolveMediaIds(admin, draft, client, connection);
     requestPayload = xRequestPayloadForDraft(draft, connection, mediaIds);
@@ -2175,14 +2191,21 @@ export async function retryPublishingJob(admin: AdminContext, input: PublishingJ
   });
 
   if (job.job_type === "dry_run") {
+    // Dry-runs don't publish externally; retain the no-confirmation
+    // shortcut for them.
     return runDryRunPublishingJob(admin, { confirmation: null, id: job.publishing_draft_id, payloadHash: null }, { jobType: "retry" });
   }
 
+  // SCA-518 (S-12): retries now require a fresh confirmation. The retry
+  // form in components/publishing/index.tsx submits
+  // `confirmation: "confirm retry"`. Threading it through here closes the
+  // gap where a stale failed job could be re-published without any
+  // re-attestation by the owner.
   // C-1: pass the prior failed job id so the idempotency key is deterministic
   // and a second concurrent retry click collides on the unique index.
   return runXPublishingJob(
     admin,
-    { confirmation: null, id: job.publishing_draft_id, payloadHash: null },
+    { confirmation: input.confirmation ?? null, id: job.publishing_draft_id, payloadHash: null },
     { jobType: "retry", mode: "live", priorFailedJobId: job.id },
   );
 }
@@ -2273,6 +2296,14 @@ export async function cancelPublishingDraft(admin: AdminContext, input: Publishi
 
 export type ScheduledPublishingExecutorResult = {
   checkedAt: string;
+  // SCA-510 (S-4): explicit `deferred` count for rate-limited rows that the
+  // executor will re-attempt on a later tick. Previously these were lumped
+  // into `skipped` alongside CAS-claim collisions, which made the cron
+  // telemetry indistinguishable between "another worker beat me to it"
+  // and "X rate-limited; reschedule for retry_after". `processed` and
+  // `skipped` continue to behave as before — `deferred` is an additional
+  // breakdown for operators.
+  deferred: number;
   failed: number;
   processed: number;
   // SCA-473 (C-3): count of stranded `status=publishing` rows reclaimed by the
@@ -2370,6 +2401,7 @@ export async function runScheduledPublishingExecutor(admin: AdminContext, option
 
   totalCandidates = (data ?? []).length;
 
+  let deferred = 0;
   let failed = 0;
   let skipped = 0;
   let succeeded = 0;
@@ -2411,7 +2443,7 @@ export async function runScheduledPublishingExecutor(admin: AdminContext, option
       );
 
       if (result.job.status === "succeeded") succeeded += 1;
-      else if (result.failure?.retryable && result.failure.retryAfter) skipped += 1;
+      else if (result.failure?.retryable && result.failure.retryAfter) deferred += 1;
       else failed += 1;
     } catch (error) {
       failed += 1;
@@ -2445,6 +2477,7 @@ export async function runScheduledPublishingExecutor(admin: AdminContext, option
       batch_id: batchId,
       candidates: totalCandidates,
       checked_at: checkedAt,
+      deferred,
       failed,
       phase: PHASE_17,
       processed: succeeded + failed,
@@ -2460,6 +2493,7 @@ export async function runScheduledPublishingExecutor(admin: AdminContext, option
 
   return {
     checkedAt,
+    deferred,
     failed,
     processed: succeeded + failed,
     reaped,

@@ -499,24 +499,28 @@ describe("Phase 17 publishing executor", () => {
     const { inserts, supabase } = createSupabaseMock({ publishing_drafts: [draft], x_connections: [connection] });
     const admin = createAdminContext(supabase);
 
-    const result = await runXPublishingJob(
-      admin,
-      {
-        confirmation: "confirm live publish",
-        id: "draft-1",
-        payloadHash: String(draft.approval_payload_hash),
-      },
-      {
-        client: publishingClient(),
-        connection: decrypted,
-        mode: "live",
-        now: () => new Date(now),
-      },
-    );
-
-    expect(result.job.status).toBe("failed");
-    expect(result.failure?.failureType).toBe("capability_disabled");
+    // SCA-520 (S-14): capability + approval-payload checks now run BEFORE
+    // the CAS that flips status to `publishing`. A capability-disabled
+    // draft throws XPublishingGuardError immediately rather than burning
+    // a publishing transition and recording a no-op failure row.
+    await expect(
+      runXPublishingJob(
+        admin,
+        {
+          confirmation: "confirm live publish",
+          id: "draft-1",
+          payloadHash: String(draft.approval_payload_hash),
+        },
+        {
+          client: publishingClient(),
+          connection: decrypted,
+          mode: "live",
+          now: () => new Date(now),
+        },
+      ),
+    ).rejects.toMatchObject({ code: "capability_disabled", name: "XPublishingGuardError" });
     expect(inserts.published_posts).toBeUndefined();
+    expect(inserts.publishing_jobs).toBeUndefined();
   });
 
   it("rejects live publish when approval was bound to a different X account", async () => {
@@ -528,23 +532,26 @@ describe("Phase 17 publishing executor", () => {
     const client = publishingClient();
     const createSpy = vi.spyOn(client, "createPost");
 
-    const result = await runXPublishingJob(
-      admin,
-      {
-        confirmation: "confirm live publish",
-        id: "draft-1",
-        payloadHash: String(draft.approval_payload_hash),
-      },
-      {
-        client,
-        connection: decryptedConnection(currentConnection),
-        mode: "live",
-        now: () => new Date(now),
-      },
-    );
-
-    expect(result.job.status).toBe("failed");
-    expect(result.failure?.failureType).toBe("payload_mismatch");
+    // SCA-520 (S-14): payload-hash freshness now checked BEFORE the CAS.
+    // A draft approved for a different X account has a stale hash relative
+    // to the current connection and throws immediately rather than passing
+    // through the publishing transition.
+    await expect(
+      runXPublishingJob(
+        admin,
+        {
+          confirmation: "confirm live publish",
+          id: "draft-1",
+          payloadHash: String(draft.approval_payload_hash),
+        },
+        {
+          client,
+          connection: decryptedConnection(currentConnection),
+          mode: "live",
+          now: () => new Date(now),
+        },
+      ),
+    ).rejects.toMatchObject({ code: "payload_mismatch", name: "XPublishingGuardError" });
     expect(createSpy).not.toHaveBeenCalled();
     expect(inserts.published_posts).toBeUndefined();
   });
