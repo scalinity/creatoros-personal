@@ -65,9 +65,13 @@ function assertProfileShape(row: null | ProfileRow): asserts row is ProfileRow {
 export async function loadCronAdminContext(): Promise<AdminContext> {
   const serviceClient = createSupabaseServiceRoleClient();
   const ownerEmail = firstAdminEmail();
-  const query = ownerEmail
-    ? serviceClient.from("profiles").select("*").eq("email", ownerEmail).limit(1)
-    : serviceClient.from("profiles").select("*").eq("is_admin", true).limit(1);
+  // SCA-492 (W-13): ADMIN_EMAILS is a hard requirement for cron — failing
+  // closed is safer than the prior "first profile with is_admin=true"
+  // fallback, which could silently elevate a seed/test row to cron actor.
+  if (!ownerEmail) {
+    throw new Error("ADMIN_EMAILS must be configured for cron context loading.");
+  }
+  const query = serviceClient.from("profiles").select("*").eq("email", ownerEmail).limit(1);
   const { data, error } = await query;
 
   if (error) {
