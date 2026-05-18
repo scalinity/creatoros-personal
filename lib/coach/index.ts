@@ -8,6 +8,7 @@ import { validateAiStructuredOutput } from "@/lib/ai/json";
 import { coachChatOutputSchema, historyPlaybookOutputSchema, type confidenceLabelSchema } from "@/lib/ai/schemas";
 import type { AiProvider, ContextPacket } from "@/lib/ai/types";
 import type { AdminContext } from "@/lib/auth/admin";
+import { asRecord, asStringArray, toJson } from "@/lib/db/json";
 import { retrieveEvidence, type RetrievalEvidenceItem, type RetrievalResult } from "@/lib/retrieval";
 import type {
   BlogPostRow,
@@ -118,19 +119,6 @@ const defaultSuggestedPrompts = [
     question: "What is the next small content experiment I should run?",
   },
 ];
-
-function asRecord(value: Json | unknown): Record<string, unknown> {
-  if (!value || Array.isArray(value) || typeof value !== "object") return {};
-  return value as Record<string, unknown>;
-}
-
-function asStringArray(value: Json | unknown): string[] {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0) : [];
-}
-
-function toJson(value: unknown): Json {
-  return JSON.parse(JSON.stringify(value ?? null)) as Json;
-}
 
 function clampSnippet(value: string) {
   return value.replace(/\s+/g, " ").trim().slice(0, 360);

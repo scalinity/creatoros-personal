@@ -7,6 +7,7 @@ import { cookies, headers } from "next/headers";
 import type { NextRequest } from "next/server";
 
 import type { AdminContext } from "@/lib/auth/admin";
+import { nowIso } from "@/lib/db/json";
 
 export const E2E_AUTH_COOKIE = "creatoros_e2e_admin";
 export const E2E_AUTH_HEADER = "x-creatoros-e2e-auth";
@@ -27,10 +28,6 @@ type E2eStore = {
 type E2eGlobal = typeof globalThis & {
   __creatorosE2eStore?: E2eStore;
 };
-
-function nowIso() {
-  return new Date().toISOString();
-}
 
 function isE2eModeEnabled() {
   return (

@@ -7,6 +7,7 @@ import { validateAiStructuredOutput } from "@/lib/ai/json";
 import { runStructuredPrompt } from "@/lib/ai/run";
 import { logAuditEvent } from "@/lib/audit";
 import type { AdminContext } from "@/lib/auth/admin";
+import { metadataWithPhase, safeObject, safeStringArray, stripMarkdown } from "@/lib/db/json";
 import { createGeneratedOutput, type ComposerOutput } from "@/lib/content";
 import type { BlogExportRow, BlogPostRow, BlogVersionRow, Database, Json, PostRow, BrainDumpRow, ContentIdeaRow, GeneratedOutputRow } from "@/types/database";
 
@@ -128,21 +129,6 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Unknown error.";
 }
 
-function safeObject(value: Json | undefined): Record<string, Json> {
-  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, Json>) : {};
-}
-
-function safeStringArray(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
-}
-
-function metadataWithPhase(metadata: Record<string, Json> = {}) {
-  return {
-    phase: PHASE,
-    ...metadata,
-  } satisfies Record<string, Json>;
-}
-
 export function slugifyBlogTitle(value: string) {
   return value
     .normalize("NFKD")
@@ -152,18 +138,6 @@ export function slugifyBlogTitle(value: string) {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "")
     .slice(0, 120);
-}
-
-function stripMarkdown(markdown: string) {
-  return markdown
-    .replace(/```[\s\S]*?```/g, " ")
-    .replace(/`([^`]+)`/g, "$1")
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
-    .replace(/\[[^\]]+\]\([^)]*\)/g, (match) => match.replace(/^\[|\]\([^)]*\)$/g, ""))
-    .replace(/[#>*_~\-]/g, " ")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
 }
 
 function wordCountForMarkdown(markdown: string) {
@@ -365,7 +339,7 @@ async function createInitialBlogVersion(admin: AdminContext, blog: BlogPostRow) 
       html: blog.html,
       json_doc: blog.json_doc,
       markdown: blog.markdown,
-      metadata: metadataWithPhase({ initial: true }),
+      metadata: metadataWithPhase(PHASE, { initial: true }),
       model: null,
       prompt_version: null,
       provider: null,
@@ -397,7 +371,7 @@ export async function createBlog(admin: AdminContext, input: BlogCreateInput) {
       json_doc: jsonDoc,
       markdown: input.markdown,
       meta_description: input.metaDescription,
-      metadata: metadataWithPhase(input.metadata),
+      metadata: metadataWithPhase(PHASE, input.metadata),
       reading_time_minutes: metrics.readingTimeMinutes,
       seo_title: input.seoTitle,
       slug,
@@ -463,7 +437,7 @@ function updatePayload(existing: BlogPostRow, input: BlogUpdateInput): BlogPostU
   if (input.canonicalSummary !== undefined) payload.canonical_summary = input.canonicalSummary;
   if (input.categories !== undefined) payload.categories = input.categories;
   if (input.metaDescription !== undefined) payload.meta_description = input.metaDescription;
-  if (input.metadata !== undefined) payload.metadata = metadataWithPhase({ ...safeObject(existing.metadata), ...input.metadata });
+  if (input.metadata !== undefined) payload.metadata = metadataWithPhase(PHASE, { ...safeObject(existing.metadata), ...input.metadata });
   if (input.seoTitle !== undefined) payload.seo_title = input.seoTitle;
   if (input.slug !== undefined) payload.slug = input.slug ?? slugifyBlogTitle(nextTitle);
   if (input.status !== undefined) payload.status = input.status;
@@ -487,7 +461,7 @@ export async function updateBlog(admin: AdminContext, input: BlogUpdateInput, at
     p_change_reason: shouldCreateVersion ? (attribution.changeReason ?? input.changeReason ?? "Blog content updated.") : null,
     p_create_version: shouldCreateVersion,
     p_created_by: attribution.createdBy ?? "owner",
-    p_metadata: metadataWithPhase(attribution.metadata),
+    p_metadata: metadataWithPhase(PHASE, attribution.metadata),
     p_model: attribution.model ?? null,
     p_payload: blogUpdateRpcPayload(payload),
     p_prompt_version: attribution.promptVersion ?? null,
@@ -663,7 +637,7 @@ export async function exportBlog(admin: AdminContext, input: { blogId: string; f
       checksum: digest,
       export_payload: payload,
       format: input.format,
-      metadata: metadataWithPhase({ word_count: blog.wordCount }),
+      metadata: metadataWithPhase(PHASE, { word_count: blog.wordCount }),
       storage_path: null,
       user_id: admin.userId,
     })
@@ -972,7 +946,7 @@ export async function repurposeBlogToX(admin: AdminContext, options: BlogAiRunOp
     .insert({
       blog_post_id: blog.id,
       direction: "blog_to_x",
-      metadata: metadataWithPhase({ output_count: 0, source: "blog_to_x" }),
+      metadata: metadataWithPhase(PHASE, { output_count: 0, source: "blog_to_x" }),
       model: response.model,
       output_generated_output_ids: [],
       output_publishing_draft_ids: [],
@@ -1039,7 +1013,7 @@ export async function repurposeBlogToX(admin: AdminContext, options: BlogAiRunOp
     await admin.supabase
       .from("blog_repurposing_jobs")
       .update({
-        metadata: metadataWithPhase({ error: errorMessage(error), output_count: generatedOutputs.length, source: "blog_to_x" }),
+        metadata: metadataWithPhase(PHASE, { error: errorMessage(error), output_count: generatedOutputs.length, source: "blog_to_x" }),
         status: "failed",
       })
       .eq("id", job.id)
@@ -1067,7 +1041,7 @@ export async function repurposeBlogToX(admin: AdminContext, options: BlogAiRunOp
   const { data: completedJob, error: completeError } = await admin.supabase
     .from("blog_repurposing_jobs")
     .update({
-      metadata: metadataWithPhase({ generated_output_ids: generatedOutputIds, output_count: generatedOutputs.length, source: "blog_to_x" }),
+      metadata: metadataWithPhase(PHASE, { generated_output_ids: generatedOutputIds, output_count: generatedOutputs.length, source: "blog_to_x" }),
       output_generated_output_ids: generatedOutputIds,
       status: "succeeded",
     })

@@ -30,6 +30,7 @@ import { experimentAnalysisOutputSchema, growthStrategyOutputSchema, profileAudi
 import { validateAiStructuredOutput } from "@/lib/ai/json";
 import { logAuditEvent } from "@/lib/audit";
 import type { AdminContext } from "@/lib/auth/admin";
+import { asRecord, asStringArray, metadataWithPhase, toJson } from "@/lib/db/json";
 import type {
   BlogPostRow,
   CampaignItemRow,
@@ -234,25 +235,6 @@ type GrowthContextPeriod = {
   endDate: string;
   startDate: string;
 };
-
-function toJson(value: unknown): Json {
-  return JSON.parse(JSON.stringify(value ?? null)) as Json;
-}
-
-function asRecord(value: unknown): Record<string, Json> {
-  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, Json>) : {};
-}
-
-function asStringArray(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0) : [];
-}
-
-function metadataWithPhase(metadata: Record<string, Json> = {}) {
-  return {
-    phase: PHASE,
-    ...metadata,
-  } satisfies Record<string, Json>;
-}
 
 function round(value: number, digits = 2) {
   const multiplier = 10 ** digits;
@@ -618,7 +600,7 @@ export async function createGrowthGoal(admin: AdminContext, input: GoalWriteInpu
     .insert({
       description: input.description ?? null,
       end_date: input.endDate ?? null,
-      metadata: metadataWithPhase(input.metadata ?? {}),
+      metadata: metadataWithPhase(PHASE, input.metadata ?? {}),
       metric_key: input.metricKey,
       start_date: input.startDate ?? null,
       status: input.status,
@@ -641,7 +623,7 @@ export async function createContentPillar(admin: AdminContext, input: PillarWrit
       active: input.active,
       description: input.description ?? null,
       examples: toJson(input.examples ?? []),
-      metadata: metadataWithPhase(input.metadata ?? {}),
+      metadata: metadataWithPhase(PHASE, input.metadata ?? {}),
       name: input.name,
       priority: input.priority ?? 0,
       user_id: admin.userId,
@@ -662,7 +644,7 @@ export async function createCampaign(admin: AdminContext, input: CampaignWriteIn
     .insert({
       end_date: input.endDate ?? null,
       hypothesis: input.hypothesis ?? null,
-      metadata: metadataWithPhase(input.metadata ?? {}),
+      metadata: metadataWithPhase(PHASE, input.metadata ?? {}),
       name: input.name,
       objective: input.objective ?? null,
       pillar_id: input.pillarId ?? null,
@@ -694,7 +676,7 @@ export async function addCampaignItem(admin: AdminContext, input: CampaignItemWr
       campaign_id: input.campaignId,
       entity_id: input.entityId ?? null,
       entity_type: input.entityType,
-      metadata: metadataWithPhase(input.metadata ?? {}),
+      metadata: metadataWithPhase(PHASE, input.metadata ?? {}),
       published_post_id: input.publishedPostId ?? null,
       publishing_draft_id: input.publishingDraftId ?? null,
       role: input.role ?? null,
@@ -720,7 +702,7 @@ export async function createExperiment(admin: AdminContext, input: ExperimentWri
       end_date: input.endDate ?? null,
       experiment_type: input.experimentType,
       hypothesis: input.hypothesis ?? null,
-      metadata: metadataWithPhase(input.metadata ?? {}),
+      metadata: metadataWithPhase(PHASE, input.metadata ?? {}),
       start_date: input.startDate ?? null,
       status: input.status,
       success_metric: input.successMetric ?? null,
@@ -832,7 +814,7 @@ export async function recordExperimentResult(admin: AdminContext, input: Experim
       confidence_label: confidenceLabel,
       decision,
       experiment_id: experiment.id,
-      metadata: metadataWithPhase(input.metadata ?? {}),
+      metadata: metadataWithPhase(PHASE, input.metadata ?? {}),
       metrics: input.metrics,
       model: null,
       prompt_version: aiOutput ? "v1" : null,
@@ -996,7 +978,7 @@ export async function runWeeklyGrowthReview(admin: AdminContext, input: WeeklyRe
     .insert({
       confidence_label: confidenceLabel,
       evidence: toJson(evidence),
-      metadata: metadataWithPhase({ citation_filter: { requested: output.evidence.length, persisted: evidence.length } }),
+      metadata: metadataWithPhase(PHASE, { citation_filter: { requested: output.evidence.length, persisted: evidence.length } }),
       model: null,
       prompt_version: "v1",
       provider: null,
@@ -1036,7 +1018,7 @@ export async function runMonthlyGrowthReview(admin: AdminContext, input: Monthly
     .insert({
       confidence_label: confidenceLabel,
       evidence: toJson(evidence),
-      metadata: metadataWithPhase({ citation_filter: { requested: output.evidence.length, persisted: evidence.length } }),
+      metadata: metadataWithPhase(PHASE, { citation_filter: { requested: output.evidence.length, persisted: evidence.length } }),
       model: null,
       month_end: monthEnd,
       month_start: monthStart,
@@ -1112,7 +1094,7 @@ export async function runProfileAudit(admin: AdminContext, input: ProfileAuditWr
       confidence_label: output.confidence_label,
       findings: toJson(output.findings),
       input_snapshot: toJson(inputSnapshot),
-      metadata: metadataWithPhase({ owner_review_required: true }),
+      metadata: metadataWithPhase(PHASE, { owner_review_required: true }),
       model: null,
       prompt_version: "v1",
       provider: null,
@@ -1169,6 +1151,6 @@ export function campaignUpdatePayload(input: Partial<CampaignCreateInput>): Camp
   if (input.endDate !== undefined) payload.end_date = input.endDate;
   if (input.hypothesis !== undefined) payload.hypothesis = input.hypothesis;
   if (input.targetMetrics !== undefined) payload.target_metrics = input.targetMetrics;
-  if (input.metadata !== undefined) payload.metadata = metadataWithPhase(input.metadata);
+  if (input.metadata !== undefined) payload.metadata = metadataWithPhase(PHASE, input.metadata);
   return payload;
 }

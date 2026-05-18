@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { logAuditEvent } from "@/lib/audit";
 import type { AdminContext } from "@/lib/auth/admin";
+import { nowIso } from "@/lib/db/json";
 import type { NormalizedPostInput, NormalizedPostMetrics } from "@/lib/imports";
 import {
   aggregateByDayOfWeek,
@@ -54,10 +55,6 @@ export type PostMetricUpdateInput = Partial<NormalizedPostMetrics> & {
 function round(value: number, digits = 2) {
   const multiplier = 10 ** digits;
   return Math.round((value + Number.EPSILON) * multiplier) / multiplier;
-}
-
-function nowIso() {
-  return new Date().toISOString();
 }
 
 function metric(value: null | number | undefined) {

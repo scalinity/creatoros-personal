@@ -2,6 +2,7 @@ import "server-only";
 
 import { logAuditEvent } from "@/lib/audit";
 import type { AdminContext } from "@/lib/auth/admin";
+import { metadataWithPhase, nowIso } from "@/lib/db/json";
 import type { ContentIdeaCreateInput, ContentIdeaUpdateInput, GeneratedOutputCreateInput, GeneratedOutputStatusActionInput } from "@/lib/content/validation";
 import type { ContentIdeaRow, Database, GeneratedOutputRow, Json } from "@/types/database";
 
@@ -58,17 +59,6 @@ type GeneratedOutputUpdatePayload = Database["public"]["Tables"]["generated_outp
 
 const PHASE = "10-content-ideas-generated-outputs-composer-base";
 
-function nowIso() {
-  return new Date().toISOString();
-}
-
-function metadataWithPhase(metadata: Record<string, Json> = {}) {
-  return {
-    phase: PHASE,
-    ...metadata,
-  } satisfies Record<string, Json>;
-}
-
 function rowToIdea(row: ContentIdeaRow): ComposerIdea {
   return {
     createdAt: row.created_at,
@@ -124,7 +114,7 @@ export async function createContentIdea(admin: AdminContext, input: ContentIdeaC
     .insert({
       favorite: input.favorite,
       linked_post_id: input.linkedPostId,
-      metadata: metadataWithPhase(input.metadata),
+      metadata: metadataWithPhase(PHASE, input.metadata),
       raw_text: input.rawText,
       source: input.source,
       source_entity_id: input.sourceEntityId,
@@ -166,7 +156,7 @@ function ideaUpdatePayload(input: ContentIdeaUpdateInput): ContentIdeaUpdatePayl
 
   if (input.favorite !== undefined) payload.favorite = input.favorite;
   if (input.linkedPostId !== undefined) payload.linked_post_id = input.linkedPostId;
-  if (input.metadata !== undefined) payload.metadata = metadataWithPhase(input.metadata);
+  if (input.metadata !== undefined) payload.metadata = metadataWithPhase(PHASE, input.metadata);
   if (input.rawText !== undefined) payload.raw_text = input.rawText;
   if (input.source !== undefined) payload.source = input.source;
   if (input.sourceEntityId !== undefined) payload.source_entity_id = input.sourceEntityId;
@@ -249,7 +239,7 @@ export async function createGeneratedOutput(admin: AdminContext, input: Generate
       favorite: input.favorite,
       input_id: input.inputId,
       input_type: input.inputType,
-      metadata: metadataWithPhase(input.metadata),
+      metadata: metadataWithPhase(PHASE, input.metadata),
       model: input.model,
       prompt_version: input.promptVersion,
       provider: input.provider,

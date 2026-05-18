@@ -7,6 +7,7 @@ import type { AdminContext } from "@/lib/auth/admin";
 import { replyWriterOutputSchema, runStructuredPrompt } from "@/lib/ai";
 import { validateAiStructuredOutput } from "@/lib/ai/json";
 import type { AiProvider } from "@/lib/ai/types";
+import { nowIso, safeObject } from "@/lib/db/json";
 import { cancelPublishingDraft, createPublishingDraft, type PublishingDraft } from "@/lib/publishing";
 import type { Json, ReplyDraftRow, TargetAccountPostRow, TargetAccountRow } from "@/types/database";
 
@@ -122,14 +123,6 @@ export type ReplyGuyFilters = {
   post?: string;
   selected?: string;
 };
-
-function nowIso(options: ServiceOptions = {}) {
-  return (options.now?.() ?? new Date()).toISOString();
-}
-
-function safeObject(value: unknown): Record<string, Json> {
-  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, Json>) : {};
-}
 
 function engagementScore(post: TargetPost) {
   return post.likeCount + post.replyCount * 2 + post.repostCount * 2 + post.quoteCount * 2 + post.bookmarkCount * 3;
@@ -350,7 +343,7 @@ export async function createTargetAccount(admin: AdminContext, input: TargetAcco
 }
 
 export async function archiveTargetAccount(admin: AdminContext, input: ReplyDraftActionInput, options: ServiceOptions = {}) {
-  const archivedAt = nowIso(options);
+  const archivedAt = nowIso(options.now);
   const { data, error } = await admin.supabase
     .from("target_accounts")
     .update({ deleted_at: archivedAt })
@@ -629,7 +622,7 @@ function nextReplyStatus(currentStatus: string, action: "copied" | "used") {
 async function updateReplyDraftTracking(admin: AdminContext, input: ReplyDraftActionInput, action: "copied" | "used", options: ServiceOptions = {}) {
   const current = await loadReplyDraftRow(admin, input.id);
   const metadata = safeObject(current.metadata);
-  const timestamp = nowIso(options);
+  const timestamp = nowIso(options.now);
   const key = action === "copied" ? "copy_count" : "used_count";
   const count = typeof metadata[key] === "number" ? Number(metadata[key]) + 1 : 1;
   const payload = {

@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { logAuditEvent, logSafeError } from "@/lib/audit";
 import type { AdminContext } from "@/lib/auth/admin";
+import { nowIso } from "@/lib/db/json";
 import { createSupabaseServiceRoleClient } from "@/lib/db/service-role";
 import type { Database, Json, PostRow } from "@/types/database";
 
@@ -44,10 +45,6 @@ type SyncJobAccumulator = {
   seen: number;
   updated: number;
 };
-
-function nowIso(now?: () => Date) {
-  return (now?.() ?? new Date()).toISOString();
-}
 
 function metric(value: null | number | undefined) {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.trunc(value) : 0;

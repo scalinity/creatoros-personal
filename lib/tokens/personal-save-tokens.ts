@@ -4,6 +4,7 @@ import { randomBytes as nodeRandomBytes } from "node:crypto";
 
 import { logAuditEvent } from "@/lib/audit";
 import type { AdminContext } from "@/lib/auth/admin";
+import { nowIso } from "@/lib/db/json";
 import { createSupabaseServiceRoleClient } from "@/lib/db/service-role";
 import {
   getPersonalSaveTokenPrefix,
@@ -69,10 +70,6 @@ export type TokenVerificationResult =
 
 function serviceClient(options: TokenServiceOptions = {}) {
   return (options.serviceClient ?? createSupabaseServiceRoleClient()) as TokenClient;
-}
-
-function nowIso(options: TokenServiceOptions = {}) {
-  return (options.now?.() ?? new Date()).toISOString();
 }
 
 function cleanName(name: string) {
@@ -195,7 +192,7 @@ export async function revokePersonalSaveToken(
   input: PersonalSaveTokenRevokeInput,
   options: TokenServiceOptions = {},
 ) {
-  const revokedAt = nowIso(options);
+  const revokedAt = nowIso(options.now);
   const reason = cleanReason(input.reason);
   const { data, error } = await serviceClient(options)
     .from("personal_save_tokens")
@@ -315,7 +312,7 @@ export async function verifyPersonalSaveTokenForScope(
 export async function markPersonalSaveTokenUsed(tokenId: string, userId: string, options: TokenServiceOptions = {}) {
   const { error } = await serviceClient(options)
     .from("personal_save_tokens")
-    .update({ last_used_at: nowIso(options) })
+    .update({ last_used_at: nowIso(options.now) })
     .eq("id", tokenId)
     .eq("user_id", userId)
     .is("deleted_at", null);

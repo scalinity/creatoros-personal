@@ -7,6 +7,7 @@ import { validateAiStructuredOutput } from "@/lib/ai/json";
 import { runStructuredPrompt } from "@/lib/ai/run";
 import { voiceProfileOutputSchema, type AiProvider } from "@/lib/ai";
 import type { AdminContext } from "@/lib/auth/admin";
+import { safeObject, safeStringArray } from "@/lib/db/json";
 import type { BlogPostRow, Json, PostRow, VoiceProfileRow } from "@/types/database";
 
 const PHASE = "13-voice-modeling-and-embeddings-foundation";
@@ -77,14 +78,6 @@ type VoiceSourceBundle = {
   blogs: OwnerBlogSource[];
   posts: OwnerPostSource[];
 };
-
-function safeStringArray(value: Json): string[] {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
-}
-
-function safeObject(value: Json): Record<string, Json> {
-  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, Json>) : {};
-}
 
 function examplesFromJson(value: Json): VoiceProfileExample[] {
   if (!Array.isArray(value)) return [];

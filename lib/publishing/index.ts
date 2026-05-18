@@ -4,6 +4,7 @@ import { createHash, randomUUID } from "node:crypto";
 
 import { logAuditEvent } from "@/lib/audit";
 import type { AdminContext } from "@/lib/auth/admin";
+import { metadataWithPhase, nowIso, safeObject, safeStringArray, stripMarkdown } from "@/lib/db/json";
 import { createSupabaseServiceRoleClient } from "@/lib/db/service-role";
 import { createLiveXPublishingClient, type XCreatePostPayload, XApiError, type XCreatedPost, type XMediaUploadInput, type XPublishingClient } from "@/lib/x/client";
 import { loadDecryptedXConnection, loadXConnectionStatus, refreshStoredXConnection, shouldRefreshXToken, type DecryptedXConnection, type SanitizedXConnection } from "@/lib/x/oauth";
@@ -212,25 +213,6 @@ export type PublishingCalendar = {
     warningDays: number;
   };
 };
-
-function nowIso() {
-  return new Date().toISOString();
-}
-
-function metadataWithPhase(metadata: Record<string, Json> = {}) {
-  return {
-    phase: PHASE,
-    ...metadata,
-  } satisfies Record<string, Json>;
-}
-
-function safeObject(value: Json): Record<string, Json> {
-  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, Json>) : {};
-}
-
-function safeStringArray(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
-}
 
 function rowToDraft(row: PublishingDraftRow): PublishingDraft {
   return {
@@ -590,7 +572,7 @@ export async function createPublishingDraft(admin: AdminContext, input: Publishi
       duplicate_check: checks.duplicateCheck,
       experiment_id: normalized.experimentId,
       media_asset_ids: normalized.mediaAssetIds,
-      metadata: metadataWithPhase(normalized.metadata),
+      metadata: metadataWithPhase(PHASE, normalized.metadata),
       quote_post_id: normalized.quotePostId,
       reply_to_post_id: normalized.replyToPostId,
       risk_check: checks.riskCheck,
@@ -646,18 +628,6 @@ function splitGeneratedOutputText(output: GeneratedOutputRow, contentType: Publi
   }
 
   return [];
-}
-
-function stripMarkdown(value: string) {
-  return value
-    .replace(/```[\s\S]*?```/g, " ")
-    .replace(/`([^`]+)`/g, "$1")
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
-    .replace(/\[[^\]]+\]\([^)]*\)/g, (match) => match.replace(/^\[|\]\([^)]*\)$/g, ""))
-    .replace(/[#>*_~\-]/g, " ")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
 }
 
 // SCA-513 (S-7): count + slice by grapheme cluster, not UTF-16 code units, so
@@ -875,7 +845,7 @@ function updatePayloadForDraft(input: PublishingDraftUpdateInput, current: Publi
     payload.media_asset_ids = input.mediaAssetIds;
     contentChanged ||= true;
   }
-  if (input.metadata !== undefined) payload.metadata = metadataWithPhase(input.metadata);
+  if (input.metadata !== undefined) payload.metadata = metadataWithPhase(PHASE, input.metadata);
   if (input.quotePostId !== undefined) {
     payload.quote_post_id = input.quotePostId;
     contentChanged ||= true;
@@ -1033,7 +1003,7 @@ export async function approvePublishingDraft(admin: AdminContext, input: Publish
       approved_at: approvedAt,
       approved_by: admin.userId,
       duplicate_check: checks.duplicateCheck,
-      metadata: metadataWithPhase({ ...draft.metadata, duplicate_override_reason: overrideReason }),
+      metadata: metadataWithPhase(PHASE, { ...draft.metadata, duplicate_override_reason: overrideReason }),
       risk_check: checks.riskCheck,
       similarity_check: checks.similarityCheck,
       status: "approved",
@@ -1101,7 +1071,7 @@ export async function scheduleApprovedDraft(admin: AdminContext, input: Publishi
       entity_id: draft.id,
       entity_type: "publishing_draft",
       item_type: "publishing",
-      metadata: metadataWithPhase({ content_type: draft.contentType, dry_run_only: true }),
+      metadata: metadataWithPhase(PHASE, { content_type: draft.contentType, dry_run_only: true }),
       starts_at: input.scheduledFor,
       status: "scheduled",
       timezone: input.timezone,
@@ -1123,7 +1093,7 @@ export async function scheduleApprovedDraft(admin: AdminContext, input: Publishi
     .from("scheduled_posts")
     .insert({
       calendar_item_id: calendarItem.id,
-      metadata: metadataWithPhase({ approval_payload_hash: draft.approvalPayloadHash, dry_run_only: true }),
+      metadata: metadataWithPhase(PHASE, { approval_payload_hash: draft.approvalPayloadHash, dry_run_only: true }),
       publishing_draft_id: draft.id,
       scheduled_for: input.scheduledFor,
       status: "scheduled",
@@ -1192,7 +1162,7 @@ async function insertPublishingFailure(admin: AdminContext, job: PublishingJobRo
     .from("publishing_failures")
     .insert({
       failure_type: "dry_run_simulated_failure",
-      metadata: metadataWithPhase({ dry_run_only: true }),
+      metadata: metadataWithPhase(PHASE, { dry_run_only: true }),
       provider_error_code: "dry_run_simulated_failure",
       publishing_draft_id: draft.id,
       publishing_job_id: job.id,
@@ -1255,7 +1225,7 @@ export async function runDryRunPublishingJob(admin: AdminContext, input: Publish
       error_code: failed ? "dry_run_simulated_failure" : null,
       idempotency_key: dryRunIdempotencyKey(draft, payloadHash, jobType),
       job_type: jobType,
-      metadata: metadataWithPhase({ dry_run_only: true, payload_hash: payloadHash, source_job: input.id }),
+      metadata: metadataWithPhase(PHASE, { dry_run_only: true, payload_hash: payloadHash, source_job: input.id }),
       publishing_draft_id: draft.id,
       scheduled_for: draft.scheduledAt,
       started_at: startedAt,
@@ -1554,7 +1524,7 @@ async function resolveMediaIds(admin: AdminContext, draft: PublishingDraft, clie
     await admin.supabase
       .from("media_assets")
       .update({
-        metadata: metadataWithPhase({ ...metadata, x_uploaded_at: publishNowIso({}) }),
+        metadata: metadataWithPhase(PHASE, { ...metadata, x_uploaded_at: publishNowIso({}) }),
         x_media_id: uploaded.id,
         x_upload_status: "uploaded",
       })
@@ -1630,7 +1600,7 @@ async function createLivePublishingJob(admin: AdminContext, draft: PublishingDra
         scheduledPostId: options.scheduledPostId ?? null,
       }),
       job_type: jobType,
-      metadata: metadataWithPhase({ phase: PHASE_17, payload_hash: payloadHash, prior_failed_job_id: options.priorFailedJobId ?? null, scheduled_post_id: options.scheduledPostId ?? null }),
+      metadata: metadataWithPhase(PHASE, { phase: PHASE_17, payload_hash: payloadHash, prior_failed_job_id: options.priorFailedJobId ?? null, scheduled_post_id: options.scheduledPostId ?? null }),
       publishing_draft_id: draft.id,
       scheduled_for: draft.scheduledAt,
       started_at: startedAt,
@@ -1855,7 +1825,7 @@ async function deferScheduledPublish(admin: AdminContext, draft: PublishingDraft
     .update({
       lock_token: null,
       locked_at: null,
-      metadata: metadataWithPhase({ deferred_message: message, deferred_reason: "rate_limited", phase: PHASE_17, retry_after: retryAfter }),
+      metadata: metadataWithPhase(PHASE, { deferred_message: message, deferred_reason: "rate_limited", phase: PHASE_17, retry_after: retryAfter }),
       scheduled_for: retryAfter,
       status: "scheduled",
     })
@@ -1933,7 +1903,7 @@ async function insertXPublishingFailure(admin: AdminContext, job: PublishingJobR
     .from("publishing_failures")
     .insert({
       failure_type: details.failureType,
-      metadata: metadataWithPhase({ phase: PHASE_17 }),
+      metadata: metadataWithPhase(PHASE, { phase: PHASE_17 }),
       provider_error_code: details.providerErrorCode,
       publishing_draft_id: draft.id,
       publishing_job_id: job.id,
@@ -2251,7 +2221,7 @@ export async function cancelPublishingDraft(admin: AdminContext, input: Publishi
 
   const { data, error } = await admin.supabase
     .from("publishing_drafts")
-    .update({ approval_status: draft.approvalStatus === "approved" ? "revoked" : draft.approvalStatus, metadata: metadataWithPhase({ ...draft.metadata, cancel_reason: input.reason }), status: "canceled" })
+    .update({ approval_status: draft.approvalStatus === "approved" ? "revoked" : draft.approvalStatus, metadata: metadataWithPhase(PHASE, { ...draft.metadata, cancel_reason: input.reason }), status: "canceled" })
     .eq("id", draft.id)
     .eq("user_id", admin.userId)
     .is("deleted_at", null)
@@ -2268,7 +2238,7 @@ export async function cancelPublishingDraft(admin: AdminContext, input: Publishi
   // so an operator can reconcile if it ever happens.
   const cancelScheduledResult = await admin.supabase
     .from("scheduled_posts")
-    .update({ canceled_audit_log_id: null, lock_token: null, locked_at: null, metadata: metadataWithPhase({ canceled_at: timestamp, reason: input.reason }), status: "canceled" })
+    .update({ canceled_audit_log_id: null, lock_token: null, locked_at: null, metadata: metadataWithPhase(PHASE, { canceled_at: timestamp, reason: input.reason }), status: "canceled" })
     .eq("publishing_draft_id", draft.id)
     .eq("user_id", admin.userId);
   if (cancelScheduledResult.error) {
@@ -2277,7 +2247,7 @@ export async function cancelPublishingDraft(admin: AdminContext, input: Publishi
 
   const cancelCalendarResult = await admin.supabase
     .from("content_calendar_items")
-    .update({ metadata: metadataWithPhase({ canceled_at: timestamp, reason: input.reason }), status: "canceled" })
+    .update({ metadata: metadataWithPhase(PHASE, { canceled_at: timestamp, reason: input.reason }), status: "canceled" })
     .eq("entity_id", draft.id)
     .eq("user_id", admin.userId);
   if (cancelCalendarResult.error) {
@@ -2339,7 +2309,7 @@ export async function runScheduledPublishingExecutor(admin: AdminContext, option
     .update({
       lock_token: null,
       locked_at: null,
-      metadata: metadataWithPhase({
+      metadata: metadataWithPhase(PHASE, {
         phase: PHASE_17,
         reaper_batch_id: batchId,
         reaper_reclaimed_at: checkedAt,
@@ -2452,7 +2422,7 @@ export async function runScheduledPublishingExecutor(admin: AdminContext, option
         .update({
           lock_token: null,
           locked_at: null,
-          metadata: metadataWithPhase({
+          metadata: metadataWithPhase(PHASE, {
             error: error instanceof Error ? error.message.slice(0, 500) : "unknown scheduled publish failure",
             phase: PHASE_17,
           }),
@@ -2520,7 +2490,7 @@ export async function deleteOwnXPost(admin: AdminContext, input: { confirmation:
     .from("published_posts")
     .update({
       deleted_at: timestamp,
-      metadata: metadataWithPhase({ deleted_external: true, phase: PHASE_17 }),
+      metadata: metadataWithPhase(PHASE, { deleted_external: true, phase: PHASE_17 }),
     })
     .eq("user_id", admin.userId)
     .eq("platform", "x")
@@ -2530,7 +2500,7 @@ export async function deleteOwnXPost(admin: AdminContext, input: { confirmation:
     .from("posts")
     .update({
       deleted_at: timestamp,
-      metadata: metadataWithPhase({ deleted_external: true, phase: PHASE_17 }),
+      metadata: metadataWithPhase(PHASE, { deleted_external: true, phase: PHASE_17 }),
     })
     .eq("user_id", admin.userId)
     .eq("platform", "x")

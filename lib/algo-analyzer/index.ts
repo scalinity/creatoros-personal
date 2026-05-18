@@ -2,6 +2,7 @@ import "server-only";
 
 import { logAuditEvent } from "@/lib/audit";
 import type { AdminContext } from "@/lib/auth/admin";
+import { safeObject } from "@/lib/db/json";
 import { createContentIdea, createGeneratedOutput } from "@/lib/content";
 import { parseTagInput } from "@/lib/content/validation";
 import { algoAnalysisOutputSchema, type AiProvider } from "@/lib/ai";
@@ -72,10 +73,6 @@ export type AlgoAnalysisRunOptions = {
 
 function safeArray(value: Json): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
-}
-
-function safeObject(value: Json): Record<string, Json> {
-  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, Json>) : {};
 }
 
 function metricScoresFromJson(value: Json): AlgoMetricScores {

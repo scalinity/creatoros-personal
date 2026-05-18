@@ -5,6 +5,7 @@ import type { AdminContext } from "@/lib/auth/admin";
 import { accountResearchOutputSchema, runStructuredPrompt } from "@/lib/ai";
 import { validateAiStructuredOutput } from "@/lib/ai/json";
 import type { AiProvider } from "@/lib/ai/types";
+import { nowIso, safeObject } from "@/lib/db/json";
 import { createContentIdea } from "@/lib/content";
 import { createTargetAccount, importParsedTargetPosts, type TargetAccount, type TargetPost } from "@/lib/reply-guy";
 import { normalizeTargetUsername, normalizeXStatusId, parsePastedTargetPosts, parseXStatusUrl, type ParsedTargetPost } from "@/lib/reply-guy/validation";
@@ -73,16 +74,8 @@ export type AccountResearchFilters = {
   selected?: string;
 };
 
-function safeObject(value: unknown): Record<string, Json> {
-  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, Json>) : {};
-}
-
 function metric(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.trunc(value) : 0;
-}
-
-function nowIso(options: ServiceOptions = {}) {
-  return (options.now?.() ?? new Date()).toISOString();
 }
 
 function topPostScore(post: Pick<TargetAccountPostRow, "bookmark_count" | "like_count" | "quote_count" | "reply_count" | "repost_count">) {
@@ -322,7 +315,7 @@ async function persistReport(
   const { data, error } = await admin.supabase
     .from("account_research_reports")
     .insert({
-      generated_at: nowIso(options),
+      generated_at: nowIso(options.now),
       input_post_ids: inputPostIds,
       input_source: input.parsedPosts.length > 0 ? "manual" : "x_data",
       metadata: {
