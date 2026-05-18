@@ -3,7 +3,14 @@ import "server-only";
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 const HASH_VERSION = "pst_v1";
-const DEFAULT_PREFIX_LENGTH = 13;
+// SCA-533 (S-27): raised from 13 chars to 17 chars so the visible prefix
+// carries ~48 bits of entropy (cos_live_ = 9 chars + 8 base64url chars)
+// instead of the prior 24 bits. The prefix is what an attacker would need
+// to collide with to push a real token out of the verification window;
+// 24 bits was reachable with 2^12 mint attempts via the birthday paradox,
+// 48 bits requires ~2^24 which is comfortably out of reach for the
+// extension save endpoint's rate-limit envelope.
+const DEFAULT_PREFIX_LENGTH = 17;
 
 export type PersonalSaveTokenHashOptions = {
   pepper?: string;

@@ -7,6 +7,12 @@ const IV_BYTE_LENGTH = 12;
 
 export type TokenEncryptionOptions = {
   key?: string;
+  // SCA-534 (S-28): symmetric with `legacyPurposes` — optional list of
+  // legacy ENCRYPTION_KEY values to try on decrypt when the primary key
+  // fails. Encrypt always uses the primary `key` (or process.env.ENCRYPTION_KEY).
+  // The rotation runbook is documented in docs/SECURITY.md §
+  // "Encryption Key Rotation".
+  legacyKeys?: readonly string[];
   // M-8: optional list of legacy AAD purposes to try on decrypt. Encrypt
   // always uses `purpose`; decrypt tries `purpose` first, then each
   // `legacyPurposes` value in order. This unblocks key/AAD rotation without a
@@ -96,22 +102,29 @@ export function decryptToken(payload: string, options: TokenEncryptionOptions = 
   }
 
   const purposesToTry = [options.purpose, ...(options.legacyPurposes ?? [])];
+  // SCA-534 (S-28): primary key + each legacyKey in order. AAD rotation and
+  // key rotation are independent — every (key, purpose) combination is tried.
+  // In practice rotation happens one axis at a time, so this nested loop
+  // costs ~2-3 attempts on the worst path during a rotation window.
+  const keysToTry = [options.key, ...(options.legacyKeys ?? [])];
 
-  for (const purpose of purposesToTry) {
-    try {
-      const key = resolveEncryptionSecret(options.key);
-      const decipher = createDecipheriv("aes-256-gcm", key, decodePart(encodedIv));
-      const aad = aadForPurpose(purpose);
+  for (const candidateKey of keysToTry) {
+    for (const purpose of purposesToTry) {
+      try {
+        const key = resolveEncryptionSecret(candidateKey);
+        const decipher = createDecipheriv("aes-256-gcm", key, decodePart(encodedIv));
+        const aad = aadForPurpose(purpose);
 
-      if (aad) {
-        decipher.setAAD(aad);
+        if (aad) {
+          decipher.setAAD(aad);
+        }
+
+        decipher.setAuthTag(decodePart(encodedTag));
+
+        return Buffer.concat([decipher.update(decodePart(encodedCiphertext)), decipher.final()]).toString("utf8");
+      } catch {
+        // Try next (key, purpose) combination. Fall through to throw below.
       }
-
-      decipher.setAuthTag(decodePart(encodedTag));
-
-      return Buffer.concat([decipher.update(decodePart(encodedCiphertext)), decipher.final()]).toString("utf8");
-    } catch {
-      // Try next legacy purpose. If none work, fall through to the throw below.
     }
   }
 

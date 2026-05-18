@@ -1387,9 +1387,13 @@ function liveIdempotencyKey(
   if (jobType === "retry") {
     // Two concurrent retries of the same prior_failed_job_id MUST collide.
     // If a caller forgot to pass priorFailedJobId, fail closed by hashing the
-    // current second window instead of randomising; that still provides some
-    // collision pressure but mostly forces callers to wire the id through.
-    const retryScope = options.priorFailedJobId ?? `unbound-job-${Math.floor(Date.now() / 1_000)}`;
+    // current 60-second window — SCA-512 (S-6): the prior 1-second window
+    // meant two retries fired 1.01s apart minted distinct keys, defeating
+    // CAS-based double-publish protection. 60s collides aggressively for
+    // any realistic retry burst while still letting an operator-initiated
+    // retry after a minute of cooling-off through.
+    const retryScope =
+      options.priorFailedJobId ?? `unbound-job-${Math.floor(Date.now() / 60_000)}`;
     return `${base}:retry-of:${retryScope}`;
   }
 

@@ -130,11 +130,19 @@ const groupDefinitions = [
   {
     id: "security",
     label: "Security Utilities",
-    readySummary: "Encryption and personal save-token pepper config are present.",
-    degradedSummary: "Security utility config is incomplete; token storage or extension ingestion must stay disabled.",
+    readySummary: "Encryption, personal save-token pepper, and audit IP hash pepper config are present.",
+    degradedSummary: "Security utility config is incomplete; token storage, extension ingestion, or audit IP hashing may be degraded.",
     items: [
       { key: "ENCRYPTION_KEY", label: "Token encryption key", secret: true },
       { key: "PERSONAL_SAVE_TOKEN_PEPPER", label: "Save-token pepper", secret: true },
+      // SCA-535 (S-29): AUDIT_IP_HASH_PEPPER is optional in the env schema
+      // (so a first-time bring-up doesn't fail to boot), but the diagnostics
+      // panel surfaces its absence as a `degraded` state by treating it as
+      // required here. Without the pepper, audit_logs.ip_hash degrades to a
+      // plain SHA-256 of IPv4 — reversible by precomputing the 4.3B-key
+      // space. Single-owner impact is low, but the surfacing nudges
+      // operators to set it.
+      { key: "AUDIT_IP_HASH_PEPPER", label: "Audit IP hash pepper", secret: true },
     ],
   },
 ] as const;

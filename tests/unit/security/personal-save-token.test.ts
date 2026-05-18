@@ -19,7 +19,11 @@ describe("personal save token hashing", () => {
     expect(hash).not.toContain(token);
     expect(hashPersonalSaveToken(token, { pepper })).toBe(hash);
     expect(hashPersonalSaveToken(token, { pepper: "different-pepper" })).not.toBe(hash);
-    expect(getPersonalSaveTokenPrefix(token)).toBe("cos_live_abcd");
+    // SCA-533 (S-27): visible prefix raised from 13 to 17 chars so it
+    // carries ~48 bits of entropy (cos_live_ + 8 base64url chars) instead
+    // of the prior 24, defeating birthday-collision pressure on the
+    // verification window.
+    expect(getPersonalSaveTokenPrefix(token)).toBe("cos_live_abcdefgh");
   });
 
   it("verifies tokens with timing-safe comparison semantics", () => {

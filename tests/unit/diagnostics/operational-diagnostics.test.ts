@@ -27,6 +27,10 @@ const validEnv = {
   ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef",
   CRON_SECRET: "cron-secret-placeholder-1234",
   PERSONAL_SAVE_TOKEN_PEPPER: "save-token-pepper-placeholder",
+  // SCA-535 (S-29): diagnostics now reports the security group as
+  // `degraded` when AUDIT_IP_HASH_PEPPER is missing, so the valid-env
+  // fixture must supply it for the "ready" assertion to pass.
+  AUDIT_IP_HASH_PEPPER: "audit-ip-hash-pepper-placeholder",
 };
 
 describe("operational diagnostics", () => {

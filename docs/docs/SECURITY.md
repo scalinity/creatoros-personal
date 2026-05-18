@@ -28,6 +28,56 @@ Never expose to browser:
 
 Diagnostics show present/missing only.
 
+## Encryption Key Rotation
+
+SCA-534 (S-28). `ENCRYPTION_KEY` encrypts X OAuth access + refresh tokens at
+rest (AES-256-GCM, AAD-versioned per `x-${kind}:${userId}:k1`). Two
+independent rotation axes are supported, both decrypt-side only — encrypt
+always uses the primary key + the current AAD purpose.
+
+**AAD purpose rotation** (most common):
+
+1. Bump the AAD version string at the encrypt call site (e.g. `:k1` →
+   `:k2`).
+2. Pass `legacyPurposes: ["x-${kind}:${userId}:k1"]` to every `decryptToken`
+   call so prior rows decrypt under the old AAD.
+3. Roll forward — newly-written rows use the new AAD. Old rows continue to
+   decrypt under the legacy AAD until they are naturally re-encrypted (X
+   token refresh writes a fresh ciphertext with the new AAD).
+4. Once all rows are old enough that they cannot possibly still be on the
+   legacy AAD (e.g. X tokens expire and re-refresh every 2 hours, so 24 h
+   is conservative), drop `legacyPurposes`.
+
+**Encryption key rotation** (rare; only after key compromise or scheduled
+key roll):
+
+1. Generate a new 32+ char high-entropy key. Verify with
+   `node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"`.
+2. Store the new value as `ENCRYPTION_KEY` in production env. Move the
+   prior value into `ENCRYPTION_KEY_PREVIOUS` (or any operator-defined
+   slot — `process.env.ENCRYPTION_KEY` is the only one
+   `resolveEncryptionSecret` reads by default; legacy values must be
+   passed explicitly).
+3. At every `decryptToken` call site that handles tokens written before
+   the rotation, pass
+   `legacyKeys: [process.env.ENCRYPTION_KEY_PREVIOUS!]`.
+4. Roll forward — new rows are encrypted under the new key. Old rows
+   decrypt under either, transparently to callers.
+5. Force a re-encrypt of every X token row by calling
+   `refreshStoredXConnection` for each owner (or wait for natural
+   refresh) — once every row has been re-written under the new key,
+   drop `ENCRYPTION_KEY_PREVIOUS` from env and the `legacyKeys` option
+   from call sites.
+
+Combined rotations (key + AAD at the same time) are supported but
+expensive on the decrypt path (`|legacyKeys| × |legacyPurposes|`
+attempts on miss). Prefer to rotate one axis at a time.
+
+Audit logging of rotation is operator responsibility; record the
+rotation start/end timestamps in `audit_logs` via a manual event so a
+later forensic review can correlate ciphertext age with the active key
+window.
+
 ## X Token Security
 
 - Encrypt OAuth tokens at rest.

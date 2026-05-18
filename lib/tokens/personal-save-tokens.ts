@@ -286,7 +286,10 @@ export async function verifyPersonalSaveTokenForScope(
     .select("*")
     .eq("token_prefix", prefix)
     .is("deleted_at", null)
-    .limit(10);
+    // SCA-533 (S-27): raised from 10 to 100. With a 48-bit-entropy prefix
+    // (DEFAULT_PREFIX_LENGTH=17) collisions are vanishingly rare; the cap
+    // still bounds memory if pathology ever occurs.
+    .limit(100);
 
   if (error) {
     console.error("Failed to verify personal save token", { reason: error.message });

@@ -200,6 +200,12 @@ function maxRisk(...risks: Risk[]): Risk {
   return risks.reduce((highest, risk) => (riskRank(risk) > riskRank(highest) ? risk : highest), "low" as Risk);
 }
 
+// SCA-514 (S-8): lowered from length>=3 to length>=2 so short technical
+// terms (AI, UX, GO, JS, ML, X, OS) survive similarity tokenization. The
+// prior cutoff silently dropped these and produced false negatives on
+// AI/UX-heavy creator content. Single-character tokens are still
+// filtered out — those are typically stop-letters from punctuation
+// stripping and add noise without signal.
 function tokens(value: string) {
   return value
     .toLowerCase()
@@ -207,7 +213,7 @@ function tokens(value: string) {
     .replace(/[^a-z0-9'\s-]/g, " ")
     .split(/\s+/)
     .map((item) => item.trim())
-    .filter((item) => item.length >= 3);
+    .filter((item) => item.length >= 2);
 }
 
 function jaccard(left: string[], right: string[]) {
