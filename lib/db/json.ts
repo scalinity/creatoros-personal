@@ -62,10 +62,30 @@ export function toJson(value: unknown): Json {
 // identifier (e.g. "15-publishing-state-machine-dry-run-and-calendar"),
 // stored as the FIRST key by convention so audit queries can use
 // `metadata->>phase = ...` cheaply.
+//
+// SCA-524 (S-18): catches typo'd phase shadows. The prior shape was
+// `{ phase, ...metadata }` which silently accepted a `pase:` typo and let
+// it pollute audit_logs as a separate key. We still allow callers to
+// override `phase` via metadata (some upstream callers — algo-analyzer →
+// content's createGeneratedOutput, blogs → content, brain-dumps →
+// content — legitimately record the originating module's phase rather
+// than the storage module's phase), but obvious typos throw at write
+// time. The pattern matches near-miss spellings like `pase`, `phse`,
+// `phae`, `phaze`, `phasse`. Exact match `phase` is permitted.
+const PHASE_TYPO_PATTERN = /^pha?[sz]?e$|^phass?e$|^pa[sz]se?$/i;
+
 export function metadataWithPhase(
   phase: string,
   metadata: Record<string, Json> = {},
 ): Record<string, Json> {
+  for (const key of Object.keys(metadata)) {
+    if (key.toLowerCase() === "phase") continue;
+    if (PHASE_TYPO_PATTERN.test(key)) {
+      throw new Error(
+        `metadataWithPhase: metadata key "${key}" looks like a typo of "phase". If this is intentional, rename it; otherwise fix the spelling.`,
+      );
+    }
+  }
   return {
     phase,
     ...metadata,

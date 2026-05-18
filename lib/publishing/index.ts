@@ -1600,7 +1600,7 @@ async function createLivePublishingJob(admin: AdminContext, draft: PublishingDra
         scheduledPostId: options.scheduledPostId ?? null,
       }),
       job_type: jobType,
-      metadata: metadataWithPhase(PHASE, { phase: PHASE_17, payload_hash: payloadHash, prior_failed_job_id: options.priorFailedJobId ?? null, scheduled_post_id: options.scheduledPostId ?? null }),
+      metadata: metadataWithPhase(PHASE_17, { payload_hash: payloadHash, prior_failed_job_id: options.priorFailedJobId ?? null, scheduled_post_id: options.scheduledPostId ?? null }),
       publishing_draft_id: draft.id,
       scheduled_for: draft.scheduledAt,
       started_at: startedAt,
@@ -1825,7 +1825,7 @@ async function deferScheduledPublish(admin: AdminContext, draft: PublishingDraft
     .update({
       lock_token: null,
       locked_at: null,
-      metadata: metadataWithPhase(PHASE, { deferred_message: message, deferred_reason: "rate_limited", phase: PHASE_17, retry_after: retryAfter }),
+      metadata: metadataWithPhase(PHASE_17, { deferred_message: message, deferred_reason: "rate_limited", retry_after: retryAfter }),
       scheduled_for: retryAfter,
       status: "scheduled",
     })
@@ -1903,7 +1903,7 @@ async function insertXPublishingFailure(admin: AdminContext, job: PublishingJobR
     .from("publishing_failures")
     .insert({
       failure_type: details.failureType,
-      metadata: metadataWithPhase(PHASE, { phase: PHASE_17 }),
+      metadata: metadataWithPhase(PHASE_17),
       provider_error_code: details.providerErrorCode,
       publishing_draft_id: draft.id,
       publishing_job_id: job.id,
@@ -2309,8 +2309,7 @@ export async function runScheduledPublishingExecutor(admin: AdminContext, option
     .update({
       lock_token: null,
       locked_at: null,
-      metadata: metadataWithPhase(PHASE, {
-        phase: PHASE_17,
+      metadata: metadataWithPhase(PHASE_17, {
         reaper_batch_id: batchId,
         reaper_reclaimed_at: checkedAt,
         reaper_reason: "stale_publishing_lock",
@@ -2422,9 +2421,8 @@ export async function runScheduledPublishingExecutor(admin: AdminContext, option
         .update({
           lock_token: null,
           locked_at: null,
-          metadata: metadataWithPhase(PHASE, {
+          metadata: metadataWithPhase(PHASE_17, {
             error: error instanceof Error ? error.message.slice(0, 500) : "unknown scheduled publish failure",
-            phase: PHASE_17,
           }),
           status: "failed",
         })
