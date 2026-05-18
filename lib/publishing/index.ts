@@ -1722,17 +1722,38 @@ async function insertPublishedPost(admin: AdminContext, draft: PublishingDraft, 
 }
 
 async function markDraftAndSchedule(admin: AdminContext, draft: PublishingDraft, status: "failed" | "published", scheduledPostId?: null | string) {
-  await admin.supabase.from("publishing_drafts").update({ status }).eq("id", draft.id).eq("user_id", admin.userId);
-
-  const scheduledUpdate = status === "published" ? { status: "published" } : { status: "failed" };
+  // SCA-473 (C-3): always clear lock_token + locked_at on terminal transitions
+  // so the row can be re-claimed if it's ever re-scheduled later. The asymmetry
+  // with deferScheduledPublish (which already cleared the lock) used to leave
+  // failed/published rows visually locked.
+  //
+  // SCA-482 (W-3): capture errors from each of the three sequential UPDATEs
+  // instead of silently discarding them — a silent failure here can leave the
+  // draft "publishing" with a successful X post already created, the worst
+  // possible inconsistency.
   const calendarStatus = status === "published" ? "published" : "missed";
-  if (scheduledPostId) {
-    await admin.supabase.from("scheduled_posts").update(scheduledUpdate).eq("id", scheduledPostId).eq("user_id", admin.userId);
-  } else {
-    await admin.supabase.from("scheduled_posts").update(scheduledUpdate).eq("publishing_draft_id", draft.id).eq("user_id", admin.userId);
+  const scheduledUpdate = { lock_token: null, locked_at: null, status } as const;
+
+  const draftResult = await admin.supabase.from("publishing_drafts").update({ status }).eq("id", draft.id).eq("user_id", admin.userId);
+  if (draftResult.error) {
+    console.error("markDraftAndSchedule: publishing_drafts update failed", { draftId: draft.id, reason: draftResult.error.message, scheduledPostId, status });
+    throw new Error(`Failed to finalize publishing_drafts.${status}: ${draftResult.error.message}`);
   }
 
-  await admin.supabase.from("content_calendar_items").update({ status: calendarStatus }).eq("entity_id", draft.id).eq("user_id", admin.userId);
+  const scheduledQuery = admin.supabase.from("scheduled_posts").update(scheduledUpdate).eq("user_id", admin.userId);
+  const scheduledResult = await (scheduledPostId
+    ? scheduledQuery.eq("id", scheduledPostId)
+    : scheduledQuery.eq("publishing_draft_id", draft.id));
+  if (scheduledResult.error) {
+    console.error("markDraftAndSchedule: scheduled_posts update failed", { draftId: draft.id, reason: scheduledResult.error.message, scheduledPostId, status });
+    throw new Error(`Failed to finalize scheduled_posts.${status}: ${scheduledResult.error.message}`);
+  }
+
+  const calendarResult = await admin.supabase.from("content_calendar_items").update({ status: calendarStatus }).eq("entity_id", draft.id).eq("user_id", admin.userId);
+  if (calendarResult.error) {
+    console.error("markDraftAndSchedule: content_calendar_items update failed", { draftId: draft.id, reason: calendarResult.error.message, status: calendarStatus });
+    throw new Error(`Failed to finalize content_calendar_items.${calendarStatus}: ${calendarResult.error.message}`);
+  }
 }
 
 async function deferScheduledPublish(admin: AdminContext, draft: PublishingDraft, scheduledPostId: string, retryAfter: string, message: string) {
@@ -2175,6 +2196,9 @@ export type ScheduledPublishingExecutorResult = {
   checkedAt: string;
   failed: number;
   processed: number;
+  // SCA-473 (C-3): count of stranded `status=publishing` rows reclaimed by the
+  // stale-lock reaper pre-pass.
+  reaped: number;
   skipped: number;
   succeeded: number;
 };
@@ -2194,6 +2218,49 @@ export async function runScheduledPublishingExecutor(admin: AdminContext, option
     targetType: "publishing_executor",
     userId: admin.userId,
   });
+
+  // SCA-473 (C-3): stale-lock reaper. A Vercel timeout / SIGTERM / unhandled
+  // throw during an in-flight publish can strand a scheduled_posts row as
+  // status='publishing' with a non-null lock_token. Without this pre-pass the
+  // row is permanently unreclaimable because the per-tick CAS at line ~2240
+  // filters `.is("lock_token", null)`. Any lock held longer than 15 minutes is
+  // treated as orphaned and reset to status='scheduled' for re-claim by this
+  // or a subsequent tick.
+  const STALE_LOCK_MS = 15 * 60 * 1_000;
+  const staleBefore = new Date(Date.now() - STALE_LOCK_MS).toISOString();
+  let reaped = 0;
+  const { data: reaperRows, error: reaperError } = await admin.supabase
+    .from("scheduled_posts")
+    .update({
+      lock_token: null,
+      locked_at: null,
+      metadata: metadataWithPhase({
+        phase: PHASE_17,
+        reaper_batch_id: batchId,
+        reaper_reclaimed_at: checkedAt,
+        reaper_reason: "stale_publishing_lock",
+      }),
+      status: "scheduled",
+    })
+    .eq("user_id", admin.userId)
+    .eq("status", "publishing")
+    .lt("locked_at", staleBefore)
+    .is("deleted_at", null)
+    .select("id");
+  if (reaperError) {
+    console.error("publishing executor reaper: scheduled_posts update failed", { batchId, reason: reaperError.message });
+  } else if (reaperRows && reaperRows.length > 0) {
+    reaped = reaperRows.length;
+    await logAuditEvent({
+      actorEmail: admin.email,
+      eventType: "publishing_executor_reaped",
+      metadata: { batch_id: batchId, phase: PHASE_17, reaped, reaper_reason: "stale_publishing_lock", stale_before: staleBefore },
+      request: options.request ?? undefined,
+      success: true,
+      targetType: "publishing_executor",
+      userId: admin.userId,
+    });
+  }
 
   let envelopeError: null | string = null;
   let totalCandidates = 0;
@@ -2270,9 +2337,16 @@ export async function runScheduledPublishingExecutor(admin: AdminContext, option
       else failed += 1;
     } catch (error) {
       failed += 1;
+      // SCA-473 (C-3): also clear lock_token/locked_at on this terminal
+      // failure path. Without it, a throw from runXPublishingJob *before* its
+      // recordFailure path engages (e.g. token-decrypt failure, transient
+      // blip) leaves the row visibly failed but still locked, blocking any
+      // future re-claim attempt.
       await admin.supabase
         .from("scheduled_posts")
         .update({
+          lock_token: null,
+          locked_at: null,
           metadata: metadataWithPhase({
             error: error instanceof Error ? error.message.slice(0, 500) : "unknown scheduled publish failure",
             phase: PHASE_17,
@@ -2297,6 +2371,7 @@ export async function runScheduledPublishingExecutor(admin: AdminContext, option
       failed,
       phase: PHASE_17,
       processed: succeeded + failed,
+      reaped,
       skipped,
       succeeded,
     },
@@ -2310,6 +2385,7 @@ export async function runScheduledPublishingExecutor(admin: AdminContext, option
     checkedAt,
     failed,
     processed: succeeded + failed,
+    reaped,
     skipped,
     succeeded,
   };
