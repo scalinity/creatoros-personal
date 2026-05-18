@@ -451,7 +451,10 @@ h6 {
 
 .switch-thumb {
   background: var(--ink-secondary);
-  border-radius: 0;
+  /* SCA-542 (S-36): soften thumb to match the 2px-rounded track. The prior
+     border-radius: 0 left a square thumb inside a rounded slot — flagged by
+     the FD1 review as visually inconsistent. */
+  border-radius: var(--radius-sm);
   height: 12px;
   left: 2px;
   position: absolute;

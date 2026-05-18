@@ -1,26 +1,27 @@
 // =============================================================================
-// M-15: lib/growth/index.ts (~1140 lines) bundles several growth sub-domains.
-// File sections (current line ranges, approximate):
+// M-15: lib/growth/index.ts bundles several growth sub-domains. File sections:
 //
-//   1. Domain types + adapters                                  (~80-200)
-//   2. Json/citation helpers (toJson, sanitizeCitations)        (~210-470)
-//   3. Goals + pillars CRUD                                     (~480-700)
-//   4. Campaigns + campaign items CRUD                          (~700-780)
-//   5. Experiments + experiment results (recordExperimentResult) (~780-870)
-//   6. Weekly + monthly review generation                       (~870-1010)
-//   7. Profile audits                                           (~1010-1100)
-//   8. Workspace loaders                                        (~1100+)
+//   1. Domain types + adapters
+//   2. Json/citation helpers (toJson, sanitizeCitations)
+//   3. Goals + pillars CRUD
+//   4. Campaigns + campaign items CRUD
+//   5. Experiments + experiment results (recordExperimentResult)
+//   6. Weekly + monthly review generation
+//   7. Profile audits
+//   8. Workspace loaders
 //
 // A future split should extract:
-//   * lib/growth/types.ts      (sections 1)
+//   * lib/growth/types.ts      (section 1)
 //   * lib/growth/citations.ts  (section 2)
 //   * lib/growth/entities.ts   (sections 3 + 4 + 5)
 //   * lib/growth/reviews.ts    (sections 6 + 7)
 //   * lib/growth/workspace.ts  (section 8)
 //
+// SCA-526 (S-20): the previous banner listed line ranges that drifted with
+// every edit. Names alone navigate via grep; no need to maintain the numbers.
+//
 // As with M-14 in lib/publishing/index.ts, the split is deferred per the
-// FINAL_CODEBASE_REVIEW M-15 note ("pure refactor, no behavior change") and
-// recorded here as section markers instead.
+// FINAL_CODEBASE_REVIEW M-15 note ("pure refactor, no behavior change").
 // =============================================================================
 
 import "server-only";

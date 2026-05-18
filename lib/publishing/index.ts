@@ -37,19 +37,17 @@ import { publishingSourceTypes } from "./validation";
 
 // =============================================================================
 // M-14: lib/publishing/index.ts is the publishing domain entry point. The file
-// is large (~2400 lines) because it bundles several cooperating concerns:
+// is large because it bundles several cooperating concerns:
 //
-//   1. Domain types and `rowTo*` adapters (around lines 60-260).
-//   2. Validation / approval-payload hashing (computePublishingPayloadHash and
-//      friends, around lines 750-900).
-//   3. The state-machine guard helpers (assertApprovalPayload, etc.) and the
-//      XPublishingGuardError class around lines 980-1240.
+//   1. Domain types and `rowTo*` adapters.
+//   2. Validation / approval-payload hashing (computePublishingPayloadHash).
+//   3. State-machine guard helpers + XPublishingGuardError + PublishingNotFoundError.
 //   4. Idempotency-key generation (liveIdempotencyKey, dryRunIdempotencyKey).
-//   5. Dry-run job construction (runDryRunPublishingJob, around 1140-1200).
-//   6. The live X publish path (runXPublishingJob + helpers, ~1820-1990).
-//   7. Retry / cancel / archive operations (~1990-2080).
-//   8. The scheduled-cron executor (runScheduledPublishingExecutor, ~2150).
-//   9. Workspace + calendar loaders for the UI (~2210+).
+//   5. Dry-run job construction (runDryRunPublishingJob).
+//   6. The live X publish path (runXPublishingJob + helpers).
+//   7. Retry / cancel / archive operations.
+//   8. The scheduled-cron executor (runScheduledPublishingExecutor + reaper).
+//   9. Workspace + calendar loaders for the UI.
 //
 // A future split should extract them into:
 //   * lib/publishing/state-machine.ts  (sections 2 + 3)
@@ -58,9 +56,13 @@ import { publishingSourceTypes } from "./validation";
 //   * lib/publishing/executor.ts       (section 8)
 //   * lib/publishing/workspace.ts      (section 9)
 //
+// SCA-526 (S-20): the previous banner included specific line numbers that
+// drifted with every edit, so this comment was actively misleading. Line
+// numbers removed; section names alone navigate the file via grep.
+//
 // That refactor is deliberately deferred per the FINAL_CODEBASE_REVIEW M-14
-// note ("pure refactor, no behavior change") — done here as section markers
-// instead so the file is at least navigable without inflating diff risk.
+// note ("pure refactor, no behavior change") — section markers above keep
+// the file navigable without inflating diff risk.
 // =============================================================================
 
 const PHASE = "15-publishing-state-machine-dry-run-calendar";
@@ -332,13 +334,25 @@ function hashString(value: string) {
 }
 
 function stableJsonStringify(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map((item) => stableJsonStringify(item)).join(",")}]`;
+  // SCA-511 (S-5): filter undefined inside arrays so two payload previews
+  // that differ only in array undefineds don't hash equal. Reject NaN/
+  // Infinity at the leaf — the prior fallback emitted them as null which
+  // could conflate "actually null" with "non-finite number".
+  if (Array.isArray(value)) {
+    return `[${value
+      .filter((item) => item !== undefined)
+      .map((item) => stableJsonStringify(item))
+      .join(",")}]`;
+  }
   if (value && typeof value === "object") {
     return `{${Object.entries(value as Record<string, unknown>)
       .filter(([, entryValue]) => entryValue !== undefined)
       .sort(([left], [right]) => left.localeCompare(right))
       .map(([key, entryValue]) => `${JSON.stringify(key)}:${stableJsonStringify(entryValue)}`)
       .join(",")}}`;
+  }
+  if (typeof value === "number" && !Number.isFinite(value)) {
+    throw new Error(`stableJsonStringify rejects non-finite number: ${value}`);
   }
 
   return JSON.stringify(value);
@@ -441,7 +455,16 @@ function riskCheckForDraft(draft: Pick<PublishingDraft, "contentType" | "quotePo
 
   if (xLimitedTypes.includes(draft.contentType)) {
     items.forEach((item, index) => {
-      if (item.length > 280) {
+      // SCA-513 (S-7): X counts characters by grapheme cluster, not UTF-16
+      // code units. `"a".repeat(280) + "😀"` was 281 by .length AND by graphemes
+      // (caught), but a string of 280 ASCII + emoji modifier composes to one
+      // visible grapheme in some scripts — code-unit length over-counts there
+      // too. Intl.Segmenter gives us the cluster count X actually applies.
+      // The heuristic disclaimer: X also weights certain CJK code points as 2,
+      // which Intl.Segmenter does NOT model. Owners with mostly CJK content
+      // should still get the heads-up; for ASCII/emoji it's tight.
+      const graphemeCount = countGraphemes(item);
+      if (graphemeCount > 280) {
         warnings.push(`Item ${index + 1} is over 280 characters.`);
         blocking = true;
       }
@@ -637,10 +660,39 @@ function stripMarkdown(value: string) {
     .trim();
 }
 
+// SCA-513 (S-7): count + slice by grapheme cluster, not UTF-16 code units, so
+// we don't split a surrogate pair (orphaned lone-surrogate would crash some
+// downstream consumers) and the 270-char clamp matches what X actually counts.
+function countGraphemes(value: string) {
+  // Intl.Segmenter is available in every Node 18+ / browser the project
+  // targets. Fall back to `.length` if a runtime ever drops it.
+  if (typeof Intl !== "undefined" && typeof Intl.Segmenter === "function") {
+    let count = 0;
+    for (const _ of new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(value)) count += 1;
+    return count;
+  }
+  return value.length;
+}
+
+function sliceGraphemes(value: string, limit: number) {
+  if (typeof Intl !== "undefined" && typeof Intl.Segmenter === "function") {
+    const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+    let count = 0;
+    let lastIndex = 0;
+    for (const segment of segmenter.segment(value)) {
+      if (count >= limit) return value.slice(0, lastIndex);
+      lastIndex = segment.index + segment.segment.length;
+      count += 1;
+    }
+    return value.slice(0, lastIndex);
+  }
+  return value.slice(0, limit);
+}
+
 function clampPostText(value: string) {
   const trimmed = value.trim();
-  if (trimmed.length <= 270) return trimmed;
-  return `${trimmed.slice(0, 267).trim()}...`;
+  if (countGraphemes(trimmed) <= 270) return trimmed;
+  return `${sliceGraphemes(trimmed, 267).trim()}...`;
 }
 
 async function loadGeneratedOutputSource(admin: AdminContext, sourceId: string) {
