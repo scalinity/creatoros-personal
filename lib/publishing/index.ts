@@ -809,32 +809,36 @@ function updatePayloadForDraft(input: PublishingDraftUpdateInput, current: Publi
   const payload: PublishingDraftUpdatePayload = {};
   let contentChanged = false;
 
+  // SCA-471 (C-1): use `||=` everywhere so later per-field branches cannot
+  // silently reset an earlier change to false. The previous `=` form let an
+  // update with mediaAssetIds (→ true) followed by text equal to current
+  // (→ false) skip approval invalidation while still shipping the new media.
   if (input.campaignId !== undefined) payload.campaign_id = input.campaignId;
   if (input.contentType !== undefined) {
     payload.content_type = input.contentType;
-    contentChanged = input.contentType !== current.contentType;
+    contentChanged ||= input.contentType !== current.contentType;
   }
   if (input.experimentId !== undefined) payload.experiment_id = input.experimentId;
   if (input.mediaAssetIds !== undefined) {
     payload.media_asset_ids = input.mediaAssetIds;
-    contentChanged = true;
+    contentChanged ||= true;
   }
   if (input.metadata !== undefined) payload.metadata = metadataWithPhase(input.metadata);
   if (input.quotePostId !== undefined) {
     payload.quote_post_id = input.quotePostId;
-    contentChanged = true;
+    contentChanged ||= true;
   }
   if (input.replyToPostId !== undefined) {
     payload.reply_to_post_id = input.replyToPostId;
-    contentChanged = true;
+    contentChanged ||= true;
   }
   if (input.text !== undefined) {
     payload.text = input.text;
-    contentChanged = input.text !== current.text;
+    contentChanged ||= input.text !== current.text;
   }
   if (input.threadItems !== undefined) {
     payload.thread_items = input.threadItems;
-    contentChanged = true;
+    contentChanged ||= true;
   }
   if (input.timezone !== undefined) payload.timezone = input.timezone;
 

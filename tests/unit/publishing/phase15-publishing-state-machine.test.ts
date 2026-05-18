@@ -285,6 +285,59 @@ describe("Phase 15 publishing services", () => {
     expect(auditMock.logAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: "publishing_scheduled" }));
   });
 
+  // SCA-471 (C-1): updatePayloadForDraft used `=` instead of `||=`, so a later
+  // per-field branch could silently reset an earlier change to false. The
+  // canonical bad path was mediaAssetIds (→ true) followed by text equal to
+  // current.text (→ false) — the draft kept its prior approval_payload_hash
+  // even though the publishable payload had materially changed.
+  it("SCA-471 regression: multi-field update with no-op text + media change still invalidates approval", async () => {
+    const { inserts, updates, supabase } = createSupabaseMock();
+    const admin = createAdminContext(supabase);
+
+    const draft = await createPublishingDraft(admin, {
+      contentType: "single_post",
+      sourceType: "manual",
+      text: "Owner draft for multi-field update regression.",
+    });
+    const approved = await approvePublishingDraft(admin, {
+      confirmation: "approve exact payload",
+      id: draft.id,
+    });
+    expect(approved.approvalStatus).toBe("approved");
+    expect(approved.approvalPayloadHash).not.toBeNull();
+
+    const mediaAssetId = "00000000-0000-0000-0000-000000000abc";
+    inserts.media_assets = [
+      {
+        id: mediaAssetId,
+        user_id: admin.userId,
+        mime_type: "image/png",
+        metadata: {},
+        x_media_id: null,
+        x_upload_status: "not_uploaded",
+        size_bytes: 1024,
+        deleted_at: null,
+      },
+    ];
+
+    const edited = await updatePublishingDraft(admin, {
+      id: draft.id,
+      mediaAssetIds: [mediaAssetId],
+      // Same text as approved payload — the `=` bug would set contentChanged
+      // back to false and SKIP approval invalidation. With `||=`, the prior
+      // `true` from mediaAssetIds wins.
+      text: approved.text,
+    });
+
+    expect(edited.status).toBe("owner_edited");
+    expect(edited.approvalStatus).toBe("invalidated");
+    expect(edited.approvalPayloadHash).toBeNull();
+    expect(updates.publishing_drafts?.at(-1)?.payload).toMatchObject({
+      approval_payload_hash: null,
+      approval_status: "invalidated",
+    });
+  });
+
   it("creates deterministic dry-run jobs and failure rows without published posts or external calls", async () => {
     const { inserts, supabase } = createSupabaseMock();
     const admin = createAdminContext(supabase);
