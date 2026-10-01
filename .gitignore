@@ -46,3 +46,4 @@ Thumbs.db
 # Electron build artifacts
 dist-electron/
 electron/assets/icon.iconset/
+.claude/
